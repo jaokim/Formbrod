@@ -1,0 +1,28 @@
+# Builds and runs the portable core tests on a normal Linux/macOS host.
+#   make -f Makefile.host test
+
+CC      ?= cc
+CFLAGS  ?= -std=c99 -Wall -Wextra -Werror -O1 -g
+CFLAGS  += -Iinclude
+
+CORE_SRC = src/timeline/timeline.c src/job/job.c src/job/module.c \
+           modules/fade/fade.c
+
+build/host/test_core: tests/test_core.c $(CORE_SRC)
+	@mkdir -p build/host
+	$(CC) $(CFLAGS) -o $@ $^
+
+# Compile-check the parts of the app that don't touch AmigaOS headers.
+APP_SRC = src/app.c src/backend/local_backend.c src/backend/media.c
+
+check-app:
+	@mkdir -p build/host
+	$(CC) $(CFLAGS) -Isrc -fsyntax-only $(APP_SRC)
+
+test: build/host/test_core check-app
+	./build/host/test_core
+
+clean:
+	rm -rf build/host
+
+.PHONY: test clean check-app

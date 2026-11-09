@@ -1,0 +1,4 @@
+build/
+Formbrod
+*.o
+*.info
