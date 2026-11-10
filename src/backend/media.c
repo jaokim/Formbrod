@@ -1,49 +1,100 @@
 /*
  * media.c - probe a media file for duration and streams.
  */
+#include <string.h>
 #include "app.h"
 
 #ifdef HAVE_LIBAV
 #include <libavformat/avformat.h>
+#include <libavutil/error.h>
 
-int FB_ProbeMedia(const char *path, fb_ms_t *duration, int *has_video,
-                  int *has_audio)
+/* Before ffmpeg 4.0 (libavformat 58.9.100) demuxers had to be registered,
+ * or avformat_open_input() fails for every file. Older AmigaOS 4 ports of
+ * ffmpeg are in that range. */
+static void ensure_registered(void)
+{
+#if LIBAVFORMAT_VERSION_INT < AV_VERSION_INT(58, 9, 100)
+    static int done;
+
+    if (!done) {
+        av_register_all();
+        done = 1;
+    }
+#endif
+}
+
+static void set_why(char *why, size_t len, int averr)
+{
+    if (!why || !len)
+        return;
+    if (av_strerror(averr, why, len) < 0) {
+        strncpy(why, "unknown error", len - 1);
+        why[len - 1] = '\0';
+    }
+}
+
+FBProbeResult FB_ProbeMedia(const char *path, fb_ms_t *duration,
+                            int *has_video, int *has_audio,
+                            char *why, size_t why_len)
 {
     AVFormatContext *fmt = NULL;
     unsigned i;
+    int err;
 
     *duration = 0;
     *has_video = *has_audio = 0;
+    if (why && why_len)
+        why[0] = '\0';
 
-    if (avformat_open_input(&fmt, path, NULL, NULL) < 0)
-        return -1;
-    if (avformat_find_stream_info(fmt, NULL) < 0) {
-        avformat_close_input(&fmt);
-        return -1;
+    ensure_registered();
+
+    if ((err = avformat_open_input(&fmt, path, NULL, NULL)) < 0) {
+        set_why(why, why_len, err);
+        return FB_PROBE_CANT_OPEN;
     }
-    if (fmt->duration != AV_NOPTS_VALUE)
+    if ((err = avformat_find_stream_info(fmt, NULL)) < 0) {
+        set_why(why, why_len, err);
+        avformat_close_input(&fmt);
+        return FB_PROBE_CANT_OPEN;
+    }
+    if (fmt->duration != AV_NOPTS_VALUE && fmt->duration > 0)
         *duration = fmt->duration / (AV_TIME_BASE / 1000);
     for (i = 0; i < fmt->nb_streams; i++) {
-        enum AVMediaType t = fmt->streams[i]->codecpar->codec_type;
+        AVStream *st = fmt->streams[i];
+        enum AVMediaType t = st->codecpar->codec_type;
 
         if (t == AVMEDIA_TYPE_VIDEO)
             *has_video = 1;
         else if (t == AVMEDIA_TYPE_AUDIO)
             *has_audio = 1;
+
+        /* Some containers only know the length per stream. */
+        if (*duration <= 0 && st->duration != AV_NOPTS_VALUE &&
+            st->duration > 0)
+            *duration = av_rescale_q(st->duration, st->time_base,
+                                     (AVRational){ 1, 1000 });
     }
     avformat_close_input(&fmt);
-    return 0;
+
+    if (!*has_video)
+        return FB_PROBE_NO_VIDEO;
+    if (*duration <= 0)
+        return FB_PROBE_NO_DURATION;
+    return FB_PROBE_OK;
 }
 
 #else
 
-int FB_ProbeMedia(const char *path, fb_ms_t *duration, int *has_video,
-                  int *has_audio)
+FBProbeResult FB_ProbeMedia(const char *path, fb_ms_t *duration,
+                            int *has_video, int *has_audio,
+                            char *why, size_t why_len)
 {
     (void)path;
     *duration = 0;
     *has_video = *has_audio = 0;
-    return -1;
+    if (why && why_len)
+        why[0] = '\0';
+    return FB_PROBE_NO_LIBAV;
 }
 
 #endif

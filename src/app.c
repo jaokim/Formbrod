@@ -42,7 +42,24 @@ int App_AddFile(const char *path)
     int has_v = 0, has_a = 0;
     int src;
 
-    if (FB_ProbeMedia(path, &dur, &has_v, &has_a) != 0 || !has_v || dur <= 0) {
+    char why[128] = "";
+
+    switch (FB_ProbeMedia(path, &dur, &has_v, &has_a, why, sizeof(why))) {
+    case FB_PROBE_OK:
+        break;
+    case FB_PROBE_NO_LIBAV:
+        App_SetStatus("%s", FB_Str(MSG_STATUS_NO_LIBAV));
+        return -1;
+    case FB_PROBE_CANT_OPEN:
+        App_SetStatus(FB_Str(MSG_STATUS_CANT_OPEN), path, why);
+        return -1;
+    case FB_PROBE_NO_VIDEO:
+        App_SetStatus(FB_Str(MSG_STATUS_NO_VIDEO), path);
+        return -1;
+    case FB_PROBE_NO_DURATION:
+        App_SetStatus(FB_Str(MSG_STATUS_NO_DURATION), path);
+        return -1;
+    default:
         App_SetStatus(FB_Str(MSG_STATUS_CANT_READ), path);
         return -1;
     }

@@ -41,7 +41,17 @@ void App_SetStatus(const char *fmt, ...);
 const char *App_JobErrorString(FBJobError err);
 
 /* Media probing (src/backend/media.c). Fills duration and stream flags. */
-int  FB_ProbeMedia(const char *path, fb_ms_t *duration, int *has_video,
-                   int *has_audio);
+typedef enum {
+    FB_PROBE_OK = 0,
+    FB_PROBE_NO_LIBAV,      /* built without HAVE_LIBAV */
+    FB_PROBE_CANT_OPEN,     /* libavformat failed; reason in `why` */
+    FB_PROBE_NO_VIDEO,
+    FB_PROBE_NO_DURATION
+} FBProbeResult;
+
+/* `why` receives ffmpeg's error text for FB_PROBE_CANT_OPEN (English). */
+FBProbeResult FB_ProbeMedia(const char *path, fb_ms_t *duration,
+                            int *has_video, int *has_audio,
+                            char *why, size_t why_len);
 
 #endif

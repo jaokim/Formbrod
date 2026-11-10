@@ -56,8 +56,13 @@ through modules and ARexx.
   backend (with ASan/UBSan) and checks the files with ffprobe. Needs the
   ffmpeg dev files (pkg-config, or `LIBAV_CFLAGS`/`LIBAV_LIBS`) and the
   `ffmpeg`/`ffprobe` tools. Run it after any change to `local_backend.c`.
-- `make` – cross-compiles with `ppc-amigaos-gcc` (AmigaOS 4 SDK, `-lauto`).
-  Add `LIBAV=1 LIBAV_PREFIX=...` to link ffmpeg.
+- `make` – cross-compiles with `ppc-amigaos-gcc` (AmigaOS 4 SDK, newlib,
+  `-lauto`). ffmpeg is linked automatically when `deps/ffmpeg` exists
+  (`make deps`); `LIBAV=0` forces a build without it.
+- Third-party libraries are listed in `tools/deps.list` and fetched by
+  `tools/fetch-deps.sh` into `deps/` (not committed). Add new dependencies
+  there rather than vendoring them. Libraries must match the C runtime
+  (newlib by default; `DEPS_CRT` selects another).
 - The Amiga-side code (GUI, ARexx, backend) has not been compiled against
   the SDK in this environment. Treat API details there as unverified until
   they build on a real toolchain.

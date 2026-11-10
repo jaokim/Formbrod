@@ -13,10 +13,39 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # tools/fetch-deps.sh needs lha or lhasa for .lha archives.
+      - name: Install unpack tools
+        run: |
+          if ! command -v lha >/dev/null && ! command -v lhasa >/dev/null; then
+            SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
+            $SUDO apt-get update -qq
+            $SUDO apt-get install -y -qq lhasa curl
+          fi
+
+      - name: Cache downloads
+        uses: actions/cache@v4
+        with:
+          path: deps/cache
+          key: deps-${{ hashFiles('tools/deps.list') }}
+
+      - name: Dependencies
+        run: |
+          tools/fetch-deps.sh
+          cat deps/*/.installed
+          ls deps/*/lib
+
       # CC is passed explicitly: make's built-in default (cc) means
       # "CC ?= ppc-amigaos-gcc" in the Makefile never takes effect.
+      # First a build without ffmpeg, so that path keeps compiling.
+      - name: Build without ffmpeg
+        run: make CC=ppc-amigaos-gcc LIBAV=0 BUILD=build/amiga-noav TARGET=Formbrod-noav
+
+      # LIBAV turns on by itself now that deps/ffmpeg exists.
       - name: Build
-        run: make CC=ppc-amigaos-gcc
+        run: |
+          make config
+          make CC=ppc-amigaos-gcc
+          test "$(make -s config)" = "LIBAV=1 LIBAV_PREFIX=deps/ffmpeg"
 
       # The .cd/.ct files are UTF-8; the Makefile converts them to
       # ISO-8859-1 with iconv before handing them to FlexCat.

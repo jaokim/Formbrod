@@ -3,3 +3,4 @@ Formbrod
 *.o
 *.info
 __pycache__/
+/deps/

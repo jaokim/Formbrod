@@ -1,0 +1,23 @@
+# Third-party libraries Formbrod builds against.
+#
+# tools/fetch-deps.sh reads this file. Each dependency ends up in
+# deps/<name>/include and deps/<name>/lib (static .a libraries only).
+#
+# Columns (whitespace-separated, one dependency per line):
+#   name     directory name under deps/
+#   url      archive to download (.lha/.lzh, .tar.*, .tgz or .zip)
+#   sha256   expected checksum, or - to skip the check. The script prints
+#            the checksum it sees, so pin it here once you trust a download.
+#   header   a header that marks the include root, relative to it
+#   lib      a static library that marks the lib directory
+#
+# The archive's own layout doesn't matter: the script searches it for
+# `header` and `lib`, preferring newlib builds over clib2/clib4 ones.
+#
+# To add a dependency: add a line, run tools/fetch-deps.sh <name>, then add
+# its -I/-L/-l flags to the Makefile (see the ffmpeg block there).
+
+# ffmpeg 8.0 libraries for AmigaOS 4 by Michael Trebilcock (LGPL; OS4Depot
+# lists it as "Distribute: no", so it's downloaded, never committed).
+# Needs libz, libbz2 and libatomic (64-bit atomics) at link time.
+ffmpeg  https://os4depot.net/share/development/misc/libffmpeg.lha  -  libavformat/avformat.h  libavformat.a
