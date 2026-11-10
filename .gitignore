@@ -2,3 +2,4 @@ build/
 Formbrod
 *.o
 *.info
+__pycache__/
