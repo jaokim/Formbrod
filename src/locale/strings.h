@@ -70,6 +70,14 @@
 #define MSG_STATUS_CANCELLED_STR         "Render cancelled"
 #define MSG_STATUS_FAILED                61
 #define MSG_STATUS_FAILED_STR            "Render failed: %s"
+#define MSG_STATUS_NO_LIBAV              62
+#define MSG_STATUS_NO_LIBAV_STR          "This Formbrod was built without ffmpeg, so it can't read video files"
+#define MSG_STATUS_CANT_OPEN             63
+#define MSG_STATUS_CANT_OPEN_STR         "Can't open %s: %s"
+#define MSG_STATUS_NO_VIDEO              64
+#define MSG_STATUS_NO_VIDEO_STR          "%s has no video in it"
+#define MSG_STATUS_NO_DURATION           65
+#define MSG_STATUS_NO_DURATION_STR       "Can't tell how long %s is"
 #define MSG_JOB_EMPTY                    70
 #define MSG_JOB_EMPTY_STR                "The timeline is empty"
 #define MSG_JOB_BAD_SOURCE               71
@@ -87,7 +95,7 @@
 #define MSG_ERR_NO_AREXX                 81
 #define MSG_ERR_NO_AREXX_STR             "Formbrod: ARexx port not available\012"
 
-#define FB_NUM_STRINGS 37
+#define FB_NUM_STRINGS 41
 
 #ifdef FB_STRINGS_ARRAY
 static const struct FBBuiltinString {
@@ -123,6 +131,10 @@ static const struct FBBuiltinString {
     { MSG_STATUS_DONE, MSG_STATUS_DONE_STR },
     { MSG_STATUS_CANCELLED, MSG_STATUS_CANCELLED_STR },
     { MSG_STATUS_FAILED, MSG_STATUS_FAILED_STR },
+    { MSG_STATUS_NO_LIBAV, MSG_STATUS_NO_LIBAV_STR },
+    { MSG_STATUS_CANT_OPEN, MSG_STATUS_CANT_OPEN_STR },
+    { MSG_STATUS_NO_VIDEO, MSG_STATUS_NO_VIDEO_STR },
+    { MSG_STATUS_NO_DURATION, MSG_STATUS_NO_DURATION_STR },
     { MSG_JOB_EMPTY, MSG_JOB_EMPTY_STR },
     { MSG_JOB_BAD_SOURCE, MSG_JOB_BAD_SOURCE_STR },
     { MSG_JOB_UNKNOWN_MODULE, MSG_JOB_UNKNOWN_MODULE_STR },

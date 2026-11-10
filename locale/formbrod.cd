@@ -114,6 +114,21 @@ Render cancelled
 MSG_STATUS_FAILED (61//)
 Render failed: %s
 ;
+MSG_STATUS_NO_LIBAV (62//)
+This Formbrod was built without ffmpeg, so it can't read video files
+;
+; The first %s is the file path, the second ffmpeg's reason (in English).
+MSG_STATUS_CANT_OPEN (63//)
+Can't open %s: %s
+;
+; %s is the file path.
+MSG_STATUS_NO_VIDEO (64//)
+%s has no video in it
+;
+; %s is the file path.
+MSG_STATUS_NO_DURATION (65//)
+Can't tell how long %s is
+;
 ; ---- Render job errors ----------------------------------------------------
 MSG_JOB_EMPTY (70//)
 The timeline is empty
