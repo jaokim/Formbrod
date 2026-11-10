@@ -58,6 +58,9 @@ Släpp en videofil här, eller använd Lägg till fil
 MSG_HINT_ZOOM
 Dra åt höger för att zooma in kring positionen, åt vänster för att se mer av klippet
 ;
+MSG_HINT_PLAYHEAD
+Klicka eller dra för att flytta positionen
+;
 MSG_REQ_ADD_FILE
 Lägg till videofil
 ;

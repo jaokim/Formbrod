@@ -76,6 +76,10 @@ Drop a video file here, or use Add file
 MSG_HINT_ZOOM (34//)
 Drag right to zoom in around the playhead, left to see more of the edit
 ;
+; Hint shown when the pointer rests on the ruler or the film strip.
+MSG_HINT_PLAYHEAD (35//)
+Click or drag to move the playhead
+;
 ; ---- File requester titles ------------------------------------------------
 MSG_REQ_ADD_FILE (40//)
 Add video file

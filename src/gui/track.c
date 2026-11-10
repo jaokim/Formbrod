@@ -329,6 +329,9 @@ static uint32 track_dispatch(Class *cl, Object *o, Msg msg)
     case GM_HITTEST:
         return GMR_GADGETHIT;
 
+    case GM_HELPTEST:      /* the whole box answers for the hover hint */
+        return GMR_HELPHIT;
+
     case GM_GOACTIVE:
         return track_go_active(cl, o, (struct gpInput *)msg);
 

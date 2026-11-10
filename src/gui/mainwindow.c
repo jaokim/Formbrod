@@ -90,7 +90,9 @@ static char PositionText[32];
 /* Shown when the pointer rests on a gadget (WINDOW_GadgetHelp). The texts
  * are filled in from the catalog when the window opens. */
 static struct HintInfo Hints[] = {
-    { GID_ZOOM, -1, NULL, 0 },
+    { GID_ZOOM,      -1, NULL, 0 },
+    { GID_RULER,     -1, NULL, 0 },
+    { GID_FILMSTRIP, -1, NULL, 0 },
     { -1, -1, NULL, 0 }
 };
 static BOOL TrackClassesMade;
@@ -416,6 +418,7 @@ static Object *track(Class *cls, uint32 id, CONST_STRPTR empty_text)
     Object *o = IIntuition->NewObject(cls, NULL,
         GA_ID,           id,
         GA_RelVerify,    TRUE,
+        GA_GadgetHelp,   TRUE,
         ICA_TARGET,      ICTARGET_IDCMP,
         TRACK_Timebase,  &TB,
         TRACK_Timeline,  &App.timeline,
@@ -445,6 +448,8 @@ int MainWindow_Open(void)
     IdcmpHook.h_Entry = (HOOKFUNC)idcmp_hook;
     strcpy(PositionText, "0:00");
     Hints[0].hi_Text = FB_Str(MSG_HINT_ZOOM);
+    Hints[1].hi_Text = FB_Str(MSG_HINT_PLAYHEAD);
+    Hints[2].hi_Text = FB_Str(MSG_HINT_PLAYHEAD);
 
     LB = (struct ListBrowserIFace *)IExec->GetInterface(
              (struct Library *)classes[C_LISTBROWSER].base, "main", 1, NULL);
