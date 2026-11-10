@@ -11,6 +11,7 @@
 #include "app.h"
 #include "gui/mainwindow.h"
 #include "arexx/arexx.h"
+#include "locale/catalog.h"
 
 static const char USED ver[] = "$VER: Formbrod 0.1 (09.11.2026)";
 
@@ -19,6 +20,7 @@ int main(int argc, char **argv)
     int rc = RETURN_FAIL;
     int i;
 
+    Locale_Open();          /* before App_Init(), which sets a status line */
     if (App_Init() != 0)
         goto out;
 
@@ -27,11 +29,11 @@ int main(int argc, char **argv)
         App_AddFile(argv[i]);
 
     if (MainWindow_Open() != 0) {
-        IDOS->Printf("Formbrod: can't open window (are the ReAction classes installed?)\n");
+        IDOS->Printf("%s", FB_Str(MSG_ERR_NO_WINDOW));
         goto out;
     }
     if (ARexx_Init() != 0)
-        IDOS->Printf("Formbrod: ARexx port not available\n");
+        IDOS->Printf("%s", FB_Str(MSG_ERR_NO_AREXX));
 
     while (!App.quit) {
         uint32 mask = MainWindow_SigMask() | ARexx_SigMask() | SIGBREAKF_CTRL_C;
@@ -64,5 +66,6 @@ out:
     ARexx_Cleanup();
     MainWindow_Close();
     App_Cleanup();
+    Locale_Close();
     return rc;
 }

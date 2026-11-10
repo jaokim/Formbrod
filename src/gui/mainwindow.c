@@ -10,6 +10,9 @@
  *   render   [#######.........]
  *   status line
  *
+ * All visible text comes from FB_Str() (src/locale/), so it is translated
+ * when a catalog for the user's language is installed.
+ *
  * Files can be dropped on the window (AppWindow). Classes are opened with
  * OpenClass() and objects created with NewObject() on the Class pointer, so
  * nothing depends on reaction_macros.h.
@@ -36,6 +39,7 @@
 #include "app.h"
 #include "mainwindow.h"
 #include "formbrod/module.h"
+#include "locale/catalog.h"
 
 enum {
     GID_ADD = 1, GID_SPLIT, GID_REMOVE, GID_FADE, GID_PREVIEW, GID_EXPORT,
@@ -92,8 +96,9 @@ static void free_clip_nodes(void)
 
 static void fmt_time(char *buf, size_t len, fb_ms_t ms)
 {
-    snprintf(buf, len, "%ld:%02ld.%01ld", (long)(ms / 60000),
-             (long)((ms / 1000) % 60), (long)((ms / 100) % 10));
+    snprintf(buf, len, "%ld:%02ld%c%01ld", (long)(ms / 60000),
+             (long)((ms / 1000) % 60), Locale_DecimalPoint(),
+             (long)((ms / 100) % 10));
 }
 
 void MainWindow_Refresh(void)
@@ -145,7 +150,11 @@ void MainWindow_Refresh(void)
     IIntuition->SetGadgetAttrs(Gad[GID_REMOVE], Win, NULL, GA_Disabled, total <= 0, TAG_END);
     IIntuition->SetGadgetAttrs(Gad[GID_FADE], Win, NULL, GA_Disabled, total <= 0, TAG_END);
     IIntuition->SetGadgetAttrs(Gad[GID_PREVIEW], Win, NULL, GA_Disabled, total <= 0, TAG_END);
-    IIntuition->SetGadgetAttrs(Gad[GID_EXPORT], Win, NULL, GA_Disabled, total <= 0, TAG_END);
+    /* While rendering, Export turns into Cancel. */
+    IIntuition->SetGadgetAttrs(Gad[GID_EXPORT], Win, NULL,
+        GA_Text,     FB_Str(App.rendering ? MSG_BTN_CANCEL : MSG_BTN_EXPORT),
+        GA_Disabled, total <= 0 && !App.rendering,
+        TAG_END);
     IIntuition->SetGadgetAttrs(Gad[GID_STATUS], Win, NULL, GA_Text, App.status, TAG_END);
 }
 
@@ -197,7 +206,7 @@ static void handle_gadget(uint32 id)
 
     switch (id) {
     case GID_ADD:
-        if (ask_file("Add video file", FALSE, path, sizeof(path)))
+        if (ask_file(FB_Str(MSG_REQ_ADD_FILE), FALSE, path, sizeof(path)))
             App_AddFile(path);
         break;
     case GID_SPLIT:
@@ -208,13 +217,13 @@ static void handle_gadget(uint32 id)
         if ((clip = selected_clip()) >= 0)
             App_RemoveClip(clip);
         else
-            App_SetStatus("Select a clip first");
+            App_SetStatus("%s", FB_Str(MSG_STATUS_SELECT_CLIP));
         break;
     case GID_FADE:
         if ((clip = selected_clip()) >= 0)
             App_AddEffect(clip, "fade");
         else
-            App_SetStatus("Select a clip first");
+            App_SetStatus("%s", FB_Str(MSG_STATUS_SELECT_CLIP));
         break;
     case GID_PREVIEW:
         App_Export("T:formbrod-preview.mp4", TRUE);
@@ -222,7 +231,7 @@ static void handle_gadget(uint32 id)
     case GID_EXPORT:
         if (App.rendering)
             App_CancelRender();
-        else if (ask_file("Export video", TRUE, path, sizeof(path)))
+        else if (ask_file(FB_Str(MSG_REQ_EXPORT), TRUE, path, sizeof(path)))
             App_Export(path, FALSE);
         break;
     }
@@ -269,22 +278,22 @@ int MainWindow_Open(void)
     IExec->NewList(&ClipList);
 
     Columns = LB->AllocLBColumnInfo(5,
-        LBCIA_Column, 0, LBCIA_Title, "#",     LBCIA_Weight, 5,
-        LBCIA_Column, 1, LBCIA_Title, "File",  LBCIA_Weight, 45,
-        LBCIA_Column, 2, LBCIA_Title, "In",    LBCIA_Weight, 15,
-        LBCIA_Column, 3, LBCIA_Title, "Out",   LBCIA_Weight, 15,
-        LBCIA_Column, 4, LBCIA_Title, "Effects", LBCIA_Weight, 20,
+        LBCIA_Column, 0, LBCIA_Title, FB_Str(MSG_COL_NUMBER),  LBCIA_Weight, 5,
+        LBCIA_Column, 1, LBCIA_Title, FB_Str(MSG_COL_FILE),    LBCIA_Weight, 45,
+        LBCIA_Column, 2, LBCIA_Title, FB_Str(MSG_COL_IN),      LBCIA_Weight, 15,
+        LBCIA_Column, 3, LBCIA_Title, FB_Str(MSG_COL_OUT),     LBCIA_Weight, 15,
+        LBCIA_Column, 4, LBCIA_Title, FB_Str(MSG_COL_EFFECTS), LBCIA_Weight, 20,
         TAG_END);
 
     buttons = IIntuition->NewObject(CLS(C_LAYOUT), NULL,
         LAYOUT_Orientation, LAYOUT_ORIENT_HORIZ,
         LAYOUT_EvenSize,    TRUE,
-        LAYOUT_AddChild, button(GID_ADD,     "_Add file..."),
-        LAYOUT_AddChild, button(GID_SPLIT,   "_Split"),
-        LAYOUT_AddChild, button(GID_REMOVE,  "_Remove"),
-        LAYOUT_AddChild, button(GID_FADE,    "_Fade"),
-        LAYOUT_AddChild, button(GID_PREVIEW, "_Preview"),
-        LAYOUT_AddChild, button(GID_EXPORT,  "_Export..."),
+        LAYOUT_AddChild, button(GID_ADD,     FB_Str(MSG_BTN_ADD)),
+        LAYOUT_AddChild, button(GID_SPLIT,   FB_Str(MSG_BTN_SPLIT)),
+        LAYOUT_AddChild, button(GID_REMOVE,  FB_Str(MSG_BTN_REMOVE)),
+        LAYOUT_AddChild, button(GID_FADE,    FB_Str(MSG_BTN_FADE)),
+        LAYOUT_AddChild, button(GID_PREVIEW, FB_Str(MSG_BTN_PREVIEW)),
+        LAYOUT_AddChild, button(GID_EXPORT,  FB_Str(MSG_BTN_EXPORT)),
         TAG_END);
 
     Gad[GID_CLIPS] = (struct Gadget *)IIntuition->NewObject(CLS(C_LISTBROWSER), NULL,
@@ -328,16 +337,16 @@ int MainWindow_Open(void)
         LAYOUT_AddChild,    Gad[GID_CLIPS],
         LAYOUT_AddChild,    Gad[GID_PLAYHEAD],
         CHILD_WeightedHeight, 0,
-        CHILD_Label,        label("Playhead"),
+        CHILD_Label,        label(FB_Str(MSG_LABEL_PLAYHEAD)),
         LAYOUT_AddChild,    Gad[GID_PROGRESS],
         CHILD_WeightedHeight, 0,
-        CHILD_Label,        label("Render"),
+        CHILD_Label,        label(FB_Str(MSG_LABEL_RENDER)),
         LAYOUT_AddChild,    Gad[GID_STATUS],
         CHILD_WeightedHeight, 0,
         TAG_END);
 
     WinObj = IIntuition->NewObject(CLS(C_WINDOW), NULL,
-        WA_Title,           "Formbröd",
+        WA_Title,           FB_Str(MSG_WINDOW_TITLE),
         WA_Activate,        TRUE,
         WA_DepthGadget,     TRUE,
         WA_DragBar,         TRUE,

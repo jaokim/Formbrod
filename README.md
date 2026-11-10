@@ -23,6 +23,7 @@ Early skeleton. Working so far:
 - [x] ReAction main window: clip list, playhead, render progress, drag and
       drop
 - [x] ARexx port
+- [x] Translatable GUI through locale.library catalogs (English, Swedish)
 - [ ] Local rendering with libav* (`src/backend/local_backend.c`)
 - [ ] Custom timeline gadget (`gadgets/timeline/`)
 - [ ] Remote rendering on a render server
@@ -37,6 +38,40 @@ Cross-compile with the AmigaOS 4 SDK:
 To run the core tests on Linux or macOS:
 
     make -f Makefile.host test
+
+Translations are built with FlexCat (and iconv, since the sources are
+UTF-8). Without FlexCat, `tools/catgen.py` can build them instead (Python 3):
+
+    make catalogs                  # Catalogs/<language>/formbrod.catalog
+    make catalogs CATTOOL=catgen   # same, without FlexCat
+    make compare-catalogs          # build with both and check they agree
+
+CI builds the catalogs with FlexCat, cross-checks them with catgen, and
+uploads them together with the executable.
+
+Copy the `Catalogs` drawer next to the program, or into `LOCALE:Catalogs/`.
+Formbröd then follows the language set in the Locale preferences.
+
+## Translating
+
+The GUI text lives in `locale/formbrod.cd` (English, built in) and one
+`.ct` file per language in `locale/` (`svenska.ct` is the example). To add a
+language, copy `svenska.ct` to `<language>.ct`, using the language's
+name as it appears in `LOCALE:Languages/`, and translate each line under its
+`MSG_` name. Then run:
+
+    python3 tools/catgen.py check locale/formbrod.cd locale/<language>.ct
+    make catalogs
+
+The checker reports missing strings (they stay in English), `%s`
+conversions that don't match the original, lost `_` shortcuts, and
+characters that ISO-8859-1 can't hold. The files are UTF-8; `catgen`
+converts them for AmigaOS.
+
+To add a string to the program, add it to `formbrod.cd` with a new ID, run
+`make strings` to regenerate `src/locale/strings.h`, and use
+`FB_Str(MSG_...)` in the code. ARexx commands and results are never
+translated.
 
 ## ARexx
 

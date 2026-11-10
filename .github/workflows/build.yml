@@ -18,7 +18,35 @@ jobs:
       - name: Build
         run: make CC=ppc-amigaos-gcc
 
+      # The .cd/.ct files are UTF-8; the Makefile converts them to
+      # ISO-8859-1 with iconv before handing them to FlexCat.
+      - name: Catalogs (FlexCat)
+        run: |
+          make catalogs
+          ls -lR Catalogs
+
+      # Cross-check FlexCat's catalogs against tools/catgen.py, which also
+      # generates src/locale/strings.h. Fails if the strings differ.
+      - name: Compare with catgen
+        run: |
+          if command -v python3 >/dev/null; then
+            make compare-catalogs
+          else
+            echo "::warning::python3 is not in the image; FlexCat catalogs were not cross-checked"
+          fi
+
+      - name: Dump catalogs on failure
+        if: failure()
+        run: |
+          for f in Catalogs/*/formbrod.catalog build/locale/catgen/*/formbrod.catalog; do
+            [ -f "$f" ] || continue
+            echo "== $f"
+            od -A d -t x1z "$f" | head -40
+          done
+
       - uses: actions/upload-artifact@v4
         with:
           name: Formbrod-os4
-          path: Formbrod
+          path: |
+            Formbrod
+            Catalogs/

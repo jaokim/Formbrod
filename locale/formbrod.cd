@@ -1,0 +1,142 @@
+; formbrod.cd - catalog description for Formbröd.
+;
+; These are the built-in English strings. tools/catgen.py turns this file
+; into src/locale/strings.h, and compiles the .ct translations next to it
+; into Catalogs/<language>/formbrod.catalog.
+;
+; Rules:
+;  - Every string has a fixed ID. Never reuse or renumber an ID; add new
+;    strings with a new number.
+;  - Strings containing printf conversions (%s, %d, ...) must keep the same
+;    conversions, in the same order, in every translation. catgen checks this.
+;  - An underscore marks the keyboard shortcut of a button.
+;  - Keep the English strings plain ASCII (so "Formbrod", not "Formbröd").
+;    FlexCat warns about anything else, and the warning fails the build.
+;  - This file and the .ct files are UTF-8. catgen converts to ISO-8859-1
+;    when it writes the header and the catalogs.
+;
+; ---- Window ---------------------------------------------------------------
+MSG_WINDOW_TITLE (1//)
+Formbrod
+;
+; ---- Buttons --------------------------------------------------------------
+MSG_BTN_ADD (10//)
+_Add file...
+;
+MSG_BTN_SPLIT (11//)
+_Split
+;
+MSG_BTN_REMOVE (12//)
+_Remove
+;
+MSG_BTN_FADE (13//)
+_Fade
+;
+MSG_BTN_PREVIEW (14//)
+_Preview
+;
+MSG_BTN_EXPORT (15//)
+_Export...
+;
+; Replaces the Export button while a render is running.
+MSG_BTN_CANCEL (16//)
+_Cancel
+;
+; ---- Clip list columns ----------------------------------------------------
+MSG_COL_NUMBER (20//)
+#
+;
+MSG_COL_FILE (21//)
+File
+;
+MSG_COL_IN (22//)
+In
+;
+MSG_COL_OUT (23//)
+Out
+;
+MSG_COL_EFFECTS (24//)
+Effects
+;
+; ---- Labels ---------------------------------------------------------------
+MSG_LABEL_PLAYHEAD (30//)
+Playhead
+;
+MSG_LABEL_RENDER (31//)
+Render
+;
+; ---- File requester titles ------------------------------------------------
+MSG_REQ_ADD_FILE (40//)
+Add video file
+;
+MSG_REQ_EXPORT (41//)
+Export video
+;
+; ---- Status line ----------------------------------------------------------
+MSG_STATUS_WELCOME (50//)
+Drop a video file in the window, or click Add file.
+;
+MSG_STATUS_SELECT_CLIP (51//)
+Select a clip first
+;
+; %s is the file path.
+MSG_STATUS_CANT_READ (52//)
+Can't read video from %s
+;
+MSG_STATUS_TOO_MANY (53//)
+Too many files or clips
+;
+; %s is the file path.
+MSG_STATUS_ADDED (54//)
+Added %s
+;
+MSG_STATUS_NOTHING_TO_SPLIT (55//)
+Nothing to split there
+;
+MSG_STATUS_NO_SUCH_CLIP (56//)
+No such clip or effect
+;
+MSG_STATUS_ALREADY_RENDERING (57//)
+Already rendering
+;
+; %s is the output path.
+MSG_STATUS_RENDERING (58//)
+Rendering %s...
+;
+; %s is a message from the render backend (may be in English).
+MSG_STATUS_DONE (59//)
+Done: %s
+;
+MSG_STATUS_CANCELLED (60//)
+Render cancelled
+;
+; %s is a message from the render backend (may be in English).
+MSG_STATUS_FAILED (61//)
+Render failed: %s
+;
+; ---- Render job errors ----------------------------------------------------
+MSG_JOB_EMPTY (70//)
+The timeline is empty
+;
+MSG_JOB_BAD_SOURCE (71//)
+A clip refers to a missing source
+;
+MSG_JOB_UNKNOWN_MODULE (72//)
+An effect uses an unknown module
+;
+MSG_JOB_NOT_EXPRESSIBLE (73//)
+An effect can't be rendered with ffmpeg filters
+;
+MSG_JOB_OVERFLOW (74//)
+The edit is too complex (filtergraph too long)
+;
+MSG_JOB_UNKNOWN (75//)
+Unknown error
+;
+; ---- Shell messages at startup --------------------------------------------
+MSG_ERR_NO_WINDOW (80//)
+Formbrod: can't open window (are the ReAction classes installed?)\n
+;
+MSG_ERR_NO_AREXX (81//)
+Formbrod: ARexx port not available\n
+;
