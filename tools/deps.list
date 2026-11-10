@@ -19,5 +19,5 @@
 
 # ffmpeg 8.0 libraries for AmigaOS 4 by Michael Trebilcock (LGPL; OS4Depot
 # lists it as "Distribute: no", so it's downloaded, never committed).
-# Needs libz and libbz2 at link time.
+# Needs libz, libbz2 and libatomic (64-bit atomics) at link time.
 ffmpeg  https://os4depot.net/share/development/misc/libffmpeg.lha  -  libavformat/avformat.h  libavformat.a

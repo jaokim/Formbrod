@@ -41,7 +41,7 @@ ifeq ($(LIBAV),1)
 CFLAGS   += -DHAVE_LIBAV -I$(LIBAV_PREFIX)/include
 LDFLAGS  += -L$(LIBAV_PREFIX)/lib
 LIBS     := -lavfilter -lavformat -lavcodec -lswscale -lswresample \
-            -lavutil -lbz2 -lz -lpthread -lm $(LIBS)
+            -lavutil -lbz2 -lz -lpthread -latomic -lm $(LIBS)
 endif
 
 # Downloads third-party libraries listed in tools/deps.list into $(DEPS_DIR).

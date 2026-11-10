@@ -29,7 +29,10 @@ jobs:
           key: deps-${{ hashFiles('tools/deps.list') }}
 
       - name: Dependencies
-        run: tools/fetch-deps.sh
+        run: |
+          tools/fetch-deps.sh
+          cat deps/*/.installed
+          ls deps/*/lib
 
       # CC is passed explicitly: make's built-in default (cc) means
       # "CC ?= ppc-amigaos-gcc" in the Makefile never takes effect.
