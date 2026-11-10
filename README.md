@@ -22,7 +22,8 @@ Early skeleton. Working so far:
 - [x] Module interface, plus a `fade` module
 - [x] Clips of different size, shape, frame rate and audio can be joined:
       each is fitted to the output frame (letterbox, crop or stretch)
-- [x] ReAction main window: clip list, playhead, render progress, drag and
+- [x] ReAction main window: clip list, playhead, render progress, menus
+      (with About, Quit, effects and the default fit mode), drag and
       drop
 - [x] ARexx port
 - [x] Translatable GUI through locale.library catalogs (English, Swedish)

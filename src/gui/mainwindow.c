@@ -21,11 +21,18 @@
  * All visible text comes from FB_Str() (src/locale/), so it is translated
  * when a catalog for the user's language is installed.
  *
+ * The menus (GadTools, attached with WINDOW_MenuStrip) repeat the buttons
+ * and add what has no button: About, Quit, every effect module, and the
+ * default fit mode. Menu items carry their command ID in
+ * GTMENUITEM_USERDATA; for actions that have a button it is the button's
+ * GID, so both go through the same code.
+ *
  * Files can be dropped on the window (AppWindow). Classes are opened with
  * OpenClass() and objects created with NewObject() on the Class pointer, so
  * nothing depends on reaction_macros.h.
  */
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 
 #include <proto/exec.h>
@@ -35,6 +42,7 @@
 #include <proto/wb.h>
 #include <proto/listbrowser.h>
 #include <proto/utility.h>
+#include <proto/gadtools.h>
 
 #include <classes/window.h>
 #include <gadgets/layout.h>
@@ -46,6 +54,7 @@
 #include <gadgets/fuelgauge.h>
 #include <images/label.h>
 #include <workbench/workbench.h>
+#include <libraries/gadtools.h>
 
 #include "app.h"
 #include "mainwindow.h"
@@ -53,11 +62,20 @@
 #include "locale/catalog.h"
 #include "gui/timebase.h"
 #include "gui/track.h"
+#include "version.h"
 
 enum {
     GID_ADD = 1, GID_SPLIT, GID_REMOVE, GID_FADE, GID_PREVIEW, GID_EXPORT,
     GID_CLIPS, GID_POSITION, GID_PROGRESS, GID_STATUS,
     GID_RULER, GID_FILMSTRIP, GID_SCROLL, GID_ZOOM, GID_LAST
+};
+
+/* Menu commands without a button. Menu items for button actions use the
+ * button's GID. */
+enum {
+    MID_CANCEL = 100, MID_ABOUT, MID_QUIT, MID_FIT_MENU,
+    MID_FIT_FIT, MID_FIT_FILL, MID_FIT_STRETCH,
+    MID_EFFECT = 200     /* + module index */
 };
 
 static struct {
@@ -96,6 +114,8 @@ static struct HintInfo Hints[] = {
     { -1, -1, NULL, 0 }
 };
 static BOOL TrackClassesMade;
+static struct Menu *Menus;
+static APTR VisualInfo;
 
 #define CLS(i) (classes[i].cls)
 
@@ -235,6 +255,276 @@ static uint32 idcmp_hook(struct Hook *hook, Object *winobj,
     return 0;
 }
 
+/* ---- Menus ------------------------------------------------------------ */
+
+static FBFit current_fit(void)
+{
+    FBFit f = App.timeline.format.fit;
+
+    return f == FB_FIT_DEFAULT ? FB_FIT_FIT : f;
+}
+
+/* The menu item for a fit mode. */
+static uint32 fit_menu_id(FBFit f)
+{
+    return MID_FIT_FIT + (uint32)(f - FB_FIT_FIT);
+}
+
+static int is_fit_id(uint32 id)
+{
+    return id >= MID_FIT_FIT && id <= MID_FIT_STRETCH;
+}
+
+/* Whether a menu command can be used right now. Mirrors the buttons, but
+ * also disables what a running render would refuse. */
+static BOOL menu_enabled(uint32 id)
+{
+    BOOL have_clips = FB_TimelineDuration(&App.timeline) > 0;
+
+    if (id >= MID_EFFECT)
+        return have_clips;
+    switch (id) {
+    case GID_SPLIT:
+    case GID_REMOVE:
+        return have_clips;
+    case GID_PREVIEW:
+    case GID_EXPORT:
+        return have_clips && !App.rendering;
+    case MID_CANCEL:
+        return App.rendering != 0;
+    default:
+        return TRUE;
+    }
+}
+
+/* Goes through every item and subitem. Without `apply` it counts the items
+ * whose enabled or checked state is out of date; with it, fixes them. */
+static int update_menu_items(BOOL apply)
+{
+    struct Menu *m;
+    struct MenuItem *item, *sub;
+    uint32 want_fit = fit_menu_id(current_fit());
+    int stale = 0;
+
+    for (m = Menus; m; m = m->NextMenu) {
+        for (item = m->FirstItem; item; item = item->NextItem) {
+            for (sub = item; sub; sub = (sub == item ? item->SubItem
+                                                    : sub->NextItem)) {
+                uint32 id = (uint32)GTMENUITEM_USERDATA(sub);
+                uint16 flags = sub->Flags;
+
+                if (id == 0)
+                    continue;           /* separator */
+                if (menu_enabled(id))
+                    flags |= ITEMENABLED;
+                else
+                    flags &= ~ITEMENABLED;
+                if (is_fit_id(id)) {
+                    if (id == want_fit)
+                        flags |= CHECKED;
+                    else
+                        flags &= ~CHECKED;
+                }
+                if (flags != sub->Flags) {
+                    stale++;
+                    if (apply)
+                        sub->Flags = flags;
+                }
+            }
+        }
+    }
+    return stale;
+}
+
+/* Puts the menus in step with the timeline and render state. The strip is
+ * taken off the window while it changes, as Intuition requires. */
+static void sync_menus(void)
+{
+    if (!Menus || !update_menu_items(FALSE))
+        return;
+    if (Win)
+        IIntuition->ClearMenuStrip(Win);
+    update_menu_items(TRUE);
+    if (Win)
+        IIntuition->ResetMenuStrip(Win, Menus);
+}
+
+static void add_menu(struct NewMenu *nm, int *n, uint8 type,
+                     const char *label, const char *key, uint32 id)
+{
+    nm[*n].nm_Type     = type;
+    nm[*n].nm_Label    = (STRPTR)label;
+    nm[*n].nm_CommKey  = (STRPTR)key;
+    nm[*n].nm_UserData = (APTR)id;
+    (*n)++;
+}
+
+/* A mutually exclusive, checkable fit-mode subitem. */
+static void add_fit_item(struct NewMenu *nm, int *n, const char *label,
+                         FBFit f)
+{
+    /* The fit items are the whole submenu, so bit k is the k-th of them. */
+    uint32 all = (1UL << (FB_FIT_COUNT - FB_FIT_FIT)) - 1;
+
+    add_menu(nm, n, NM_SUB, label, NULL, fit_menu_id(f));
+    nm[*n - 1].nm_Flags = CHECKIT | (f == current_fit() ? CHECKED : 0);
+    nm[*n - 1].nm_MutualExclude = all & ~(1UL << (f - FB_FIT_FIT));
+}
+
+/* Builds the menu strip for `scr`. The shortcuts follow the Amiga style
+ * guide (O open, Q quit, ? about) and are the same in every language. */
+static BOOL make_menus(struct Screen *scr)
+{
+    int nmods = FB_NumModules();
+    struct NewMenu *nm;
+    int n = 0, i;
+
+    nm = calloc(32 + nmods, sizeof(*nm));
+    if (!nm)
+        return FALSE;
+
+    add_menu(nm, &n, NM_TITLE, FB_Str(MSG_MENU_PROJECT), NULL, 0);
+    add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_ADD),      "O", GID_ADD);
+    add_menu(nm, &n, NM_ITEM, NM_BARLABEL,               NULL, 0);
+    add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_PREVIEW),  "P", GID_PREVIEW);
+    add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_EXPORT),   "E", GID_EXPORT);
+    add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_CANCEL),   NULL, MID_CANCEL);
+    add_menu(nm, &n, NM_ITEM, NM_BARLABEL,               NULL, 0);
+    add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_ABOUT),    "?", MID_ABOUT);
+    add_menu(nm, &n, NM_ITEM, NM_BARLABEL,               NULL, 0);
+    add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_QUIT),     "Q", MID_QUIT);
+
+    add_menu(nm, &n, NM_TITLE, FB_Str(MSG_MENU_EDIT),    NULL, 0);
+    add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_SPLIT),    NULL, GID_SPLIT);
+    add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_REMOVE),   NULL, GID_REMOVE);
+
+    /* One item per registered module, so new modules show up here without
+     * GUI changes. Module labels aren't translated yet. */
+    add_menu(nm, &n, NM_TITLE, FB_Str(MSG_MENU_EFFECTS), NULL, 0);
+    for (i = 0; i < nmods; i++) {
+        const FBModule *mod = FB_GetModule(i);
+
+        add_menu(nm, &n, NM_ITEM, mod->label ? mod->label : mod->name,
+                 NULL, MID_EFFECT + (uint32)i);
+    }
+    if (nmods == 0)
+        nm[n - 1].nm_Flags = NM_MENUDISABLED;
+
+    add_menu(nm, &n, NM_TITLE, FB_Str(MSG_MENU_SETTINGS), NULL, 0);
+    add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_FIT),      NULL, MID_FIT_MENU);
+    add_fit_item(nm, &n, FB_Str(MSG_MENU_FIT_FIT),       FB_FIT_FIT);
+    add_fit_item(nm, &n, FB_Str(MSG_MENU_FIT_FILL),      FB_FIT_FILL);
+    add_fit_item(nm, &n, FB_Str(MSG_MENU_FIT_STRETCH),   FB_FIT_STRETCH);
+
+    nm[n].nm_Type = NM_END;
+
+    VisualInfo = IGadTools->GetVisualInfoA(scr, NULL);
+    if (VisualInfo)
+        Menus = IGadTools->CreateMenus(nm, GTMN_FrontPen, 0, TAG_END);
+    free(nm);
+    if (!Menus)
+        return FALSE;
+    if (!IGadTools->LayoutMenus(Menus, VisualInfo,
+                                GTMN_NewLookMenus, TRUE, TAG_END))
+        return FALSE;
+    update_menu_items(TRUE);
+    return TRUE;
+}
+
+static void free_menus(void)
+{
+    if (Menus) {
+        IGadTools->FreeMenus(Menus);
+        Menus = NULL;
+    }
+    if (VisualInfo) {
+        IGadTools->FreeVisualInfo(VisualInfo);
+        VisualInfo = NULL;
+    }
+}
+
+static void show_about(void)
+{
+    struct EasyStruct es;
+    char version[32];
+
+    snprintf(version, sizeof(version), "%s (%s)", FB_VERSION, FB_VERSION_DATE);
+    memset(&es, 0, sizeof(es));
+    es.es_StructSize   = sizeof(es);
+    es.es_Title        = (STRPTR)FB_Str(MSG_ABOUT_TITLE);
+    es.es_TextFormat   = (STRPTR)FB_Str(MSG_ABOUT_TEXT);
+    es.es_GadgetFormat = (STRPTR)FB_Str(MSG_ABOUT_OK);
+    /* Modal, so a running render pauses until it is closed. */
+    IIntuition->EasyRequest(Win, &es, NULL, version,
+#ifdef HAVE_LIBAV
+                            FB_Str(MSG_ABOUT_LIBAV)
+#else
+                            FB_Str(MSG_ABOUT_NO_LIBAV)
+#endif
+                            );
+}
+
+static void handle_gadget(uint32 id);
+static int selected_clip(void);
+
+static void handle_menu(uint32 id)
+{
+    int clip;
+
+    if (id >= MID_EFFECT) {
+        const FBModule *mod = FB_GetModule((int)(id - MID_EFFECT));
+
+        if (!mod)
+            return;
+        if ((clip = selected_clip()) >= 0)
+            App_AddEffect(clip, mod->name);
+        else
+            App_SetStatus("%s", FB_Str(MSG_STATUS_SELECT_CLIP));
+        MainWindow_Refresh();
+        return;
+    }
+    if (is_fit_id(id)) {
+        App_SetDefaultFit(FB_FIT_FIT + (int)(id - MID_FIT_FIT));
+        MainWindow_Refresh();
+        return;
+    }
+    switch (id) {
+    case MID_ABOUT:
+        show_about();
+        break;
+    case MID_QUIT:
+        App.quit = 1;
+        break;
+    case MID_CANCEL:
+        App_CancelRender();
+        MainWindow_Refresh();
+        break;
+    case GID_EXPORT:
+        if (!App.rendering)       /* the button means Cancel then */
+            handle_gadget(id);
+        break;
+    case GID_ADD:
+    case GID_SPLIT:
+    case GID_REMOVE:
+    case GID_PREVIEW:
+        handle_gadget(id);
+        break;
+    }
+}
+
+/* `code` is the first picked item; more may follow through NextSelect. */
+static void handle_menupick(uint16 code)
+{
+    while (code != MENUNULL && Menus && !App.quit) {
+        struct MenuItem *item = IIntuition->ItemAddress(Menus, code);
+
+        if (!item)
+            break;
+        code = item->NextSelect;   /* read first: handling may reset the strip */
+        handle_menu((uint32)GTMENUITEM_USERDATA(item));
+    }
+}
+
 void MainWindow_Refresh(void)
 {
     const FBTimeline *tl = &App.timeline;
@@ -296,6 +586,7 @@ void MainWindow_Refresh(void)
         GA_Disabled, total <= 0 && !App.rendering,
         TAG_END);
     IIntuition->SetGadgetAttrs(Gad[GID_STATUS], Win, NULL, GA_Text, App.status, TAG_END);
+    sync_menus();
 }
 
 void MainWindow_SetProgress(const FBProgress *p)
@@ -433,6 +724,7 @@ static Object *track(Class *cls, uint32 id, CONST_STRPTR empty_text)
 int MainWindow_Open(void)
 {
     Object *buttons, *timeline, *viewrow, *root;
+    struct Screen *scr;
     int i;
 
     for (i = 0; i < C_COUNT; i++) {
@@ -569,7 +861,17 @@ int MainWindow_Open(void)
         CHILD_WeightedHeight, 0,
         TAG_END);
 
+    /* The menus are laid out for the screen the window opens on, so lock
+     * that screen and open the window there. Without menus the window is
+     * still usable through the buttons. */
+    scr = IIntuition->LockPubScreen(NULL);
+    if (!scr)
+        return -1;
+    if (!make_menus(scr))
+        free_menus();
+
     WinObj = IIntuition->NewObject(CLS(C_WINDOW), NULL,
+        WA_PubScreen,       scr,
         WA_Title,           FB_Str(MSG_WINDOW_TITLE),
         WA_Activate,        TRUE,
         WA_DepthGadget,     TRUE,
@@ -580,7 +882,8 @@ int MainWindow_Open(void)
         WA_InnerHeight,     380,
         WA_IDCMP,           IDCMP_GADGETUP | IDCMP_CLOSEWINDOW |
                             IDCMP_IDCMPUPDATE | IDCMP_NEWSIZE |
-                            IDCMP_GADGETHELP,
+                            IDCMP_GADGETHELP | IDCMP_MENUPICK,
+        WA_NewLookMenus,    TRUE,
         WINDOW_GadgetHelp,  TRUE,
         WINDOW_HintInfo,    Hints,
         WINDOW_IDCMPHook,   &IdcmpHook,
@@ -589,11 +892,11 @@ int MainWindow_Open(void)
         WINDOW_AppPort,     AppPort,
         WINDOW_AppWindow,   TRUE,
         WINDOW_Layout,      root,
+        WINDOW_MenuStrip,   Menus,
         TAG_END);
-    if (!WinObj)
-        return -1;
-
-    Win = (struct Window *)IIntuition->IDoMethod(WinObj, WM_OPEN, NULL);
+    if (WinObj)
+        Win = (struct Window *)IIntuition->IDoMethod(WinObj, WM_OPEN, NULL);
+    IIntuition->UnlockPubScreen(NULL, scr);   /* the open window holds it */
     if (!Win)
         return -1;
     MainWindow_Refresh();
@@ -628,6 +931,9 @@ void MainWindow_Handle(uint32 sigs)
         case WMHI_GADGETUP:
             handle_gadget(result & WMHI_GADGETMASK);
             break;
+        case WMHI_MENUPICK:
+            handle_menupick(code);
+            break;
         case WMHI_NEWSIZE:
             /* The tracks have taken the new width in GM_LAYOUT. */
             sync_controls();
@@ -645,6 +951,7 @@ void MainWindow_Close(void)
         WinObj = NULL;
         Win = NULL;
     }
+    free_menus();                            /* window.class doesn't */
     if (LB) {
         free_clip_nodes();
         if (Columns)

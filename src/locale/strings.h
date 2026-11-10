@@ -112,8 +112,50 @@
 #define MSG_FITS_CROP_STR                "Cropped"
 #define MSG_FITS_STRETCH                 94
 #define MSG_FITS_STRETCH_STR             "Stretched"
+#define MSG_MENU_PROJECT                 100
+#define MSG_MENU_PROJECT_STR             "Project"
+#define MSG_MENU_ADD                     101
+#define MSG_MENU_ADD_STR                 "Add file..."
+#define MSG_MENU_PREVIEW                 102
+#define MSG_MENU_PREVIEW_STR             "Preview"
+#define MSG_MENU_EXPORT                  103
+#define MSG_MENU_EXPORT_STR              "Export..."
+#define MSG_MENU_CANCEL                  104
+#define MSG_MENU_CANCEL_STR              "Cancel render"
+#define MSG_MENU_ABOUT                   105
+#define MSG_MENU_ABOUT_STR               "About..."
+#define MSG_MENU_QUIT                    106
+#define MSG_MENU_QUIT_STR                "Quit"
+#define MSG_MENU_EDIT                    107
+#define MSG_MENU_EDIT_STR                "Edit"
+#define MSG_MENU_SPLIT                   108
+#define MSG_MENU_SPLIT_STR               "Split at playhead"
+#define MSG_MENU_REMOVE                  109
+#define MSG_MENU_REMOVE_STR              "Remove clip"
+#define MSG_MENU_EFFECTS                 110
+#define MSG_MENU_EFFECTS_STR             "Effects"
+#define MSG_MENU_SETTINGS                111
+#define MSG_MENU_SETTINGS_STR            "Settings"
+#define MSG_MENU_FIT                     112
+#define MSG_MENU_FIT_STR                 "Fit clips to frame"
+#define MSG_MENU_FIT_FIT                 113
+#define MSG_MENU_FIT_FIT_STR             "Fit inside, add bars"
+#define MSG_MENU_FIT_FILL                114
+#define MSG_MENU_FIT_FILL_STR            "Fill frame, crop edges"
+#define MSG_MENU_FIT_STRETCH             115
+#define MSG_MENU_FIT_STRETCH_STR         "Stretch to frame"
+#define MSG_ABOUT_TITLE                  120
+#define MSG_ABOUT_TITLE_STR              "About Formbrod"
+#define MSG_ABOUT_TEXT                   121
+#define MSG_ABOUT_TEXT_STR               "Formbrod %s\012\012A video editor for AmigaOS 4.\012\012%s"
+#define MSG_ABOUT_LIBAV                  122
+#define MSG_ABOUT_LIBAV_STR              "Reads and exports video with ffmpeg's libav* libraries."
+#define MSG_ABOUT_NO_LIBAV               123
+#define MSG_ABOUT_NO_LIBAV_STR           "Built without ffmpeg: video can't be read or exported."
+#define MSG_ABOUT_OK                     124
+#define MSG_ABOUT_OK_STR                 "OK"
 
-#define FB_NUM_STRINGS 50
+#define FB_NUM_STRINGS 71
 
 #ifdef FB_STRINGS_ARRAY
 static const struct FBBuiltinString {
@@ -170,6 +212,27 @@ static const struct FBBuiltinString {
     { MSG_FITS_PILLARBOX, MSG_FITS_PILLARBOX_STR },
     { MSG_FITS_CROP, MSG_FITS_CROP_STR },
     { MSG_FITS_STRETCH, MSG_FITS_STRETCH_STR },
+    { MSG_MENU_PROJECT, MSG_MENU_PROJECT_STR },
+    { MSG_MENU_ADD, MSG_MENU_ADD_STR },
+    { MSG_MENU_PREVIEW, MSG_MENU_PREVIEW_STR },
+    { MSG_MENU_EXPORT, MSG_MENU_EXPORT_STR },
+    { MSG_MENU_CANCEL, MSG_MENU_CANCEL_STR },
+    { MSG_MENU_ABOUT, MSG_MENU_ABOUT_STR },
+    { MSG_MENU_QUIT, MSG_MENU_QUIT_STR },
+    { MSG_MENU_EDIT, MSG_MENU_EDIT_STR },
+    { MSG_MENU_SPLIT, MSG_MENU_SPLIT_STR },
+    { MSG_MENU_REMOVE, MSG_MENU_REMOVE_STR },
+    { MSG_MENU_EFFECTS, MSG_MENU_EFFECTS_STR },
+    { MSG_MENU_SETTINGS, MSG_MENU_SETTINGS_STR },
+    { MSG_MENU_FIT, MSG_MENU_FIT_STR },
+    { MSG_MENU_FIT_FIT, MSG_MENU_FIT_FIT_STR },
+    { MSG_MENU_FIT_FILL, MSG_MENU_FIT_FILL_STR },
+    { MSG_MENU_FIT_STRETCH, MSG_MENU_FIT_STRETCH_STR },
+    { MSG_ABOUT_TITLE, MSG_ABOUT_TITLE_STR },
+    { MSG_ABOUT_TEXT, MSG_ABOUT_TEXT_STR },
+    { MSG_ABOUT_LIBAV, MSG_ABOUT_LIBAV_STR },
+    { MSG_ABOUT_NO_LIBAV, MSG_ABOUT_NO_LIBAV_STR },
+    { MSG_ABOUT_OK, MSG_ABOUT_OK_STR },
 };
 #endif
 

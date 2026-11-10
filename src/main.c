@@ -12,8 +12,10 @@
 #include "gui/mainwindow.h"
 #include "arexx/arexx.h"
 #include "locale/catalog.h"
+#include "version.h"
 
-static const char USED ver[] = "$VER: Formbrod 0.1 (09.11.2026)";
+static const char USED ver[] =
+    "$VER: Formbrod " FB_VERSION " (" FB_VERSION_DATE ")";
 
 int main(int argc, char **argv)
 {
