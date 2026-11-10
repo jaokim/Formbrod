@@ -88,7 +88,11 @@ Catalogs/%/formbrod.catalog: locale/%.ct $(CD)
 	@mkdir -p $(dir $@) $(LOCBUILD)/latin1
 	$(ICONV) -f UTF-8 -t ISO-8859-1 $(CD) > $(LOCBUILD)/latin1/formbrod.cd
 	$(ICONV) -f UTF-8 -t ISO-8859-1 $< > $(LOCBUILD)/latin1/$*.ct
-	$(FLEXCAT) $(LOCBUILD)/latin1/formbrod.cd $(LOCBUILD)/latin1/$*.ct CATALOG=$@
+	@# FlexCat exits 5 (RETURN_WARN) on warnings, e.g. for the non-ASCII
+	@# "ö" in Formbröd in the .cd file. Accept that; errors are 10 or 20.
+	$(FLEXCAT) $(LOCBUILD)/latin1/formbrod.cd $(LOCBUILD)/latin1/$*.ct \
+	    CATALOG=$@ || [ $$? -eq 5 ]
+	@test -s $@ || { echo "FlexCat did not write $@"; exit 1; }
 endif
 
 # Builds every catalog with catgen too and checks both tools agree.

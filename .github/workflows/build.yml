@@ -22,7 +22,6 @@ jobs:
       # ISO-8859-1 with iconv before handing them to FlexCat.
       - name: Catalogs (FlexCat)
         run: |
-          flexcat VERSION || true
           make catalogs
           ls -lR Catalogs
 
