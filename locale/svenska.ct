@@ -91,6 +91,18 @@ Renderingen avbröts
 MSG_STATUS_FAILED
 Renderingen misslyckades: %s
 ;
+MSG_STATUS_NO_LIBAV
+Den här versionen av Formbröd byggdes utan ffmpeg och kan inte läsa videofiler
+;
+MSG_STATUS_CANT_OPEN
+Kan inte öppna %s: %s
+;
+MSG_STATUS_NO_VIDEO
+%s innehåller ingen video
+;
+MSG_STATUS_NO_DURATION
+Kan inte avgöra hur lång %s är
+;
 MSG_JOB_EMPTY
 Tidslinjen är tom
 ;
