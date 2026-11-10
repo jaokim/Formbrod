@@ -94,6 +94,10 @@
 #define MSG_JOB_OVERFLOW_STR             "The edit is too complex (filtergraph too long)"
 #define MSG_JOB_UNKNOWN                  75
 #define MSG_JOB_UNKNOWN_STR              "Unknown error"
+#define MSG_ERR_NO_WINDOW                80
+#define MSG_ERR_NO_WINDOW_STR            "Formbrod: can't open window (are the ReAction classes installed?)\012"
+#define MSG_ERR_NO_AREXX                 81
+#define MSG_ERR_NO_AREXX_STR             "Formbrod: ARexx port not available\012"
 #define MSG_FITS_SCALE                   90
 #define MSG_FITS_SCALE_STR               "Scaled"
 #define MSG_FITS_LETTERBOX               91
@@ -104,10 +108,6 @@
 #define MSG_FITS_CROP_STR                "Cropped"
 #define MSG_FITS_STRETCH                 94
 #define MSG_FITS_STRETCH_STR             "Stretched"
-#define MSG_ERR_NO_WINDOW                80
-#define MSG_ERR_NO_WINDOW_STR            "Formbrod: can't open window (are the ReAction classes installed?)\012"
-#define MSG_ERR_NO_AREXX                 81
-#define MSG_ERR_NO_AREXX_STR             "Formbrod: ARexx port not available\012"
 
 #define FB_NUM_STRINGS 48
 
@@ -157,13 +157,13 @@ static const struct FBBuiltinString {
     { MSG_JOB_NOT_EXPRESSIBLE, MSG_JOB_NOT_EXPRESSIBLE_STR },
     { MSG_JOB_OVERFLOW, MSG_JOB_OVERFLOW_STR },
     { MSG_JOB_UNKNOWN, MSG_JOB_UNKNOWN_STR },
+    { MSG_ERR_NO_WINDOW, MSG_ERR_NO_WINDOW_STR },
+    { MSG_ERR_NO_AREXX, MSG_ERR_NO_AREXX_STR },
     { MSG_FITS_SCALE, MSG_FITS_SCALE_STR },
     { MSG_FITS_LETTERBOX, MSG_FITS_LETTERBOX_STR },
     { MSG_FITS_PILLARBOX, MSG_FITS_PILLARBOX_STR },
     { MSG_FITS_CROP, MSG_FITS_CROP_STR },
     { MSG_FITS_STRETCH, MSG_FITS_STRETCH_STR },
-    { MSG_ERR_NO_WINDOW, MSG_ERR_NO_WINDOW_STR },
-    { MSG_ERR_NO_AREXX, MSG_ERR_NO_AREXX_STR },
 };
 #endif
 

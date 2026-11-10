@@ -155,6 +155,13 @@ The edit is too complex (filtergraph too long)
 MSG_JOB_UNKNOWN (75//)
 Unknown error
 ;
+; ---- Shell messages at startup --------------------------------------------
+MSG_ERR_NO_WINDOW (80//)
+Formbrod: can't open window (are the ReAction classes installed?)\n
+;
+MSG_ERR_NO_AREXX (81//)
+Formbrod: ARexx port not available\n
+;
 ; ---- How a clip is fitted to the output frame (Effects column) ----------
 ; Shown when a clip's size or shape differs from the output's.
 MSG_FITS_SCALE (90//)
@@ -173,11 +180,4 @@ Cropped
 ;
 MSG_FITS_STRETCH (94//)
 Stretched
-;
-; ---- Shell messages at startup --------------------------------------------
-MSG_ERR_NO_WINDOW (80//)
-Formbrod: can't open window (are the ReAction classes installed?)\n
-;
-MSG_ERR_NO_AREXX (81//)
-Formbrod: ARexx port not available\n
 ;
