@@ -29,7 +29,10 @@ Early skeleton. Working so far:
 - [x] Local rendering with libav* (`src/backend/local_backend.c`): decode,
       filter, encode and mux, a few packets per GUI tick. Tested on Linux
       with ffmpeg 6.1, not yet on AmigaOS
-- [ ] Custom timeline gadget (`gadgets/timeline/`)
+- [x] Timeline gadgets, first step (`gadgets/timeline/`): ruler and film
+      strip on a shared time axis, zoom, scrolling and a draggable playhead.
+      Thumbnails are dummies for now
+- [ ] Real thumbnails, waveforms, trimming in the timeline
 - [ ] Remote rendering on a render server
 
 ## Building

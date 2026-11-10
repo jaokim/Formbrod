@@ -124,6 +124,11 @@ def parse_cd(path):
             raise CatError("%s: %s defined twice" % (where, name))
         if sid in ids:
             raise CatError("%s: ID %d used twice" % (where, sid))
+        if ids and sid < max(ids):
+            # FlexCat writes strings in file order and catgen sorts them,
+            # so the two only build the same catalog if the IDs go up.
+            raise CatError("%s: ID %d comes after ID %d; keep IDs in "
+                           "increasing order" % (where, sid, max(ids)))
         names.add(name)
         ids.add(sid)
         pending = {"name": name, "id": sid,

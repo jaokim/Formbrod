@@ -24,7 +24,9 @@ through modules and ARexx.
   behind `#if` checks at the top of the file). It appends format/fps
   conversion filters after the job's output labels, so jobs don't need to
   know what the encoder accepts.
-- `gadgets/timeline/` – the planned custom timeline gadget (design notes only).
+- `src/gui/track.c`, `src/gui/timebase.c` – the timeline gadgets (ruler,
+  film strip) and the time axis they share. Their arithmetic is in the
+  portable `src/timeline/timeview.c`. Notes in `gadgets/timeline/README.md`.
 
 ## Design rules
 

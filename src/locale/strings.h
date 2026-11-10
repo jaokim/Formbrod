@@ -42,6 +42,14 @@
 #define MSG_LABEL_PLAYHEAD_STR           "Playhead"
 #define MSG_LABEL_RENDER                 31
 #define MSG_LABEL_RENDER_STR             "Render"
+#define MSG_LABEL_ZOOM                   32
+#define MSG_LABEL_ZOOM_STR               "Zoom"
+#define MSG_TRACK_EMPTY                  33
+#define MSG_TRACK_EMPTY_STR              "Drop a video file here, or use Add file"
+#define MSG_HINT_ZOOM                    34
+#define MSG_HINT_ZOOM_STR                "Drag right to zoom in around the playhead, left to see more of the edit"
+#define MSG_HINT_PLAYHEAD                35
+#define MSG_HINT_PLAYHEAD_STR            "Click or drag to move the playhead"
 #define MSG_REQ_ADD_FILE                 40
 #define MSG_REQ_ADD_FILE_STR             "Add video file"
 #define MSG_REQ_EXPORT                   41
@@ -90,6 +98,10 @@
 #define MSG_JOB_OVERFLOW_STR             "The edit is too complex (filtergraph too long)"
 #define MSG_JOB_UNKNOWN                  75
 #define MSG_JOB_UNKNOWN_STR              "Unknown error"
+#define MSG_ERR_NO_WINDOW                80
+#define MSG_ERR_NO_WINDOW_STR            "Formbrod: can't open window (are the ReAction classes installed?)\012"
+#define MSG_ERR_NO_AREXX                 81
+#define MSG_ERR_NO_AREXX_STR             "Formbrod: ARexx port not available\012"
 #define MSG_FITS_SCALE                   90
 #define MSG_FITS_SCALE_STR               "Scaled"
 #define MSG_FITS_LETTERBOX               91
@@ -100,12 +112,8 @@
 #define MSG_FITS_CROP_STR                "Cropped"
 #define MSG_FITS_STRETCH                 94
 #define MSG_FITS_STRETCH_STR             "Stretched"
-#define MSG_ERR_NO_WINDOW                80
-#define MSG_ERR_NO_WINDOW_STR            "Formbrod: can't open window (are the ReAction classes installed?)\012"
-#define MSG_ERR_NO_AREXX                 81
-#define MSG_ERR_NO_AREXX_STR             "Formbrod: ARexx port not available\012"
 
-#define FB_NUM_STRINGS 46
+#define FB_NUM_STRINGS 50
 
 #ifdef FB_STRINGS_ARRAY
 static const struct FBBuiltinString {
@@ -127,6 +135,10 @@ static const struct FBBuiltinString {
     { MSG_COL_EFFECTS, MSG_COL_EFFECTS_STR },
     { MSG_LABEL_PLAYHEAD, MSG_LABEL_PLAYHEAD_STR },
     { MSG_LABEL_RENDER, MSG_LABEL_RENDER_STR },
+    { MSG_LABEL_ZOOM, MSG_LABEL_ZOOM_STR },
+    { MSG_TRACK_EMPTY, MSG_TRACK_EMPTY_STR },
+    { MSG_HINT_ZOOM, MSG_HINT_ZOOM_STR },
+    { MSG_HINT_PLAYHEAD, MSG_HINT_PLAYHEAD_STR },
     { MSG_REQ_ADD_FILE, MSG_REQ_ADD_FILE_STR },
     { MSG_REQ_EXPORT, MSG_REQ_EXPORT_STR },
     { MSG_STATUS_WELCOME, MSG_STATUS_WELCOME_STR },
@@ -151,13 +163,13 @@ static const struct FBBuiltinString {
     { MSG_JOB_NOT_EXPRESSIBLE, MSG_JOB_NOT_EXPRESSIBLE_STR },
     { MSG_JOB_OVERFLOW, MSG_JOB_OVERFLOW_STR },
     { MSG_JOB_UNKNOWN, MSG_JOB_UNKNOWN_STR },
+    { MSG_ERR_NO_WINDOW, MSG_ERR_NO_WINDOW_STR },
+    { MSG_ERR_NO_AREXX, MSG_ERR_NO_AREXX_STR },
     { MSG_FITS_SCALE, MSG_FITS_SCALE_STR },
     { MSG_FITS_LETTERBOX, MSG_FITS_LETTERBOX_STR },
     { MSG_FITS_PILLARBOX, MSG_FITS_PILLARBOX_STR },
     { MSG_FITS_CROP, MSG_FITS_CROP_STR },
     { MSG_FITS_STRETCH, MSG_FITS_STRETCH_STR },
-    { MSG_ERR_NO_WINDOW, MSG_ERR_NO_WINDOW_STR },
-    { MSG_ERR_NO_AREXX, MSG_ERR_NO_AREXX_STR },
 };
 #endif
 

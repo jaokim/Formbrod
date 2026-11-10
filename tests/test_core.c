@@ -7,6 +7,7 @@
 #include "formbrod/timeline.h"
 #include "formbrod/job.h"
 #include "formbrod/module.h"
+#include "formbrod/timeview.h"
 
 static int failures;
 
@@ -219,6 +220,137 @@ static void test_fit(void)
     CHECK(strcmp(FB_FitName(FB_FIT_FILL), "fill") == 0);
 }
 
+static void test_timeview(void)
+{
+    FBTimeView v;
+    FBTimeline tl;
+    FBCell cells[64];
+    fb_us_t major, minor, st;
+    char buf[32];
+    int n, i, levels;
+
+    /* 400 px wide, 25 fps, 48 px cells: most zoomed in is one frame per
+     * cell, 40000 / 48 = 833 us per pixel. */
+    FB_ViewInit(&v, 400);
+    FB_ViewSetFrame(&v, 40000, 48);
+    CHECK(v.min_per_px == 833);
+    FB_ViewSetLength(&v, FB_US(60000));             /* one minute */
+    CHECK(v.max_per_px == 150000);                  /* 60 s in 400 px */
+    CHECK(v.per_px == 833 && v.start == 0);
+
+    FB_ViewZoomToFit(&v);
+    CHECK(v.per_px == 150000);
+    CHECK(FB_ViewTimeToX(&v, FB_US(30000)) == 200);
+    CHECK(FB_ViewXToTime(&v, 200) == FB_US(30000));
+    CHECK(FB_ViewXToTime(&v, -5) == 0);
+    CHECK(FB_ViewXToTime(&v, 5000) == FB_US(60000));
+    CHECK(FB_ViewTotalPx(&v) == 400);
+
+    /* Zooming in around the middle keeps 30 s under x = 200. */
+    FB_ViewSetZoom(&v, 10000, 200);
+    CHECK(v.per_px == 10000);
+    CHECK(v.start == FB_US(28000));
+    CHECK(FB_ViewTimeToX(&v, FB_US(30000)) == 200);
+    CHECK(FB_ViewTimeToX(&v, FB_US(27990)) == -1);  /* rounds down */
+
+    /* Can't scroll past either end. */
+    FB_ViewSetStart(&v, -1000);
+    CHECK(v.start == 0);
+    FB_ViewSetStart(&v, FB_US(99000));
+    CHECK(v.start == FB_US(56000));                 /* 60 s - 400 * 10 ms */
+    FB_ViewScrollPx(&v, -100);
+    CHECK(v.start == FB_US(55000));
+
+    /* Following the playhead scrolls whole pages. */
+    FB_ViewSetStart(&v, 0);
+    CHECK(FB_ViewEnsureVisible(&v, FB_US(3999)) == 0);
+    CHECK(FB_ViewEnsureVisible(&v, FB_US(4500)) == 1);
+    CHECK(v.start == FB_US(4000));
+    CHECK(FB_ViewEnsureVisible(&v, FB_US(100)) == 1 && v.start == 0);
+
+    /* Zoom levels run from min to max and round-trip. */
+    levels = FB_ViewZoomLevels(&v);
+    CHECK(levels > 10 && levels < 40);
+    FB_ViewSetZoomLevel(&v, 0, 0);
+    CHECK(v.per_px == v.min_per_px && FB_ViewZoomLevel(&v) == 0);
+    FB_ViewSetZoomLevel(&v, levels - 1, 0);
+    CHECK(v.per_px == v.max_per_px);
+    CHECK(FB_ViewZoomLevel(&v) == levels - 1);
+    for (i = 0; i < levels; i++) {
+        FB_ViewSetZoomLevel(&v, i, 0);
+        CHECK(FB_ViewZoomLevel(&v) == i);
+    }
+    FB_ViewSetZoomLevel(&v, levels + 5, 0);
+    CHECK(v.per_px == v.max_per_px);
+
+    /* A shorter length lowers the most zoomed-out level and clamps. */
+    FB_ViewSetLength(&v, FB_US(4000));
+    CHECK(v.max_per_px == 10000 && v.per_px == 10000 && v.start == 0);
+    /* Empty: nothing to zoom out to. */
+    FB_ViewSetLength(&v, 0);
+    CHECK(v.max_per_px == v.min_per_px && FB_ViewZoomLevels(&v) == 1);
+
+    /* Ruler steps: labels 60 px apart. */
+    FB_ViewSetLength(&v, FB_US(3600000));
+    FB_ViewSetZoom(&v, 833, 0);                     /* frame level */
+    FB_ViewRulerSteps(&v, 60, 40000, &major, &minor);
+    CHECK(major == 80000 && minor == 40000);        /* 2 frames, 1 frame */
+    FB_ViewSetZoom(&v, 10000, 0);                   /* 10 ms per px */
+    FB_ViewRulerSteps(&v, 60, 40000, &major, &minor);
+    CHECK(major == FB_US(1000) && minor == FB_US(200));
+    FB_ViewRulerSteps(&v, 60, 0, &major, &minor);
+    CHECK(major == FB_US(1000));
+    FB_ViewSetZoom(&v, 5000, 0);
+    FB_ViewRulerSteps(&v, 60, 0, &major, &minor);
+    CHECK(major == FB_US(500) && minor == FB_US(100));
+    FB_ViewSetZoom(&v, 2000000, 0);                 /* 2 s per px */
+    FB_ViewRulerSteps(&v, 60, 40000, &major, &minor);
+    CHECK(major == FB_US(120000) && minor == FB_US(30000));   /* 2 min */
+
+    /* Timecodes. */
+    CHECK(strcmp(FB_FormatTimecode(buf, sizeof(buf), FB_US(65000),
+                                   FB_US(1000), 40000, '.'), "1:05") == 0);
+    CHECK(strcmp(FB_FormatTimecode(buf, sizeof(buf), FB_US(65480),
+                                   80000, 40000, '.'), "1:05:12") == 0);
+    CHECK(strcmp(FB_FormatTimecode(buf, sizeof(buf), FB_US(65500),
+                                   FB_US(500), 0, ','), "1:05,5") == 0);
+    CHECK(strcmp(FB_FormatTimecode(buf, sizeof(buf), FB_US(3725000),
+                                   FB_US(5000), 40000, '.'), "1:02:05") == 0);
+    CHECK(strcmp(FB_FormatTimecode(buf, sizeof(buf), -5,
+                                   FB_US(1000), 0, '.'), "0:00") == 0);
+
+    /* Cells sit on a grid from time 0 and show their middle frame. */
+    FB_ViewInit(&v, 100);
+    FB_ViewSetFrame(&v, 40000, 48);
+    FB_ViewSetLength(&v, FB_US(10000));
+    FB_ViewSetZoom(&v, 1000, 0);                    /* 48 ms per cell */
+    FB_ViewSetStart(&v, 20000);                     /* 20 ms in */
+    n = FB_ViewCells(&v, 48, cells, 64);
+    CHECK(n == 3);
+    CHECK(cells[0].index == 0 && cells[0].x == -20);
+    CHECK(cells[0].t0 == 0 && cells[0].t1 == 48000 && cells[0].mid == 24000);
+    CHECK(cells[1].x == 28 && cells[2].x == 76);
+    /* At the end, the last cell's middle is the middle of what's left. */
+    FB_ViewSetLength(&v, 110000);
+    FB_ViewSetStart(&v, 20000);
+    n = FB_ViewCells(&v, 48, cells, 64);
+    CHECK(n == 3 && cells[2].t0 == 96000 && cells[2].mid == 103000);
+    CHECK(FB_ViewCells(&v, 48, cells, 2) == 2);
+
+    /* Timeline time to clip and source time. */
+    FB_TimelineInit(&tl);
+    FB_TimelineAddSource(&tl, "a.mp4", 10000, 1, 1);
+    FB_TimelineAddSource(&tl, "b.mp4", 10000, 1, 1);
+    FB_TimelineAppendClip(&tl, 0, 2000, 5000);      /* 0-3 s on the timeline */
+    FB_TimelineAppendClip(&tl, 1, 1000, 2000);      /* 3-4 s */
+    CHECK(FB_TimelineClipStart(&tl, 1) == FB_US(3000));
+    CHECK(FB_TimelineLocate(&tl, FB_US(500), &st) == 0 && st == FB_US(2500));
+    CHECK(FB_TimelineLocate(&tl, FB_US(3000), &st) == 1 && st == FB_US(1000));
+    CHECK(FB_TimelineLocate(&tl, FB_US(3999), NULL) == 1);
+    CHECK(FB_TimelineLocate(&tl, FB_US(4000), NULL) == -1);
+    CHECK(FB_TimelineLocate(&tl, -1, NULL) == -1);
+}
+
 int main(void)
 {
     FB_RegisterBuiltinModules();
@@ -226,6 +358,7 @@ int main(void)
     test_job_build_and_roundtrip();
     test_job_errors();
     test_fit();
+    test_timeview();
     if (failures) {
         printf("%d check(s) failed\n", failures);
         return 1;

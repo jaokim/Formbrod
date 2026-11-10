@@ -55,9 +55,12 @@ config:
 SRC = src/main.c \
       src/app.c \
       src/gui/mainwindow.c \
+      src/gui/timebase.c \
+      src/gui/track.c \
       src/locale/catalog.c \
       src/arexx/arexx.c \
       src/timeline/timeline.c \
+      src/timeline/timeview.c \
       src/job/job.c \
       src/job/module.c \
       src/backend/local_backend.c \

@@ -2,13 +2,21 @@
  * mainwindow.c - the ReAction main window.
  *
  *   [Add file...] [Split] [Remove] [Fade] [Preview] [Export...]
+ *   | 0:00     | 0:05     | 0:10     | 0:15          ruler
+ *   [#][#][#][#][#][#][#][#|#][#][#][#][#]          film strip
+ *   [<====scroll====>                         ]
+ *   playhead [0:07:12]   zoom [-----|=======]   (right = zoomed in)
  *   +-------------------------------------------------------+
- *   | timeline: a ListBrowser of clips for now; replaced by |
- *   | the custom timeline gadget (gadgets/timeline/) later  |
+ *   | clip list (ListBrowser) until the timeline gadget can |
+ *   | select clips itself                                   |
  *   +-------------------------------------------------------+
- *   playhead [==========|-------------------]
  *   render   [#######.........]
  *   status line
+ *
+ * The ruler and film strip are the track gadgets from track.c. They share
+ * one FBTimebase (timebase.c) with the scroller and the zoom slider:
+ * clicking or dragging in a track moves the playhead, and the window then
+ * redraws the other tracks, from idcmp_hook() while dragging.
  *
  * All visible text comes from FB_Str() (src/locale/), so it is translated
  * when a catalog for the user's language is installed.
@@ -26,12 +34,15 @@
 #include <proto/asl.h>
 #include <proto/wb.h>
 #include <proto/listbrowser.h>
+#include <proto/utility.h>
 
 #include <classes/window.h>
 #include <gadgets/layout.h>
 #include <gadgets/button.h>
 #include <gadgets/listbrowser.h>
 #include <gadgets/slider.h>
+#include <gadgets/scroller.h>
+#include <intuition/icclass.h>
 #include <gadgets/fuelgauge.h>
 #include <images/label.h>
 #include <workbench/workbench.h>
@@ -40,10 +51,13 @@
 #include "mainwindow.h"
 #include "formbrod/module.h"
 #include "locale/catalog.h"
+#include "gui/timebase.h"
+#include "gui/track.h"
 
 enum {
     GID_ADD = 1, GID_SPLIT, GID_REMOVE, GID_FADE, GID_PREVIEW, GID_EXPORT,
-    GID_CLIPS, GID_PLAYHEAD, GID_PROGRESS, GID_STATUS, GID_LAST
+    GID_CLIPS, GID_POSITION, GID_PROGRESS, GID_STATUS,
+    GID_RULER, GID_FILMSTRIP, GID_SCROLL, GID_ZOOM, GID_LAST
 };
 
 static struct {
@@ -58,9 +72,10 @@ static struct {
     { NULL, NULL, "gadgets/slider.gadget" },
     { NULL, NULL, "gadgets/fuelgauge.gadget" },
     { NULL, NULL, "images/label.image" },
+    { NULL, NULL, "gadgets/scroller.gadget" },
 };
 enum { C_WINDOW, C_LAYOUT, C_BUTTON, C_LISTBROWSER, C_SLIDER, C_FUELGAUGE,
-       C_LABEL, C_COUNT };
+       C_LABEL, C_SCROLLER, C_COUNT };
 
 static struct ListBrowserIFace *LB;   /* listbrowser.gadget interface */
 static struct MsgPort *AppPort;
@@ -69,6 +84,18 @@ static struct Window *Win;
 static struct Gadget *Gad[GID_LAST];
 static struct List ClipList;
 static struct ColumnInfo *Columns;
+static FBTimebase TB;
+static struct Hook IdcmpHook;
+static char PositionText[32];
+/* Shown when the pointer rests on a gadget (WINDOW_GadgetHelp). The texts
+ * are filled in from the catalog when the window opens. */
+static struct HintInfo Hints[] = {
+    { GID_ZOOM,      -1, NULL, 0 },
+    { GID_RULER,     -1, NULL, 0 },
+    { GID_FILMSTRIP, -1, NULL, 0 },
+    { -1, -1, NULL, 0 }
+};
+static BOOL TrackClassesMade;
 
 #define CLS(i) (classes[i].cls)
 
@@ -116,6 +143,98 @@ static const char *fit_text(FBFitResult r)
     }
 }
 
+/* The zoom slider goes the other way from the zoom levels: right is
+ * zoomed in (level 0), left shows the whole edit. */
+static uint32 zoom_slider_level(void)
+{
+    return FB_ViewZoomLevels(&TB.view) - 1 - FB_ViewZoomLevel(&TB.view);
+}
+
+/* Puts the scroller, zoom slider and playhead time in step with TB. */
+static void sync_controls(void)
+{
+    FBTimeView *v = &TB.view;
+
+    FB_FormatTimecode(PositionText, sizeof(PositionText), TB.playhead,
+                      TB.frame_us > 0 ? TB.frame_us : FB_US(100),
+                      TB.frame_us, Locale_DecimalPoint());
+    IIntuition->SetGadgetAttrs(Gad[GID_POSITION], Win, NULL,
+                               GA_Text, PositionText, TAG_END);
+    IIntuition->SetGadgetAttrs(Gad[GID_SCROLL], Win, NULL,
+        SCROLLER_Total,   FB_ViewTotalPx(v),
+        SCROLLER_Visible, v->width,
+        SCROLLER_Top,     FB_ViewStartPx(v),
+        GA_Disabled,      v->length <= 0,
+        TAG_END);
+    IIntuition->SetGadgetAttrs(Gad[GID_ZOOM], Win, NULL,
+        SLIDER_Max,   FB_ViewZoomLevels(v) - 1,
+        SLIDER_Level, zoom_slider_level(),
+        GA_Disabled,  FB_ViewZoomLevels(v) <= 1,
+        TAG_END);
+}
+
+/* A track, the scroller or the zoom slider changed TB: redraw the rest.
+ * `except` already shows the change. */
+static void timebase_changed(struct Gadget *except)
+{
+    Timebase_Redraw(&TB, Win, except);
+    sync_controls();
+}
+
+static void scroll_to(uint32 top_px)
+{
+    FB_ViewSetStart(&TB.view, (fb_us_t)top_px * TB.view.per_px);
+    Timebase_Redraw(&TB, Win, NULL);
+}
+
+/* Called with the zoom slider's position (see zoom_slider_level). */
+static void zoom_to(uint32 slider)
+{
+    int level = FB_ViewZoomLevels(&TB.view) - 1 - (int)slider;
+
+    if (level == FB_ViewZoomLevel(&TB.view))
+        return;
+    Timebase_SetZoomLevel(&TB, level);
+    Timebase_Redraw(&TB, Win, NULL);
+    /* The scroller's range changes with the zoom; the slider is already
+     * where the user put it. */
+    IIntuition->SetGadgetAttrs(Gad[GID_SCROLL], Win, NULL,
+        SCROLLER_Total,   FB_ViewTotalPx(&TB.view),
+        SCROLLER_Visible, TB.view.width,
+        SCROLLER_Top,     FB_ViewStartPx(&TB.view),
+        TAG_END);
+}
+
+/* Live updates while something is dragged: the tracks, the scroller and
+ * the zoom slider notify the window (ICA_TARGET ICTARGET_IDCMP), and
+ * window.class calls this from WM_HANDLEINPUT. */
+static uint32 idcmp_hook(struct Hook *hook, Object *winobj,
+                         struct IntuiMessage *imsg)
+{
+    struct TagItem *tags = (struct TagItem *)imsg->IAddress;
+    uint32 id;
+
+    if (imsg->Class != IDCMP_IDCMPUPDATE || !tags)
+        return 0;
+    id = IUtility->GetTagData(GA_ID, 0, tags);
+    switch (id) {
+    case GID_RULER:
+    case GID_FILMSTRIP:
+        /* The track has moved TB's playhead and redrawn itself. */
+        timebase_changed(Gad[id]);
+        break;
+    case GID_SCROLL:
+        if (IUtility->FindTagItem(SCROLLER_Top, tags))
+            scroll_to(IUtility->GetTagData(SCROLLER_Top, 0, tags));
+        break;
+    case GID_ZOOM:
+        if (IUtility->FindTagItem(SLIDER_Level, tags))
+            zoom_to(IUtility->GetTagData(SLIDER_Level, 0, tags));
+        break;
+    }
+    return 0;
+}
+
 void MainWindow_Refresh(void)
 {
     const FBTimeline *tl = &App.timeline;
@@ -160,11 +279,12 @@ void MainWindow_Refresh(void)
     IIntuition->SetGadgetAttrs(Gad[GID_CLIPS], Win, NULL,
                                LISTBROWSER_Labels, &ClipList, TAG_END);
 
-    /* playhead in tenths of a second */
-    IIntuition->SetGadgetAttrs(Gad[GID_PLAYHEAD], Win, NULL,
-        SLIDER_Max,     total > 0 ? (int32)(total / 100) : 1,
-        GA_Disabled,    total <= 0,
-        TAG_END);
+    Timebase_SetTimeline(&TB, tl);
+    IIntuition->SetGadgetAttrs(Gad[GID_RULER], Win, NULL,
+                               TRACK_Timeline, tl, TAG_END);
+    IIntuition->SetGadgetAttrs(Gad[GID_FILMSTRIP], Win, NULL,
+                               TRACK_Timeline, tl, TAG_END);
+    sync_controls();
 
     IIntuition->SetGadgetAttrs(Gad[GID_SPLIT], Win, NULL, GA_Disabled, total <= 0, TAG_END);
     IIntuition->SetGadgetAttrs(Gad[GID_REMOVE], Win, NULL, GA_Disabled, total <= 0, TAG_END);
@@ -221,17 +341,31 @@ static int selected_clip(void)
 static void handle_gadget(uint32 id)
 {
     char path[FB_PATH_LEN];
-    uint32 level = 0;
+    uint32 value = 0;
     int clip;
 
     switch (id) {
+    /* The timeline controls only change the view, so they don't need the
+     * full refresh below. Their final value also comes through
+     * idcmp_hook(); this catches it if that notification was missed. */
+    case GID_RULER:
+    case GID_FILMSTRIP:
+        timebase_changed(NULL);
+        return;
+    case GID_SCROLL:
+        IIntuition->GetAttr(SCROLLER_Top, (Object *)Gad[GID_SCROLL], &value);
+        scroll_to(value);
+        return;
+    case GID_ZOOM:
+        IIntuition->GetAttr(SLIDER_Level, (Object *)Gad[GID_ZOOM], &value);
+        zoom_to(value);
+        return;
     case GID_ADD:
         if (ask_file(FB_Str(MSG_REQ_ADD_FILE), FALSE, path, sizeof(path)))
             App_AddFile(path);
         break;
     case GID_SPLIT:
-        IIntuition->GetAttr(SLIDER_Level, (Object *)Gad[GID_PLAYHEAD], &level);
-        App_Split((fb_ms_t)level * 100);
+        App_Split(FB_MS(TB.playhead));
         break;
     case GID_REMOVE:
         if ((clip = selected_clip()) >= 0)
@@ -278,9 +412,27 @@ static void handle_appmessages(void)
     MainWindow_Refresh();
 }
 
+/* A track gadget sharing TB, notifying the window while dragged. */
+static Object *track(Class *cls, uint32 id, CONST_STRPTR empty_text)
+{
+    Object *o = IIntuition->NewObject(cls, NULL,
+        GA_ID,           id,
+        GA_RelVerify,    TRUE,
+        GA_GadgetHelp,   TRUE,
+        ICA_TARGET,      ICTARGET_IDCMP,
+        TRACK_Timebase,  &TB,
+        TRACK_Timeline,  &App.timeline,
+        TRACK_EmptyText, empty_text,
+        TAG_END);
+
+    Gad[id] = (struct Gadget *)o;
+    Timebase_Attach(&TB, Gad[id]);
+    return o;
+}
+
 int MainWindow_Open(void)
 {
-    Object *buttons, *root;
+    Object *buttons, *timeline, *viewrow, *root;
     int i;
 
     for (i = 0; i < C_COUNT; i++) {
@@ -289,6 +441,16 @@ int MainWindow_Open(void)
         if (!classes[i].base)
             return -1;
     }
+    if (!Track_MakeClasses())
+        return -1;
+    TrackClassesMade = TRUE;
+    Timebase_Init(&TB, FB_CELL_W_DEFAULT);
+    IdcmpHook.h_Entry = (HOOKFUNC)idcmp_hook;
+    strcpy(PositionText, "0:00");
+    Hints[0].hi_Text = FB_Str(MSG_HINT_ZOOM);
+    Hints[1].hi_Text = FB_Str(MSG_HINT_PLAYHEAD);
+    Hints[2].hi_Text = FB_Str(MSG_HINT_PLAYHEAD);
+
     LB = (struct ListBrowserIFace *)IExec->GetInterface(
              (struct Library *)classes[C_LISTBROWSER].base, "main", 1, NULL);
     if (!LB)
@@ -325,13 +487,54 @@ int MainWindow_Open(void)
         LISTBROWSER_ShowSelected, TRUE,
         TAG_END);
 
-    Gad[GID_PLAYHEAD] = (struct Gadget *)IIntuition->NewObject(CLS(C_SLIDER), NULL,
-        GA_ID,          GID_PLAYHEAD,
-        GA_RelVerify,   TRUE,
-        GA_Disabled,    TRUE,
-        SLIDER_Min,     0,
-        SLIDER_Max,     1,
+    /* Ruler, film strip and scroller, stacked without gaps. */
+    timeline = IIntuition->NewObject(CLS(C_LAYOUT), NULL,
+        LAYOUT_Orientation,  LAYOUT_ORIENT_VERT,
+        LAYOUT_InnerSpacing, 0,
+        LAYOUT_AddChild, track(RulerClass, GID_RULER, NULL),
+        CHILD_WeightedHeight, 0,
+        LAYOUT_AddChild, track(FilmstripClass, GID_FILMSTRIP,
+                               FB_Str(MSG_TRACK_EMPTY)),
+        CHILD_WeightedHeight, 0,
+        LAYOUT_AddChild, Gad[GID_SCROLL] = (struct Gadget *)IIntuition->NewObject(
+                CLS(C_SCROLLER), NULL,
+            GA_ID,                GID_SCROLL,
+            GA_RelVerify,         TRUE,
+            GA_Disabled,          TRUE,
+            ICA_TARGET,           ICTARGET_IDCMP,
+            SCROLLER_Orientation, SORIENT_HORIZ,
+            SCROLLER_Total,       1,
+            SCROLLER_Visible,     1,
+            SCROLLER_Top,         0,
+            TAG_END),
+        CHILD_WeightedHeight, 0,
+        TAG_END);
+
+    Gad[GID_POSITION] = (struct Gadget *)IIntuition->NewObject(CLS(C_BUTTON), NULL,
+        GA_ID,       GID_POSITION,
+        GA_ReadOnly, TRUE,
+        GA_Text,     PositionText,
+        TAG_END);
+
+    Gad[GID_ZOOM] = (struct Gadget *)IIntuition->NewObject(CLS(C_SLIDER), NULL,
+        GA_ID,              GID_ZOOM,
+        GA_RelVerify,       TRUE,
+        GA_Disabled,        TRUE,
+        ICA_TARGET,         ICTARGET_IDCMP,
+        SLIDER_Min,         0,
+        SLIDER_Max,         1,
+        SLIDER_Level,       0,
         SLIDER_Orientation, SLIDER_HORIZONTAL,
+        TAG_END);
+
+    viewrow = IIntuition->NewObject(CLS(C_LAYOUT), NULL,
+        LAYOUT_Orientation, LAYOUT_ORIENT_HORIZ,
+        LAYOUT_AddChild,    Gad[GID_POSITION],
+        CHILD_WeightedWidth, 0,
+        CHILD_MinWidth,     80,
+        CHILD_Label,        label(FB_Str(MSG_LABEL_PLAYHEAD)),
+        LAYOUT_AddChild,    Gad[GID_ZOOM],
+        CHILD_Label,        label(FB_Str(MSG_LABEL_ZOOM)),
         TAG_END);
 
     Gad[GID_PROGRESS] = (struct Gadget *)IIntuition->NewObject(CLS(C_FUELGAUGE), NULL,
@@ -354,10 +557,11 @@ int MainWindow_Open(void)
         LAYOUT_SpaceOuter,  TRUE,
         LAYOUT_AddChild,    buttons,
         CHILD_WeightedHeight, 0,
-        LAYOUT_AddChild,    Gad[GID_CLIPS],
-        LAYOUT_AddChild,    Gad[GID_PLAYHEAD],
+        LAYOUT_AddChild,    timeline,
         CHILD_WeightedHeight, 0,
-        CHILD_Label,        label(FB_Str(MSG_LABEL_PLAYHEAD)),
+        LAYOUT_AddChild,    viewrow,
+        CHILD_WeightedHeight, 0,
+        LAYOUT_AddChild,    Gad[GID_CLIPS],
         LAYOUT_AddChild,    Gad[GID_PROGRESS],
         CHILD_WeightedHeight, 0,
         CHILD_Label,        label(FB_Str(MSG_LABEL_RENDER)),
@@ -372,8 +576,15 @@ int MainWindow_Open(void)
         WA_DragBar,         TRUE,
         WA_CloseGadget,     TRUE,
         WA_SizeGadget,      TRUE,
-        WA_InnerWidth,      560,
-        WA_InnerHeight,     300,
+        WA_InnerWidth,      640,
+        WA_InnerHeight,     380,
+        WA_IDCMP,           IDCMP_GADGETUP | IDCMP_CLOSEWINDOW |
+                            IDCMP_IDCMPUPDATE | IDCMP_NEWSIZE |
+                            IDCMP_GADGETHELP,
+        WINDOW_GadgetHelp,  TRUE,
+        WINDOW_HintInfo,    Hints,
+        WINDOW_IDCMPHook,   &IdcmpHook,
+        WINDOW_IDCMPHookBits, IDCMP_IDCMPUPDATE,
         WINDOW_Position,    WPOS_CENTERSCREEN,
         WINDOW_AppPort,     AppPort,
         WINDOW_AppWindow,   TRUE,
@@ -417,6 +628,10 @@ void MainWindow_Handle(uint32 sigs)
         case WMHI_GADGETUP:
             handle_gadget(result & WMHI_GADGETMASK);
             break;
+        case WMHI_NEWSIZE:
+            /* The tracks have taken the new width in GM_LAYOUT. */
+            sync_controls();
+            break;
         }
     }
 }
@@ -444,6 +659,10 @@ void MainWindow_Close(void)
             IExec->ReplyMsg(m);
         IExec->FreeSysObject(ASOT_PORT, AppPort);
         AppPort = NULL;
+    }
+    if (TrackClassesMade) {
+        Track_FreeClasses();     /* after the window, which held the tracks */
+        TrackClassesMade = FALSE;
     }
     for (i = C_COUNT - 1; i >= 0; i--) {
         if (classes[i].base)
