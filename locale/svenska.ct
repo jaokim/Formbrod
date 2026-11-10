@@ -127,3 +127,18 @@ Formbröd: kan inte öppna fönstret (är ReAction-klasserna installerade?)\n
 MSG_ERR_NO_AREXX
 Formbröd: ARexx-porten är inte tillgänglig\n
 ;
+;
+MSG_FITS_SCALE
+Skalad
+;
+MSG_FITS_LETTERBOX
+Letterbox
+;
+MSG_FITS_PILLARBOX
+Pillarbox
+;
+MSG_FITS_CROP
+Beskuren
+;
+MSG_FITS_STRETCH
+Utsträckt

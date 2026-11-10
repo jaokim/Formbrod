@@ -29,6 +29,12 @@ int  App_Split(fb_ms_t at);
 int  App_RemoveClip(int clip);
 int  App_AddEffect(int clip, const char *module);
 int  App_SetEffectParam(int clip, int effect, const char *name, double value);
+
+/* How clips of another size or shape are fitted (see FBFormat). */
+int  App_SetClipFit(int clip, int fit);          /* FB_FIT_DEFAULT = global */
+int  App_SetDefaultFit(int fit);                 /* not FB_FIT_DEFAULT */
+int  App_SetFrameSize(int width, int height);    /* 0 0 = first clip's */
+int  App_SetFrameRate(int num, int den);         /* 0 0 = first clip's */
 int  App_Export(const char *path, int preview);
 void App_CancelRender(void);
 
@@ -40,7 +46,8 @@ void App_SetStatus(const char *fmt, ...);
 /* Translated text for a job error, for the status line. */
 const char *App_JobErrorString(FBJobError err);
 
-/* Media probing (src/backend/media.c). Fills duration and stream flags. */
+/* Media probing (src/backend/media.c). Fills duration, stream flags and
+ * video size/aspect/rate of `info` (not its path). */
 typedef enum {
     FB_PROBE_OK = 0,
     FB_PROBE_NO_LIBAV,      /* built without HAVE_LIBAV */
@@ -50,8 +57,7 @@ typedef enum {
 } FBProbeResult;
 
 /* `why` receives ffmpeg's error text for FB_PROBE_CANT_OPEN (English). */
-FBProbeResult FB_ProbeMedia(const char *path, fb_ms_t *duration,
-                            int *has_video, int *has_audio,
+FBProbeResult FB_ProbeMedia(const char *path, FBSource *info,
                             char *why, size_t why_len);
 
 #endif

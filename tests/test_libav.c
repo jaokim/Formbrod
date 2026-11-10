@@ -155,6 +155,46 @@ static void test_join(void)
     CHECK(pr.width == 640 && pr.height == 360);
 }
 
+/* The sizes, rates and audio of a.mp4, b.mkv and c.mp4 differ; with probed
+ * sources and no output size the timeline's defaults must make them fit:
+ * the frame of the first clip, b letterboxed, silence under c. */
+static void test_mixed_sizes(void)
+{
+    FBTimeline tl;
+    FBOutput out;
+    FBJob job;
+    FBResult res;
+    Probe pr;
+    char a[FB_PATH_LEN], b[FB_PATH_LEN], c[FB_PATH_LEN];
+    int calls;
+
+    printf("mixed sizes, rates and audio, default fit\n");
+    in_path(a, "a.mp4");
+    in_path(b, "b.mkv");
+    in_path(c, "c.mp4");
+    FB_TimelineInit(&tl);
+    FB_TimelineAddSource(&tl, a, 5000, 1, 1);
+    FB_SourceSetVideo(&tl.sources[0], 320, 240, 1, 1, 25, 1);
+    FB_TimelineAddSource(&tl, b, 4000, 1, 1);
+    FB_SourceSetVideo(&tl.sources[1], 640, 360, 1, 1, 30, 1);
+    FB_TimelineAddSource(&tl, c, 3000, 1, 0);
+    FB_SourceSetVideo(&tl.sources[2], 320, 240, 1, 1, 25, 1);
+    FB_TimelineAppendClip(&tl, 0, 0, 2000);
+    FB_TimelineAppendClip(&tl, 1, 0, 2000);
+    FB_TimelineAppendClip(&tl, 2, 0, 1500);
+    tl.clips[1].fit = FB_FIT_FILL;   /* per-clip override */
+    set_output(&out, "out_mixed.mp4", "mpeg4", "aac", 0, 0,
+               FB_QUALITY_FINAL);
+    CHECK(FB_JobBuild(&job, &tl, &out) == FB_JOB_OK);
+    CHECK(strstr(job.filtergraph, "anullsrc") != NULL);
+
+    CHECK(render(&job, &calls, &res) == FB_RENDER_DONE);
+    CHECK(probe(out.path, &pr) == 0);
+    CHECK(near(pr.duration, 5.5));
+    CHECK(pr.video == 1 && pr.audio == 1);
+    CHECK(pr.width == 320 && pr.height == 240);
+}
+
 /* Two clips from one file, in reverse order: one stream feeds two pads. */
 static void test_same_source_reversed(void)
 {
@@ -231,8 +271,8 @@ static void test_h264(void)
     FB_TimelineAddSource(&tl, a, 5000, 1, 1);
     FB_TimelineAppendClip(&tl, 0, 0, 4000);
     FB_TimelineAppendClip(&tl, 1, 0, 5000);
-    /* Concat needs one frame size; the sources differ in aspect, so the
-     * size must be given (a plain preview would be 320x180 vs 320x240). */
+    /* These sources aren't probed (no FB_SourceSetVideo), so the timeline
+     * doesn't know their size; an output size makes them fit anyway. */
     set_output(&out, "out_h264.mkv", "libx264", "mp2", 320, 180,
                FB_QUALITY_PREVIEW);
     CHECK(FB_JobBuild(&job, &tl, &out) == FB_JOB_OK);
@@ -353,6 +393,7 @@ int main(int argc, char **argv)
 
     test_join();
     test_same_source_reversed();
+    test_mixed_sizes();
     test_video_only_fallback();
     test_h264();
     test_cancel();

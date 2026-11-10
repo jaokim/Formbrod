@@ -14,6 +14,9 @@
  *   RENDERSTATUS                        IDLE|RUNNING <pos> <total>|DONE|FAILED
  *   CLIPS                               number of clips
  *   MODULES                             space-separated module names
+ *   FIT CLIP/N/A,MODE/A                 DEFAULT|FIT|FILL|STRETCH
+ *   FORMAT WIDTH/N,HEIGHT/N,FPS/K,FIT/K set output format; returns
+ *                                       "<w> <h> <fps> <fit>" (0 = auto)
  *   QUIT
  */
 #include <stdio.h>
@@ -143,6 +146,60 @@ static void cmd_modules(struct ARexxCmd *cmd, struct RexxMsg *rm)
     set_result(cmd, 0);
 }
 
+static void cmd_fit(struct ARexxCmd *cmd, struct RexxMsg *rm)
+{
+    int fit = FB_FitFromName((const char *)cmd->ac_ArgList[1]);
+
+    (void)rm;
+    result[0] = '\0';
+    set_result(cmd, fit < 0 ||
+                    App_SetClipFit(*(int32 *)cmd->ac_ArgList[0], fit)
+                    ? RC_ERROR : 0);
+}
+
+/* "25", "30000/1001" or "AUTO"/"0". Returns 0 on success. */
+static int parse_rate(const char *s, int *num, int *den)
+{
+    char *end;
+    long n, d = 1;
+
+    if (s[0] == 'a' || s[0] == 'A') {   /* AUTO */
+        *num = *den = 0;
+        return 0;
+    }
+    n = strtol(s, &end, 10);
+    if (*end == '/')
+        d = strtol(end + 1, &end, 10);
+    if (*end || n < 0 || d <= 0)
+        return -1;
+    *num = (int)n;
+    *den = n ? (int)d : 0;
+    return 0;
+}
+
+static void cmd_format(struct ARexxCmd *cmd, struct RexxMsg *rm)
+{
+    const FBFormat *f = &App.timeline.format;
+    int32 *w = (int32 *)cmd->ac_ArgList[0];
+    int32 *h = (int32 *)cmd->ac_ArgList[1];
+    const char *fps = (const char *)cmd->ac_ArgList[2];
+    const char *fit = (const char *)cmd->ac_ArgList[3];
+    int rc = 0, num, den;
+
+    (void)rm;
+    if ((w || h) && App_SetFrameSize(w ? *w : 0, h ? *h : 0) != 0)
+        rc = RC_ERROR;
+    if (fps && (parse_rate(fps, &num, &den) != 0 ||
+                App_SetFrameRate(num, den) != 0))
+        rc = RC_ERROR;
+    if (fit && App_SetDefaultFit(FB_FitFromName(fit)) != 0)
+        rc = RC_ERROR;
+
+    snprintf(result, sizeof(result), "%d %d %d/%d %s", f->width, f->height,
+             f->fps_num, f->fps_den ? f->fps_den : 1, FB_FitName(f->fit));
+    set_result(cmd, rc);
+}
+
 static void cmd_quit(struct ARexxCmd *cmd, struct RexxMsg *rm)
 {
     (void)rm;
@@ -164,6 +221,9 @@ static struct ARexxCmd commands[] = {
     { "CLIPS",        9,  cmd_clips,        NULL,                0, NULL, 0, 0, NULL },
     { "MODULES",      10, cmd_modules,      NULL,                0, NULL, 0, 0, NULL },
     { "QUIT",         11, cmd_quit,         NULL,                0, NULL, 0, 0, NULL },
+    { "FIT",          12, cmd_fit,          "CLIP/N/A,MODE/A",   0, NULL, 0, 0, NULL },
+    { "FORMAT",       13, cmd_format,
+      "WIDTH/N,HEIGHT/N,FPS/K,FIT/K",                             0, NULL, 0, 0, NULL },
     { NULL,           0,  NULL,             NULL,                0, NULL, 0, 0, NULL }
 };
 
