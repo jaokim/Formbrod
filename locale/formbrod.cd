@@ -65,6 +65,13 @@ Playhead
 MSG_LABEL_RENDER (31//)
 Render
 ;
+MSG_LABEL_ZOOM (32//)
+Zoom
+;
+; Shown in the empty film strip before any file has been added.
+MSG_TRACK_EMPTY (33//)
+Drop a video file here, or use Add file
+;
 ; ---- File requester titles ------------------------------------------------
 MSG_REQ_ADD_FILE (40//)
 Add video file

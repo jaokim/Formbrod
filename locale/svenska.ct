@@ -49,6 +49,12 @@ Position
 MSG_LABEL_RENDER
 Rendering
 ;
+MSG_LABEL_ZOOM
+Zoom
+;
+MSG_TRACK_EMPTY
+Släpp en videofil här, eller använd Lägg till fil
+;
 MSG_REQ_ADD_FILE
 Lägg till videofil
 ;
