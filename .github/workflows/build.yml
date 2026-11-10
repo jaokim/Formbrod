@@ -35,6 +35,15 @@ jobs:
             echo "::warning::python3 is not in the image; FlexCat catalogs were not cross-checked"
           fi
 
+      - name: Dump catalogs on failure
+        if: failure()
+        run: |
+          for f in Catalogs/*/formbrod.catalog build/locale/catgen/*/formbrod.catalog; do
+            [ -f "$f" ] || continue
+            echo "== $f"
+            od -A d -t x1z "$f" | head -40
+          done
+
       - uses: actions/upload-artifact@v4
         with:
           name: Formbrod-os4
