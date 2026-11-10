@@ -19,9 +19,11 @@ what AmigaOS expects. Text that has no ISO-8859-1 form is an error.
 
 The catalog is the IFF FORM CTLG format read by locale.library, laid out
 exactly as FlexCat writes it: FVER (version string), LANG (language name),
-CSET (code set, 32 bytes) and STRS. In STRS each string is its ID, its
-length without the NUL, then the text followed by one to four NULs so the
-next entry starts on a four-byte boundary. Translations identical to the
+CSET (code set, 32 bytes) and STRS. In STRS each string is its ID, a
+length, then the text padded with NULs to a four-byte boundary. FlexCat
+stores the length without the NUL, except when the text is a multiple of
+four bytes long: then it adds a NUL and counts it, so every string is
+still NUL-terminated. Translations identical to the
 built-in string are left out; locale.library then uses the built-in one.
 """
 import argparse
@@ -309,8 +311,10 @@ def build_catalog(header, strings):
     strs = bytearray()
     for sid, text in strings:
         data = encode(text, "string %d" % sid)
+        if len(data) % 4 == 0:
+            data += b"\0"          # counted in the length, as FlexCat does
         strs += struct.pack(">II", sid, len(data))
-        strs += data + b"\0" * (4 - len(data) % 4)     # 1..4 NULs
+        strs += data + b"\0" * (-len(data) % 4)
     body = (b"CTLG" + iff_chunk(b"FVER", fver) + iff_chunk(b"LANG", lang) +
             iff_chunk(b"CSET", cset) + iff_chunk(b"STRS", bytes(strs)))
     return b"FORM" + struct.pack(">I", len(body)) + body
@@ -335,10 +339,13 @@ def read_catalog(data):
     pos = 0
     while pos < len(strs):
         sid, slen = struct.unpack(">II", strs[pos:pos + 8])
-        if strs[pos + 8 + slen:pos + 9 + slen] != b"\0":
+        raw = strs[pos + 8:pos + 8 + slen]
+        if raw.endswith(b"\0"):
+            raw = raw[:-1]
+        elif strs[pos + 8 + slen:pos + 9 + slen] != b"\0":
             raise CatError("string %d is not NUL-terminated" % sid)
-        strings[sid] = strs[pos + 8:pos + 8 + slen].decode(TARGET_ENCODING)
-        pos += 8 + slen + (4 - slen % 4)
+        strings[sid] = raw.decode(TARGET_ENCODING)
+        pos += 8 + slen + (-slen % 4)
     return chunks, strings
 
 
