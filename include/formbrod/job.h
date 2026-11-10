@@ -62,4 +62,10 @@ int FB_JobParse(FBJob *job, const char *text);
  * servers that shell out to the stock ffmpeg CLI. */
 int FB_JobToCommandLine(const FBJob *job, char *buf, size_t len);
 
+/* Estimates the output length from the filtergraph, for progress bars: the
+ * sum of every video "trim" (start/end or duration), which is what the
+ * concat built by FB_JobBuild() plays. Returns 0 if there are no video
+ * trims or one of them has no end. */
+fb_ms_t FB_JobEstimateLength(const FBJob *job);
+
 #endif

@@ -34,7 +34,28 @@ test: build/host/test_core build/host/test_locale check-app check-locale
 	./build/host/test_core
 	./build/host/test_locale
 
+# End-to-end render through the local libav backend. Needs the ffmpeg
+# development files (found with pkg-config, or set LIBAV_CFLAGS/LIBAV_LIBS)
+# and the ffmpeg/ffprobe CLIs to make test inputs and check the results.
+#   make -f Makefile.host test-libav
+#   make -f Makefile.host test-libav LIBAV_CFLAGS=-I/opt/ff/include \
+#        LIBAV_LIBS="-L/opt/ff/lib -lavformat -lavfilter -lavcodec -lavutil"
+LIBAV_PKGS   = libavformat libavfilter libavcodec libavutil
+LIBAV_CFLAGS ?= $(shell pkg-config --cflags $(LIBAV_PKGS))
+LIBAV_LIBS   ?= $(shell pkg-config --libs $(LIBAV_PKGS))
+SANITIZE     ?= -fsanitize=address,undefined
+
+LIBAV_TEST_SRC = tests/test_libav.c src/backend/local_backend.c $(CORE_SRC)
+
+build/host/test_libav: $(LIBAV_TEST_SRC) include/formbrod/backend.h
+	@mkdir -p build/host
+	$(CC) $(CFLAGS) $(SANITIZE) -Isrc -DHAVE_LIBAV $(LIBAV_CFLAGS:-I%=-isystem %) \
+		-o $@ $(LIBAV_TEST_SRC) $(LIBAV_LIBS)
+
+test-libav: build/host/test_libav
+	sh tests/test_libav.sh ./build/host/test_libav build/host/libav
+
 clean:
 	rm -rf build/host
 
-.PHONY: test clean check-app check-locale
+.PHONY: test test-libav clean check-app check-locale

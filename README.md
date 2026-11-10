@@ -24,7 +24,9 @@ Early skeleton. Working so far:
       drop
 - [x] ARexx port
 - [x] Translatable GUI through locale.library catalogs (English, Swedish)
-- [ ] Local rendering with libav* (`src/backend/local_backend.c`)
+- [x] Local rendering with libav* (`src/backend/local_backend.c`): decode,
+      filter, encode and mux, a few packets per GUI tick. Tested on Linux
+      with ffmpeg 6.1, not yet on AmigaOS
 - [ ] Custom timeline gadget (`gadgets/timeline/`)
 - [ ] Remote rendering on a render server
 
@@ -78,6 +80,12 @@ Currently:
 To run the core tests on Linux or macOS:
 
     make -f Makefile.host test
+
+With the ffmpeg development files and the `ffmpeg`/`ffprobe` tools
+installed, this renders a few small jobs end to end through the local
+backend:
+
+    make -f Makefile.host test-libav
 
 Translations are built with FlexCat (and iconv, since the sources are
 UTF-8). Without FlexCat, `tools/catgen.py` can build them instead (Python 3):
