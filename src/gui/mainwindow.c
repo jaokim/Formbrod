@@ -5,7 +5,7 @@
  *   | 0:00     | 0:05     | 0:10     | 0:15          ruler
  *   [#][#][#][#][#][#][#][#|#][#][#][#][#]          film strip
  *   [<====scroll====>                         ]
- *   playhead [0:07:12]   zoom [=====|--------]
+ *   playhead [0:07:12]   zoom [-----|=======]   (right = zoomed in)
  *   +-------------------------------------------------------+
  *   | clip list (ListBrowser) until the timeline gadget can |
  *   | select clips itself                                   |
@@ -87,6 +87,12 @@ static struct ColumnInfo *Columns;
 static FBTimebase TB;
 static struct Hook IdcmpHook;
 static char PositionText[32];
+/* Shown when the pointer rests on a gadget (WINDOW_GadgetHelp). The texts
+ * are filled in from the catalog when the window opens. */
+static struct HintInfo Hints[] = {
+    { GID_ZOOM, -1, NULL, 0 },
+    { -1, -1, NULL, 0 }
+};
 static BOOL TrackClassesMade;
 
 #define CLS(i) (classes[i].cls)
@@ -135,6 +141,13 @@ static const char *fit_text(FBFitResult r)
     }
 }
 
+/* The zoom slider goes the other way from the zoom levels: right is
+ * zoomed in (level 0), left shows the whole edit. */
+static uint32 zoom_slider_level(void)
+{
+    return FB_ViewZoomLevels(&TB.view) - 1 - FB_ViewZoomLevel(&TB.view);
+}
+
 /* Puts the scroller, zoom slider and playhead time in step with TB. */
 static void sync_controls(void)
 {
@@ -153,7 +166,7 @@ static void sync_controls(void)
         TAG_END);
     IIntuition->SetGadgetAttrs(Gad[GID_ZOOM], Win, NULL,
         SLIDER_Max,   FB_ViewZoomLevels(v) - 1,
-        SLIDER_Level, FB_ViewZoomLevel(v),
+        SLIDER_Level, zoom_slider_level(),
         GA_Disabled,  FB_ViewZoomLevels(v) <= 1,
         TAG_END);
 }
@@ -172,9 +185,12 @@ static void scroll_to(uint32 top_px)
     Timebase_Redraw(&TB, Win, NULL);
 }
 
-static void zoom_to(uint32 level)
+/* Called with the zoom slider's position (see zoom_slider_level). */
+static void zoom_to(uint32 slider)
 {
-    if ((int)level == FB_ViewZoomLevel(&TB.view))
+    int level = FB_ViewZoomLevels(&TB.view) - 1 - (int)slider;
+
+    if (level == FB_ViewZoomLevel(&TB.view))
         return;
     Timebase_SetZoomLevel(&TB, level);
     Timebase_Redraw(&TB, Win, NULL);
@@ -428,6 +444,7 @@ int MainWindow_Open(void)
     Timebase_Init(&TB, FB_CELL_W_DEFAULT);
     IdcmpHook.h_Entry = (HOOKFUNC)idcmp_hook;
     strcpy(PositionText, "0:00");
+    Hints[0].hi_Text = FB_Str(MSG_HINT_ZOOM);
 
     LB = (struct ListBrowserIFace *)IExec->GetInterface(
              (struct Library *)classes[C_LISTBROWSER].base, "main", 1, NULL);
@@ -557,7 +574,10 @@ int MainWindow_Open(void)
         WA_InnerWidth,      640,
         WA_InnerHeight,     380,
         WA_IDCMP,           IDCMP_GADGETUP | IDCMP_CLOSEWINDOW |
-                            IDCMP_IDCMPUPDATE | IDCMP_NEWSIZE,
+                            IDCMP_IDCMPUPDATE | IDCMP_NEWSIZE |
+                            IDCMP_GADGETHELP,
+        WINDOW_GadgetHelp,  TRUE,
+        WINDOW_HintInfo,    Hints,
         WINDOW_IDCMPHook,   &IdcmpHook,
         WINDOW_IDCMPHookBits, IDCMP_IDCMPUPDATE,
         WINDOW_Position,    WPOS_CENTERSCREEN,

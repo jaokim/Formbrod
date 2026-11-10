@@ -25,7 +25,7 @@ subclass of `TrackClass`.
 - Zoom is microseconds per pixel. Most zoomed in, one film-strip cell
   (48 px) is one frame. Most zoomed out, the whole edit fits the width.
   In between are steps of 5/4, used by the zoom slider (and later the
-  mouse wheel).
+  mouse wheel). The slider is reversed: right zooms in, left shows more.
 - Film-strip cells sit on a grid from time 0, so they don't jump while
   scrolling. Each cell shows **the frame from the middle** of the time it
   covers.

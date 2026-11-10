@@ -72,6 +72,10 @@ Zoom
 MSG_TRACK_EMPTY (33//)
 Drop a video file here, or use Add file
 ;
+; Hint shown when the pointer rests on the zoom slider.
+MSG_HINT_ZOOM (34//)
+Drag right to zoom in around the playhead, left to see more of the edit
+;
 ; ---- File requester titles ------------------------------------------------
 MSG_REQ_ADD_FILE (40//)
 Add video file

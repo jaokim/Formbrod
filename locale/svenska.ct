@@ -55,6 +55,9 @@ Zoom
 MSG_TRACK_EMPTY
 Släpp en videofil här, eller använd Lägg till fil
 ;
+MSG_HINT_ZOOM
+Dra åt höger för att zooma in kring positionen, åt vänster för att se mer av klippet
+;
 MSG_REQ_ADD_FILE
 Lägg till videofil
 ;

@@ -46,6 +46,8 @@
 #define MSG_LABEL_ZOOM_STR               "Zoom"
 #define MSG_TRACK_EMPTY                  33
 #define MSG_TRACK_EMPTY_STR              "Drop a video file here, or use Add file"
+#define MSG_HINT_ZOOM                    34
+#define MSG_HINT_ZOOM_STR                "Drag right to zoom in around the playhead, left to see more of the edit"
 #define MSG_REQ_ADD_FILE                 40
 #define MSG_REQ_ADD_FILE_STR             "Add video file"
 #define MSG_REQ_EXPORT                   41
@@ -109,7 +111,7 @@
 #define MSG_FITS_STRETCH                 94
 #define MSG_FITS_STRETCH_STR             "Stretched"
 
-#define FB_NUM_STRINGS 48
+#define FB_NUM_STRINGS 49
 
 #ifdef FB_STRINGS_ARRAY
 static const struct FBBuiltinString {
@@ -133,6 +135,7 @@ static const struct FBBuiltinString {
     { MSG_LABEL_RENDER, MSG_LABEL_RENDER_STR },
     { MSG_LABEL_ZOOM, MSG_LABEL_ZOOM_STR },
     { MSG_TRACK_EMPTY, MSG_TRACK_EMPTY_STR },
+    { MSG_HINT_ZOOM, MSG_HINT_ZOOM_STR },
     { MSG_REQ_ADD_FILE, MSG_REQ_ADD_FILE_STR },
     { MSG_REQ_EXPORT, MSG_REQ_EXPORT_STR },
     { MSG_STATUS_WELCOME, MSG_STATUS_WELCOME_STR },
