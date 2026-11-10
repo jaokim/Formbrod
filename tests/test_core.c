@@ -82,6 +82,9 @@ static void test_job_build_and_roundtrip(void)
     CHECK(strcmp(parsed.audio_out, "outa") == 0);
     CHECK(parsed.output.quality == FB_QUALITY_FINAL);
 
+    /* 3 s of clip 0 plus 5 s of clip 1; the atrims don't count twice */
+    CHECK(FB_JobEstimateLength(&job) == 8000);
+
     CHECK(FB_JobToCommandLine(&job, cmd, sizeof(cmd)) > 0);
     CHECK(strstr(cmd, "-i \"Work:Video/my clip.mp4\"") != NULL);
     printf("command: %s\n", cmd);
@@ -104,6 +107,14 @@ static void test_job_errors(void)
     CHECK(strstr(job.filtergraph, "concat=n=1:v=1:a=0[outv]") != NULL);
     /* preview quality scales down by default */
     CHECK(strstr(job.filtergraph, "scale=320:-2") != NULL);
+
+    CHECK(FB_JobEstimateLength(&job) == 1000);
+    strcpy(job.filtergraph, "[0:v]trim=start=2[outv]");   /* no end */
+    CHECK(FB_JobEstimateLength(&job) == 0);
+    strcpy(job.filtergraph, "[0:v]trim=duration=1.5,fps=25[outv]");
+    CHECK(FB_JobEstimateLength(&job) == 1500);
+    strcpy(job.filtergraph, "[0:v]null[outv]");
+    CHECK(FB_JobEstimateLength(&job) == 0);
 
     FB_ClipAddEffect(&tl.clips[0], "nosuchmodule");
     CHECK(FB_JobBuild(&job, &tl, &out) == FB_JOB_UNKNOWN_MODULE);

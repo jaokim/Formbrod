@@ -339,3 +339,55 @@ int FB_JobToCommandLine(const FBJob *job, char *out, size_t len)
 
     return b.overflow ? -1 : (int)b.used;
 }
+
+/* Reads "key=value" options of one filter (up to ',', ';' or '[') and
+ * returns the value of `key` in ms, or -1 if absent. Plain seconds only,
+ * which is what FB_JobBuild() writes. */
+static fb_ms_t trim_option(const char *args, const char *key)
+{
+    size_t klen = strlen(key);
+    const char *p = args;
+
+    while (*p && *p != ',' && *p != ';' && *p != '[') {
+        if (strncmp(p, key, klen) == 0 && p[klen] == '=')
+            return (fb_ms_t)(atof(p + klen + 1) * 1000.0 + 0.5);
+        while (*p && *p != ':' && *p != ',' && *p != ';' && *p != '[')
+            p++;
+        if (*p == ':')
+            p++;
+    }
+    return -1;
+}
+
+fb_ms_t FB_JobEstimateLength(const FBJob *job)
+{
+    const char *g = job->filtergraph;
+    const char *p = g;
+    fb_ms_t total = 0;
+    int found = 0;
+
+    while ((p = strstr(p, "trim=")) != NULL) {
+        /* "trim" as a whole filter name, not "atrim" */
+        int whole = (p == g || p[-1] == ',' || p[-1] == ';' || p[-1] == ']'
+                     || p[-1] == ' ');
+        const char *args = p + 5;
+
+        p = args;
+        if (whole) {
+            fb_ms_t start = trim_option(args, "start");
+            fb_ms_t end   = trim_option(args, "end");
+            fb_ms_t dur   = trim_option(args, "duration");
+
+            if (start < 0)
+                start = 0;
+            if (dur >= 0)
+                total += dur;
+            else if (end > start)
+                total += end - start;
+            else
+                return 0;
+            found = 1;
+        }
+    }
+    return found ? total : 0;
+}

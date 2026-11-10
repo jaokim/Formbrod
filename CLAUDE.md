@@ -19,7 +19,11 @@ through modules and ARexx.
   from `locale/formbrod.cd` by `tools/catgen.py` (`make strings`); don't edit
   it by hand. Translations are `locale/*.ct`.
 - `src/backend/` – render backends and media probing. libav code goes inside
-  `#ifdef HAVE_LIBAV`.
+  `#ifdef HAVE_LIBAV`. `local_backend.c` renders a job with libavformat/
+  codec/filter (send/receive API, ffmpeg 4.4+; version differences are
+  behind `#if` checks at the top of the file). It appends format/fps
+  conversion filters after the job's output labels, so jobs don't need to
+  know what the encoder accepts.
 - `gadgets/timeline/` – the planned custom timeline gadget (design notes only).
 
 ## Design rules
@@ -48,6 +52,10 @@ through modules and ARexx.
   with a real ffmpeg when possible.
 - The host test also checks that `strings.h` matches `formbrod.cd` and that
   every `.ct` passes `catgen.py check`.
+- `make -f Makefile.host test-libav` – renders real jobs through the local
+  backend (with ASan/UBSan) and checks the files with ffprobe. Needs the
+  ffmpeg dev files (pkg-config, or `LIBAV_CFLAGS`/`LIBAV_LIBS`) and the
+  `ffmpeg`/`ffprobe` tools. Run it after any change to `local_backend.c`.
 - `make` – cross-compiles with `ppc-amigaos-gcc` (AmigaOS 4 SDK, `-lauto`).
   Add `LIBAV=1 LIBAV_PREFIX=...` to link ffmpeg.
 - The Amiga-side code (GUI, ARexx, backend) has not been compiled against
