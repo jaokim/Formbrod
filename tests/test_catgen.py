@@ -73,6 +73,21 @@ class CatgenTest(unittest.TestCase):
         self.assertEqual(len(chunks["CSET"]), 32)
         self.assertIn("\xe5".encode("iso-8859-1"), data)   # å in Latin-1
 
+    def test_compare(self):
+        _, _, header, strings = self.check("MSG_HELLO\nHej\nMSG_ADDED\nLade till %s\n")
+        a = self.write("a.ct", "")
+        b = self.write("b.ct", "")
+        with open(a, "wb") as f:
+            f.write(catgen.build_catalog(header, strings))
+        with open(b, "wb") as f:
+            f.write(catgen.build_catalog(header, strings))
+        self.assertEqual(catgen.compare_catalogs(a, b), [])
+        with open(b, "wb") as f:
+            f.write(catgen.build_catalog(header, [(1, "Hej!"), strings[1]]))
+        diffs = catgen.compare_catalogs(a, b)
+        self.assertEqual(len(diffs), 1)
+        self.assertIn("string 1", diffs[0])
+
     def test_format_mismatch(self):
         errors, _, _, _ = self.check("MSG_ADDED\nLade till %d\n")
         self.assertTrue(any("conversions" in e for e in errors))

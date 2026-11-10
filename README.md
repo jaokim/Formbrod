@@ -39,9 +39,15 @@ To run the core tests on Linux or macOS:
 
     make -f Makefile.host test
 
-Translations need Python 3 on the build host:
+Translations are built with FlexCat (and iconv, since the sources are
+UTF-8). Without FlexCat, `tools/catgen.py` can build them instead (Python 3):
 
-    make catalogs      # Catalogs/<language>/formbrod.catalog
+    make catalogs                  # Catalogs/<language>/formbrod.catalog
+    make catalogs CATTOOL=catgen   # same, without FlexCat
+    make compare-catalogs          # build with both and check they agree
+
+CI builds the catalogs with FlexCat, cross-checks them with catgen, and
+uploads them together with the executable.
 
 Copy the `Catalogs` drawer next to the program, or into `LOCALE:Catalogs/`.
 Formbröd then follows the language set in the Locale preferences.

@@ -9,6 +9,10 @@ on any host with only Python 3.
   catgen.py check   formbrod.cd svenska.ct [more.ct ...]
   catgen.py catalog formbrod.cd svenska.ct -o Catalogs/svenska/formbrod.catalog
   catgen.py dump    Catalogs/svenska/formbrod.catalog
+  catgen.py compare a.catalog b.catalog
+
+The release catalogs are built with FlexCat ('make catalogs'); 'compare'
+checks that FlexCat and catgen agree.
 
 .cd and .ct files are read as UTF-8 and written out in ISO-8859-1, which is
 what AmigaOS expects. Text that has no ISO-8859-1 form is an error.
@@ -335,6 +339,35 @@ def read_catalog(data):
     return chunks, strings
 
 
+def compare_catalogs(a_path, b_path):
+    """Returns a list of differences that locale.library would notice."""
+    with open(a_path, "rb") as f:
+        a_data = f.read()
+    with open(b_path, "rb") as f:
+        b_data = f.read()
+    a_chunks, a_strs = read_catalog(a_data)
+    b_chunks, b_strs = read_catalog(b_data)
+    diffs = []
+    for tag in ("FVER", "LANG"):
+        a_val = a_chunks.get(tag, b"").rstrip(b"\0")
+        b_val = b_chunks.get(tag, b"").rstrip(b"\0")
+        if a_val != b_val:
+            diffs.append("%s: %r vs %r" % (tag, a_val, b_val))
+    a_cs = a_chunks.get("CSET", b"\0\0\0\0")[:4]
+    b_cs = b_chunks.get("CSET", b"\0\0\0\0")[:4]
+    if a_cs != b_cs:
+        diffs.append("CSET codeset: %r vs %r" % (a_cs, b_cs))
+    for sid in sorted(set(a_strs) | set(b_strs)):
+        if a_strs.get(sid) != b_strs.get(sid):
+            diffs.append("string %d: %r vs %r"
+                         % (sid, a_strs.get(sid), b_strs.get(sid)))
+    if not diffs and a_data != b_data:
+        print("note: %s and %s hold the same strings but differ in layout; "
+              "chunks %s vs %s" % (a_path, b_path, sorted(a_chunks),
+                                   sorted(b_chunks)))
+    return diffs
+
+
 def report(errors, warnings, quiet):
     if not quiet:
         for w in warnings:
@@ -361,9 +394,20 @@ def main(argv=None):
     p.add_argument("-o", "--output", required=True)
     p = sub.add_parser("dump", help="print the strings in a .catalog")
     p.add_argument("catalog")
+    p = sub.add_parser("compare",
+                       help="compare two .catalog files, e.g. FlexCat's and ours")
+    p.add_argument("a")
+    p.add_argument("b")
     args = ap.parse_args(argv)
 
     try:
+        if args.cmd == "compare":
+            diffs = compare_catalogs(args.a, args.b)
+            for d in diffs:
+                print("differs: " + d, file=sys.stderr)
+            if not diffs:
+                print("same strings: %s, %s" % (args.a, args.b))
+            return 1 if diffs else 0
         if args.cmd == "dump":
             with open(args.catalog, "rb") as f:
                 chunks, strings = read_catalog(f.read())
