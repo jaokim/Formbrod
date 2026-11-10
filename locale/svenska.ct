@@ -154,3 +154,66 @@ Beskuren
 ;
 MSG_FITS_STRETCH
 Utsträckt
+;
+MSG_MENU_PROJECT
+Projekt
+;
+MSG_MENU_ADD
+Lägg till fil...
+;
+MSG_MENU_PREVIEW
+Förhandsvisa
+;
+MSG_MENU_EXPORT
+Exportera...
+;
+MSG_MENU_CANCEL
+Avbryt rendering
+;
+MSG_MENU_ABOUT
+Om...
+;
+MSG_MENU_QUIT
+Avsluta
+;
+MSG_MENU_EDIT
+Redigera
+;
+MSG_MENU_SPLIT
+Dela vid positionen
+;
+MSG_MENU_REMOVE
+Ta bort klipp
+;
+MSG_MENU_EFFECTS
+Effekter
+;
+MSG_MENU_SETTINGS
+Inställningar
+;
+MSG_MENU_FIT
+Anpassa klipp till bilden
+;
+MSG_MENU_FIT_FIT
+Passa in, lägg till kanter
+;
+MSG_MENU_FIT_FILL
+Fyll bilden, beskär kanterna
+;
+MSG_MENU_FIT_STRETCH
+Sträck ut till bilden
+;
+MSG_ABOUT_TITLE
+Om Formbröd
+;
+MSG_ABOUT_TEXT
+Formbröd %s\n\nEn videoredigerare för AmigaOS 4.\n\n%s
+;
+MSG_ABOUT_LIBAV
+Läser och exporterar video med ffmpegs libav*-bibliotek.
+;
+MSG_ABOUT_NO_LIBAV
+Byggd utan ffmpeg: video kan inte läsas eller exporteras.
+;
+MSG_ABOUT_OK
+OK

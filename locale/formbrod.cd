@@ -189,3 +189,74 @@ Cropped
 MSG_FITS_STRETCH (94//)
 Stretched
 ;
+;
+; ---- Menus ----------------------------------------------------------------
+; Menu shortcuts (Amiga-O, Amiga-Q, ...) are fixed in the program and follow
+; the Amiga style guide, so they are not part of these strings.
+MSG_MENU_PROJECT (100//)
+Project
+;
+MSG_MENU_ADD (101//)
+Add file...
+;
+MSG_MENU_PREVIEW (102//)
+Preview
+;
+MSG_MENU_EXPORT (103//)
+Export...
+;
+MSG_MENU_CANCEL (104//)
+Cancel render
+;
+MSG_MENU_ABOUT (105//)
+About...
+;
+MSG_MENU_QUIT (106//)
+Quit
+;
+MSG_MENU_EDIT (107//)
+Edit
+;
+MSG_MENU_SPLIT (108//)
+Split at playhead
+;
+MSG_MENU_REMOVE (109//)
+Remove clip
+;
+; Lists the effect modules; picking one adds it to the selected clip.
+MSG_MENU_EFFECTS (110//)
+Effects
+;
+MSG_MENU_SETTINGS (111//)
+Settings
+;
+; Submenu: how clips of another shape are fitted into the output frame.
+MSG_MENU_FIT (112//)
+Fit clips to frame
+;
+MSG_MENU_FIT_FIT (113//)
+Fit inside, add bars
+;
+MSG_MENU_FIT_FILL (114//)
+Fill frame, crop edges
+;
+MSG_MENU_FIT_STRETCH (115//)
+Stretch to frame
+;
+; ---- About requester ------------------------------------------------------
+MSG_ABOUT_TITLE (120//)
+About Formbrod
+;
+; The first %s is the version and date, e.g. "0.1 (10.11.2026)". The second
+; is MSG_ABOUT_LIBAV or MSG_ABOUT_NO_LIBAV.
+MSG_ABOUT_TEXT (121//)
+Formbrod %s\n\nA video editor for AmigaOS 4.\n\n%s
+;
+MSG_ABOUT_LIBAV (122//)
+Reads and exports video with ffmpeg's libav* libraries.
+;
+MSG_ABOUT_NO_LIBAV (123//)
+Built without ffmpeg: video can't be read or exported.
+;
+MSG_ABOUT_OK (124//)
+OK
