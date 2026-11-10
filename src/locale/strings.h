@@ -13,7 +13,7 @@
 #define FB_CATALOG_VERSION 1
 
 #define MSG_WINDOW_TITLE                 1
-#define MSG_WINDOW_TITLE_STR             "Formbr\366d"
+#define MSG_WINDOW_TITLE_STR             "Formbrod"
 #define MSG_BTN_ADD                      10
 #define MSG_BTN_ADD_STR                  "_Add file..."
 #define MSG_BTN_SPLIT                    11
@@ -83,9 +83,9 @@
 #define MSG_JOB_UNKNOWN                  75
 #define MSG_JOB_UNKNOWN_STR              "Unknown error"
 #define MSG_ERR_NO_WINDOW                80
-#define MSG_ERR_NO_WINDOW_STR            "Formbr\366d: can't open window (are the ReAction classes installed?)\012"
+#define MSG_ERR_NO_WINDOW_STR            "Formbrod: can't open window (are the ReAction classes installed?)\012"
 #define MSG_ERR_NO_AREXX                 81
-#define MSG_ERR_NO_AREXX_STR             "Formbr\366d: ARexx port not available\012"
+#define MSG_ERR_NO_AREXX_STR             "Formbrod: ARexx port not available\012"
 
 #define FB_NUM_STRINGS 37
 

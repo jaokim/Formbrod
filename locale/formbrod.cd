@@ -10,12 +10,14 @@
 ;  - Strings containing printf conversions (%s, %d, ...) must keep the same
 ;    conversions, in the same order, in every translation. catgen checks this.
 ;  - An underscore marks the keyboard shortcut of a button.
+;  - Keep the English strings plain ASCII (so "Formbrod", not "Formbröd").
+;    FlexCat warns about anything else, and the warning fails the build.
 ;  - This file and the .ct files are UTF-8. catgen converts to ISO-8859-1
 ;    when it writes the header and the catalogs.
 ;
 ; ---- Window ---------------------------------------------------------------
 MSG_WINDOW_TITLE (1//)
-Formbröd
+Formbrod
 ;
 ; ---- Buttons --------------------------------------------------------------
 MSG_BTN_ADD (10//)
@@ -133,8 +135,8 @@ Unknown error
 ;
 ; ---- Shell messages at startup --------------------------------------------
 MSG_ERR_NO_WINDOW (80//)
-Formbröd: can't open window (are the ReAction classes installed?)\n
+Formbrod: can't open window (are the ReAction classes installed?)\n
 ;
 MSG_ERR_NO_AREXX (81//)
-Formbröd: ARexx port not available\n
+Formbrod: ARexx port not available\n
 ;

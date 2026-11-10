@@ -25,7 +25,7 @@ int main(void)
     CHECK(strcmp(FB_Str(MSG_BTN_SPLIT), "_Split") == 0);
 
     Locale_Open();
-    CHECK(strcmp(FB_Str(MSG_WINDOW_TITLE), "Formbr\366d") == 0);
+    CHECK(strcmp(FB_Str(MSG_WINDOW_TITLE), "Formbrod") == 0);
     CHECK(strcmp(FB_Str(MSG_STATUS_ADDED), "Added %s") == 0);
     CHECK(strcmp(FB_Str(99999), "") == 0);     /* unknown ID: never NULL */
     CHECK(Locale_DecimalPoint() == '.');
