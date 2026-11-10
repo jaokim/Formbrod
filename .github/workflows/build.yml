@@ -1,0 +1,24 @@
+name: AmigaOS 4 build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  amigaos4:
+    runs-on: ubuntu-latest
+    container:
+      image: walkero/amigagccondocker:os4-gcc11
+    steps:
+      - uses: actions/checkout@v4
+
+      # CC is passed explicitly: make's built-in default (cc) means
+      # "CC ?= ppc-amigaos-gcc" in the Makefile never takes effect.
+      - name: Build
+        run: make CC=ppc-amigaos-gcc
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Formbrod-os4
+          path: Formbrod
