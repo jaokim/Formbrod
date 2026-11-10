@@ -10,6 +10,10 @@
 #   make LIBAV=1 LIBAV_PREFIX=/opt/ffmpeg-ppc
 #
 # The portable core can be tested on any host: make -f Makefile.host test
+#
+# Translations (needs Python 3 on the build host):
+#   make catalogs    builds Catalogs/<language>/formbrod.catalog from locale/*.ct
+#   make strings     regenerates src/locale/strings.h after editing locale/formbrod.cd
 
 CC        ?= ppc-amigaos-gcc
 LIBAV     ?= 0
@@ -33,6 +37,7 @@ endif
 SRC = src/main.c \
       src/app.c \
       src/gui/mainwindow.c \
+      src/locale/catalog.c \
       src/arexx/arexx.c \
       src/timeline/timeline.c \
       src/job/job.c \
@@ -50,10 +55,26 @@ $(BUILD)/%.o: %.c
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -c -o $@ $<
 
+# ---- Locale -------------------------------------------------------------
+PYTHON    ?= python3
+CATGEN     = $(PYTHON) tools/catgen.py
+CD         = locale/formbrod.cd
+CT         = $(wildcard locale/*.ct)
+CATALOGS   = $(CT:locale/%.ct=Catalogs/%/formbrod.catalog)
+
+strings: $(CD) tools/catgen.py
+	$(CATGEN) header $(CD) -o src/locale/strings.h
+
+catalogs: $(CATALOGS)
+
+Catalogs/%/formbrod.catalog: locale/%.ct $(CD) tools/catgen.py
+	@mkdir -p $(dir $@)
+	$(CATGEN) catalog $(CD) $< -o $@
+
 clean:
-	rm -rf $(BUILD) $(TARGET)
+	rm -rf $(BUILD) $(TARGET) Catalogs
 
 test:
 	$(MAKE) -f Makefile.host test
 
-.PHONY: clean test
+.PHONY: clean test strings catalogs

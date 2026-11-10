@@ -15,6 +15,9 @@ through modules and ARexx.
 - `src/gui/` – ReAction. Classes are opened with `OpenClass()` and objects
   made with `NewObject(Class *, ...)`, not reaction_macros.h.
 - `src/arexx/` – the FORMBROD port, using arexx.class.
+- `src/locale/` – `FB_Str()` over locale.library. `strings.h` is generated
+  from `locale/formbrod.cd` by `tools/catgen.py` (`make strings`); don't edit
+  it by hand. Translations are `locale/*.ct`.
 - `src/backend/` – render backends and media probing. libav code goes inside
   `#ifdef HAVE_LIBAV`.
 - `gadgets/timeline/` – the planned custom timeline gadget (design notes only).
@@ -30,6 +33,11 @@ through modules and ARexx.
 - **Modules return filter strings.** A module with `FB_MODF_NATIVE` can't run
   remotely, and building a job with one fails with `FB_JOB_NOT_EXPRESSIBLE`
   until there is a local pre-pass.
+- **No literal UI text.** Anything the user reads in the window or the shell
+  goes through `FB_Str(MSG_...)`. New strings get a new, never reused ID in
+  `formbrod.cd`. ARexx commands/results and the core's English error strings
+  (`FB_JobErrorString`, used in logs and by render servers) stay untranslated;
+  the GUI shows `App_JobErrorString()` instead.
 - **The job text format is versioned** (`FB_JOB_VERSION`). Parsers ignore
   unknown keys, so add keys rather than change existing ones.
 
@@ -38,6 +46,8 @@ through modules and ARexx.
 - `make -f Makefile.host test` – builds and runs `tests/test_core.c` on the
   host. Run it after any change to the core. Check generated filtergraphs
   with a real ffmpeg when possible.
+- The host test also checks that `strings.h` matches `formbrod.cd` and that
+  every `.ct` passes `catgen.py check`.
 - `make` – cross-compiles with `ppc-amigaos-gcc` (AmigaOS 4 SDK, `-lauto`).
   Add `LIBAV=1 LIBAV_PREFIX=...` to link ffmpeg.
 - The Amiga-side code (GUI, ARexx, backend) has not been compiled against

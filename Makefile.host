@@ -13,16 +13,28 @@ build/host/test_core: tests/test_core.c $(CORE_SRC)
 	$(CC) $(CFLAGS) -o $@ $^
 
 # Compile-check the parts of the app that don't touch AmigaOS headers.
-APP_SRC = src/app.c src/backend/local_backend.c src/backend/media.c
+APP_SRC = src/app.c src/backend/local_backend.c src/backend/media.c \
+          src/locale/catalog.c
 
 check-app:
 	@mkdir -p build/host
 	$(CC) $(CFLAGS) -Isrc -fsyntax-only $(APP_SRC)
 
-test: build/host/test_core check-app
+build/host/test_locale: tests/test_locale.c src/locale/catalog.c src/locale/strings.h
+	@mkdir -p build/host
+	$(CC) $(CFLAGS) -Isrc -o $@ tests/test_locale.c src/locale/catalog.c
+
+# Translations: catgen's own tests, then every .ct against the .cd.
+PYTHON ?= python3
+check-locale:
+	$(PYTHON) -I tests/test_catgen.py
+	$(PYTHON) -I tools/catgen.py check locale/formbrod.cd locale/*.ct
+
+test: build/host/test_core build/host/test_locale check-app check-locale
 	./build/host/test_core
+	./build/host/test_locale
 
 clean:
 	rm -rf build/host
 
-.PHONY: test clean check-app
+.PHONY: test clean check-app check-locale

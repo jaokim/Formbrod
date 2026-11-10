@@ -37,6 +37,9 @@ FBProgress App_PollRender(void);
 
 void App_SetStatus(const char *fmt, ...);
 
+/* Translated text for a job error, for the status line. */
+const char *App_JobErrorString(FBJobError err);
+
 /* Media probing (src/backend/media.c). Fills duration and stream flags. */
 int  FB_ProbeMedia(const char *path, fb_ms_t *duration, int *has_video,
                    int *has_audio);

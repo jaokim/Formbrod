@@ -1,0 +1,117 @@
+## version $VER: formbrod.catalog 1.0 (10.11.2026)
+## language svenska
+## codeset 0
+;
+; Swedish translation of Formbröd. UTF-8; see formbrod.cd.
+;
+MSG_WINDOW_TITLE
+Formbröd
+;
+MSG_BTN_ADD
+_Lägg till fil...
+;
+MSG_BTN_SPLIT
+_Dela
+;
+MSG_BTN_REMOVE
+_Ta bort
+;
+MSG_BTN_FADE
+T_oning
+;
+MSG_BTN_PREVIEW
+_Förhandsvisa
+;
+MSG_BTN_EXPORT
+_Exportera...
+;
+MSG_BTN_CANCEL
+_Avbryt
+;
+MSG_COL_NUMBER
+#
+;
+MSG_COL_FILE
+Fil
+;
+MSG_COL_IN
+In
+;
+MSG_COL_OUT
+Ut
+;
+MSG_COL_EFFECTS
+Effekter
+;
+MSG_LABEL_PLAYHEAD
+Position
+;
+MSG_LABEL_RENDER
+Rendering
+;
+MSG_REQ_ADD_FILE
+Lägg till videofil
+;
+MSG_REQ_EXPORT
+Exportera video
+;
+MSG_STATUS_WELCOME
+Släpp en videofil i fönstret, eller klicka på Lägg till fil.
+;
+MSG_STATUS_SELECT_CLIP
+Välj ett klipp först
+;
+MSG_STATUS_CANT_READ
+Kan inte läsa video från %s
+;
+MSG_STATUS_TOO_MANY
+För många filer eller klipp
+;
+MSG_STATUS_ADDED
+Lade till %s
+;
+MSG_STATUS_NOTHING_TO_SPLIT
+Det finns inget att dela där
+;
+MSG_STATUS_NO_SUCH_CLIP
+Klippet eller effekten finns inte
+;
+MSG_STATUS_ALREADY_RENDERING
+Renderar redan
+;
+MSG_STATUS_RENDERING
+Renderar %s...
+;
+MSG_STATUS_DONE
+Klar: %s
+;
+MSG_STATUS_CANCELLED
+Renderingen avbröts
+;
+MSG_STATUS_FAILED
+Renderingen misslyckades: %s
+;
+MSG_JOB_EMPTY
+Tidslinjen är tom
+;
+MSG_JOB_BAD_SOURCE
+Ett klipp hänvisar till en källa som saknas
+;
+MSG_JOB_UNKNOWN_MODULE
+En effekt använder en okänd modul
+;
+MSG_JOB_NOT_EXPRESSIBLE
+En effekt kan inte renderas med ffmpeg-filter
+;
+MSG_JOB_OVERFLOW
+Redigeringen är för komplex (filtergrafen blev för lång)
+;
+MSG_JOB_UNKNOWN
+Okänt fel
+;
+MSG_ERR_NO_WINDOW
+Formbröd: kan inte öppna fönstret (är ReAction-klasserna installerade?)\n
+;
+MSG_ERR_NO_AREXX
+Formbröd: ARexx-porten är inte tillgänglig\n
+;

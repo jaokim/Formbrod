@@ -3,6 +3,7 @@
 #include <stdarg.h>
 #include "app.h"
 #include "formbrod/module.h"
+#include "locale/catalog.h"
 
 FBApp App;
 
@@ -14,7 +15,7 @@ int App_Init(void)
     App.backend = FB_CreateLocalBackend();
     if (!App.backend)
         return -1;
-    App_SetStatus("Drop a video file in the window, or use Project/Open.");
+    App_SetStatus("%s", FB_Str(MSG_STATUS_WELCOME));
     return 0;
 }
 
@@ -42,22 +43,22 @@ int App_AddFile(const char *path)
     int src;
 
     if (FB_ProbeMedia(path, &dur, &has_v, &has_a) != 0 || !has_v || dur <= 0) {
-        App_SetStatus("Can't read video from %s", path);
+        App_SetStatus(FB_Str(MSG_STATUS_CANT_READ), path);
         return -1;
     }
     src = FB_TimelineAddSource(&App.timeline, path, dur, has_v, has_a);
     if (src < 0 || FB_TimelineAppendClip(&App.timeline, src, 0, dur) < 0) {
-        App_SetStatus("Too many files or clips");
+        App_SetStatus("%s", FB_Str(MSG_STATUS_TOO_MANY));
         return -1;
     }
-    App_SetStatus("Added %s", path);
+    App_SetStatus(FB_Str(MSG_STATUS_ADDED), path);
     return 0;
 }
 
 int App_Split(fb_ms_t at)
 {
     if (FB_TimelineSplit(&App.timeline, at) < 0) {
-        App_SetStatus("Nothing to split there");
+        App_SetStatus("%s", FB_Str(MSG_STATUS_NOTHING_TO_SPLIT));
         return -1;
     }
     return 0;
@@ -75,7 +76,7 @@ int App_AddEffect(int clip, const char *module)
     int i;
 
     if (clip < 0 || clip >= App.timeline.num_clips || !mod) {
-        App_SetStatus("No such clip or effect");
+        App_SetStatus("%s", FB_Str(MSG_STATUS_NO_SUCH_CLIP));
         return -1;
     }
     fx = FB_ClipAddEffect(&App.timeline.clips[clip], module);
@@ -98,6 +99,21 @@ int App_SetEffectParam(int clip, int effect, const char *name, double value)
     return FB_EffectSetParam(&c->effects[effect], name, value);
 }
 
+/* FB_JobErrorString() stays in English for logs and render servers; this is
+ * the translated version for the window. */
+const char *App_JobErrorString(FBJobError err)
+{
+    switch (err) {
+    case FB_JOB_OK:              return "";
+    case FB_JOB_EMPTY:           return FB_Str(MSG_JOB_EMPTY);
+    case FB_JOB_BAD_SOURCE:      return FB_Str(MSG_JOB_BAD_SOURCE);
+    case FB_JOB_UNKNOWN_MODULE:  return FB_Str(MSG_JOB_UNKNOWN_MODULE);
+    case FB_JOB_NOT_EXPRESSIBLE: return FB_Str(MSG_JOB_NOT_EXPRESSIBLE);
+    case FB_JOB_OVERFLOW:        return FB_Str(MSG_JOB_OVERFLOW);
+    }
+    return FB_Str(MSG_JOB_UNKNOWN);
+}
+
 int App_Export(const char *path, int preview)
 {
     static FBJob job;   /* large; keep it off the stack */
@@ -105,7 +121,7 @@ int App_Export(const char *path, int preview)
     FBJobError err;
 
     if (App.rendering) {
-        App_SetStatus("Already rendering");
+        App_SetStatus("%s", FB_Str(MSG_STATUS_ALREADY_RENDERING));
         return -1;
     }
 
@@ -117,7 +133,7 @@ int App_Export(const char *path, int preview)
 
     err = FB_JobBuild(&job, &App.timeline, &out);
     if (err != FB_JOB_OK) {
-        App_SetStatus("%s", FB_JobErrorString(err));
+        App_SetStatus("%s", App_JobErrorString(err));
         return -1;
     }
     if (App.backend->Submit(App.backend, &job) != 0) {
@@ -125,7 +141,7 @@ int App_Export(const char *path, int preview)
         return -1;
     }
     App.rendering = 1;
-    App_SetStatus("Rendering %s...", path);
+    App_SetStatus(FB_Str(MSG_STATUS_RENDERING), path);
     return 0;
 }
 
@@ -144,11 +160,11 @@ FBProgress App_PollRender(void)
 
         App.rendering = 0;
         if (r.state == FB_RENDER_DONE)
-            App_SetStatus("Done: %s", r.message);
+            App_SetStatus(FB_Str(MSG_STATUS_DONE), r.message);
         else if (r.state == FB_RENDER_CANCELLED)
-            App_SetStatus("Render cancelled");
+            App_SetStatus("%s", FB_Str(MSG_STATUS_CANCELLED));
         else
-            App_SetStatus("Render failed: %s", r.message);
+            App_SetStatus(FB_Str(MSG_STATUS_FAILED), r.message);
     }
     return p;
 }
