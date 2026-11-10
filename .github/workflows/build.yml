@@ -13,6 +13,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Toolchain info
+        run: |
+          ppc-amigaos-gcc --version | head -1
+          command -v flexcat lha
+
       # CC is passed explicitly: make's built-in default (cc) means
       # "CC ?= ppc-amigaos-gcc" in the Makefile never takes effect.
       - name: Build
