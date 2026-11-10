@@ -10,6 +10,8 @@ static void copy_str(char *dst, const char *src, size_t len)
 void FB_TimelineInit(FBTimeline *tl)
 {
     memset(tl, 0, sizeof(*tl));
+    tl->format.fit = FB_FIT_FIT;
+    tl->format.pad_color = 0x000000;
 }
 
 int FB_TimelineAddSource(FBTimeline *tl, const char *path, fb_ms_t duration,
@@ -134,4 +136,157 @@ fb_ms_t FB_TimelineDuration(const FBTimeline *tl)
     for (i = 0; i < tl->num_clips; i++)
         total += tl->clips[i].out - tl->clips[i].in;
     return total;
+}
+
+/* ---- Output format and fitting --------------------------------------- */
+
+void FB_SourceSetVideo(FBSource *src, int width, int height,
+                       int sar_num, int sar_den, int fps_num, int fps_den)
+{
+    src->width   = width > 0 ? width : 0;
+    src->height  = height > 0 ? height : 0;
+    src->sar_num = (sar_num > 0 && sar_den > 0) ? sar_num : 0;
+    src->sar_den = (sar_num > 0 && sar_den > 0) ? sar_den : 0;
+    src->fps_num = (fps_num > 0 && fps_den > 0) ? fps_num : 0;
+    src->fps_den = (fps_num > 0 && fps_den > 0) ? fps_den : 0;
+}
+
+/* The source's size as shown, i.e. with square pixels. 0 if unknown. */
+static int display_size(const FBSource *src, int *w, int *h)
+{
+    *w = src->width;
+    *h = src->height;
+    if (*w <= 0 || *h <= 0)
+        return 0;
+    if (src->sar_num > 0 && src->sar_den > 0 && src->sar_num != src->sar_den)
+        *w = (int)(((int64_t)*w * src->sar_num + src->sar_den / 2)
+                   / src->sar_den);
+    return 1;
+}
+
+static int even(int v)
+{
+    v &= ~1;
+    return v < 2 ? 2 : v;
+}
+
+static const FBSource *first_source(const FBTimeline *tl)
+{
+    int s;
+
+    if (tl->num_clips <= 0)
+        return NULL;
+    s = tl->clips[0].source;
+    if (s < 0 || s >= tl->num_sources)
+        return NULL;
+    return &tl->sources[s];
+}
+
+int FB_TimelineFrameSize(const FBTimeline *tl, int *width, int *height)
+{
+    const FBSource *src;
+    int w, h;
+
+    *width = *height = 0;
+    if (tl->format.width > 0 && tl->format.height > 0) {
+        *width  = even(tl->format.width);
+        *height = even(tl->format.height);
+        return 1;
+    }
+    src = first_source(tl);
+    if (!src || !display_size(src, &w, &h))
+        return 0;
+    *width  = even(w);
+    *height = even(h);
+    return 1;
+}
+
+int FB_TimelineFrameRate(const FBTimeline *tl, int *num, int *den)
+{
+    const FBSource *src;
+
+    *num = *den = 0;
+    if (tl->format.fps_num > 0 && tl->format.fps_den > 0) {
+        *num = tl->format.fps_num;
+        *den = tl->format.fps_den;
+        return 1;
+    }
+    src = first_source(tl);
+    if (!src || src->fps_num <= 0 || src->fps_den <= 0)
+        return 0;
+    *num = src->fps_num;
+    *den = src->fps_den;
+    return 1;
+}
+
+FBFit FB_ClipFit(const FBTimeline *tl, const FBClip *clip)
+{
+    if (clip->fit > FB_FIT_DEFAULT && clip->fit < FB_FIT_COUNT)
+        return clip->fit;
+    if (tl->format.fit > FB_FIT_DEFAULT && tl->format.fit < FB_FIT_COUNT)
+        return tl->format.fit;
+    return FB_FIT_FIT;
+}
+
+FBFitResult FB_ClipFitResult(const FBTimeline *tl, const FBClip *clip,
+                             int width, int height)
+{
+    int w, h;
+    int64_t a, b, tol;
+
+    if (clip->source < 0 || clip->source >= tl->num_sources)
+        return FB_FITS_NONE;
+    if (width <= 0 || height <= 0 ||
+        !display_size(&tl->sources[clip->source], &w, &h))
+        return FB_FITS_NONE;
+    if (w == width && h == height)
+        return FB_FITS_NONE;
+
+    /* Compare aspects as w/h vs width/height, within 1% (odd sizes and
+     * rounding to even shouldn't count as a different shape). */
+    a = (int64_t)w * height;
+    b = (int64_t)width * h;
+    tol = b / 100;
+    if (a - b <= tol && b - a <= tol)
+        return FB_FITS_SCALE;
+
+    switch (FB_ClipFit(tl, clip)) {
+    case FB_FIT_FILL:    return FB_FITS_CROP;
+    case FB_FIT_STRETCH: return FB_FITS_STRETCH;
+    default:             return a > b ? FB_FITS_LETTERBOX : FB_FITS_PILLARBOX;
+    }
+}
+
+static const char *const fit_names[FB_FIT_COUNT] = {
+    "default", "fit", "fill", "stretch"
+};
+
+const char *FB_FitName(FBFit fit)
+{
+    if (fit < 0 || fit >= FB_FIT_COUNT)
+        return "default";
+    return fit_names[fit];
+}
+
+int FB_FitFromName(const char *name)
+{
+    int i;
+
+    for (i = 0; i < FB_FIT_COUNT; i++) {
+        const char *a = name, *b = fit_names[i];
+
+        while (*a && *b) {
+            char c = *a;
+
+            if (c >= 'A' && c <= 'Z')
+                c = (char)(c - 'A' + 'a');
+            if (c != *b)
+                break;
+            a++;
+            b++;
+        }
+        if (!*a && !*b)
+            return i;
+    }
+    return -1;
 }

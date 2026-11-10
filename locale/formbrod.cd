@@ -148,6 +148,25 @@ The edit is too complex (filtergraph too long)
 MSG_JOB_UNKNOWN (75//)
 Unknown error
 ;
+; ---- How a clip is fitted to the output frame (Effects column) ----------
+; Shown when a clip's size or shape differs from the output's.
+MSG_FITS_SCALE (90//)
+Scaled
+;
+; Bars above and below.
+MSG_FITS_LETTERBOX (91//)
+Letterbox
+;
+; Bars left and right.
+MSG_FITS_PILLARBOX (92//)
+Pillarbox
+;
+MSG_FITS_CROP (93//)
+Cropped
+;
+MSG_FITS_STRETCH (94//)
+Stretched
+;
 ; ---- Shell messages at startup --------------------------------------------
 MSG_ERR_NO_WINDOW (80//)
 Formbrod: can't open window (are the ReAction classes installed?)\n

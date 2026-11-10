@@ -31,8 +31,10 @@ check out_join.mp4 4.0
 check out_reversed.mp4 2.5
 check out_video_only.mkv 3.0
 check out_h264.mkv 9.0
+check out_mixed.mp4 5.5
 # decode every frame to make sure the files are clean
-for f in out_join.mp4 out_reversed.mp4 out_video_only.mkv out_h264.mkv; do
+for f in out_join.mp4 out_reversed.mp4 out_video_only.mkv out_h264.mkv \
+         out_mixed.mp4; do
     ffmpeg -v error -xerror -i "$dir/$f" -f null - || { echo "FAIL: $f decode"; exit 1; }
 done
 echo "ffprobe checks passed"

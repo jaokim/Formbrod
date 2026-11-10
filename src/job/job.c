@@ -1,14 +1,22 @@
 /*
  * job.c - turn a timeline into a render job, and (de)serialise jobs.
  *
- * For each clip we emit a trimmed video chain (and an audio chain when every
- * clip has audio), run the clip's effects through their modules, then concat
- * everything into [outv]/[outa]:
+ * For each clip we emit a trimmed video chain (and an audio chain when any
+ * clip has audio), fit it to the timeline's frame (see FBFormat), run the
+ * clip's effects through their modules, then concat everything into
+ * [outv]/[outa]:
  *
- *   [0:v]trim=start=1:end=4,setpts=PTS-STARTPTS,fade=...[v0];
- *   [0:a]atrim=start=1:end=4,asetpts=PTS-STARTPTS,afade=...[a0];
- *   ...
+ *   [0:v]trim=start=1:end=4,setpts=PTS-STARTPTS,<fit>,fps=25/1,fade=...[v0];
+ *   [0:a]atrim=start=1:end=4,asetpts=PTS-STARTPTS,aformat=...,afade=...[a0];
+ *   [1:v]...[v1];
+ *   anullsrc=...,atrim=duration=2,aformat=...[a1];     (clip without audio)
  *   [v0][a0][v1][a1]concat=n=2:v=1:a=1[outv][outa]
+ *
+ * <fit> is one of (W x H is the frame):
+ *   fit      scale=W:H:force_original_aspect_ratio=decrease,pad=W:H:...
+ *   fill     scale=W:H:force_original_aspect_ratio=increase,crop=W:H
+ *   stretch  scale=W:H
+ * followed by setsar=1, or just setsar=1 for a clip that already matches.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -18,6 +26,7 @@
 #include "formbrod/module.h"
 
 #define PREVIEW_WIDTH 320
+#define FB_AUDIO_RATE 48000   /* every clip's audio is resampled to this */
 
 typedef struct Buf {
     char  *p;
@@ -80,11 +89,57 @@ static FBJobError add_effects(Buf *b, const FBClip *clip, int audio)
     return FB_JOB_OK;
 }
 
+/* Rounds down to an even number of at least 2; yuv420p needs even sizes. */
+static int even(int v)
+{
+    v &= ~1;
+    return v < 2 ? 2 : v;
+}
+
+/* Appends the chain that makes a clip exactly fw x fh with square pixels,
+ * according to its fit mode. */
+static void add_fit(Buf *b, const FBTimeline *tl, const FBClip *c,
+                    int fw, int fh)
+{
+    const FBSource *src = &tl->sources[c->source];
+    int known = src->width > 0 && src->height > 0;
+
+    /* Already the right size and shape: nothing to do. */
+    if (known && FB_ClipFitResult(tl, c, fw, fh) == FB_FITS_NONE) {
+        buf_printf(b, ",setsar=1");
+        return;
+    }
+    /* Non-square pixels (DV, anamorphic DVD): make them square first, so
+     * the aspect-keeping modes see the picture as it is shown. */
+    if (src->sar_num > 0 && src->sar_den > 0 && src->sar_num != src->sar_den)
+        buf_printf(b, ",scale=iw*sar:ih,setsar=1");
+
+    switch (FB_ClipFit(tl, c)) {
+    case FB_FIT_FILL:
+        buf_printf(b, ",scale=%d:%d:force_original_aspect_ratio=increase,"
+                   "crop=%d:%d", fw, fh, fw, fh);
+        break;
+    case FB_FIT_STRETCH:
+        buf_printf(b, ",scale=%d:%d", fw, fh);
+        break;
+    default:
+        buf_printf(b, ",scale=%d:%d:force_original_aspect_ratio=decrease,"
+                   "pad=%d:%d:(ow-iw)/2:(oh-ih)/2:color=0x%06lX",
+                   fw, fh, fw, fh,
+                   (unsigned long)(tl->format.pad_color & 0xFFFFFF));
+        break;
+    }
+    buf_printf(b, ",setsar=1");
+}
+
 FBJobError FB_JobBuild(FBJob *job, const FBTimeline *tl, const FBOutput *out)
 {
     int input_of[FB_MAX_SOURCES];
-    int with_audio = 1;
-    int width = out->width, height = out->height;
+    int with_audio = 0;
+    int fw = 0, fh = 0;          /* frame every clip is fitted to, or 0 */
+    int legacy_w = 0;            /* size unknown: scale=W:-2 per clip */
+    int fps_num = 0, fps_den = 0;
+    int out_w = out->width, out_h = out->height;
     Buf b;
     int i;
 
@@ -95,7 +150,8 @@ FBJobError FB_JobBuild(FBJob *job, const FBTimeline *tl, const FBOutput *out)
     if (tl->num_clips == 0)
         return FB_JOB_EMPTY;
 
-    /* Only sources that are actually used become inputs. */
+    /* Only sources that are actually used become inputs. Audio is on if
+     * any clip has it; the others get silence. */
     for (i = 0; i < FB_MAX_SOURCES; i++)
         input_of[i] = -1;
     for (i = 0; i < tl->num_clips; i++) {
@@ -108,14 +164,34 @@ FBJobError FB_JobBuild(FBJob *job, const FBTimeline *tl, const FBOutput *out)
             copy_str(job->inputs[job->num_inputs++], tl->sources[s].path,
                      FB_PATH_LEN);
         }
-        if (!tl->sources[s].has_audio)
-            with_audio = 0;
+        if (tl->sources[s].has_audio)
+            with_audio = 1;
     }
 
-    if (out->quality == FB_QUALITY_PREVIEW && width == 0) {
-        width  = PREVIEW_WIDTH;
-        height = -2;   /* keep aspect, even height */
+    if (out->quality == FB_QUALITY_PREVIEW && out_w <= 0) {
+        out_w = PREVIEW_WIDTH;
+        out_h = 0;
     }
+
+    /* The frame size: the output's if given, else the timeline's. A width
+     * alone keeps the timeline's aspect. If the timeline's size isn't
+     * known (sources not probed) we can only scale each clip on its own,
+     * which is what older versions did. */
+    if (FB_TimelineFrameSize(tl, &fw, &fh)) {
+        if (out_w > 0 && out_h > 0) {
+            fw = even(out_w);
+            fh = even(out_h);
+        } else if (out_w > 0) {
+            fh = even((int)(((int64_t)out_w * fh + fw / 2) / fw));
+            fw = even(out_w);
+        }
+    } else if (out_w > 0 && out_h > 0) {
+        fw = even(out_w);
+        fh = even(out_h);
+    } else if (out_w > 0) {
+        legacy_w = out_w;
+    }
+    FB_TimelineFrameRate(tl, &fps_num, &fps_den);
 
     b.p = job->filtergraph;
     b.len = sizeof(job->filtergraph);
@@ -130,17 +206,28 @@ FBJobError FB_JobBuild(FBJob *job, const FBTimeline *tl, const FBOutput *out)
 
         buf_printf(&b, "[%d:v]trim=start=%.3f:end=%.3f,setpts=PTS-STARTPTS",
                    in, secs(c->in), secs(c->out));
-        /* concat needs equal frame sizes, so scale every clip */
-        if (width != 0)
-            buf_printf(&b, ",scale=%d:%d,setsar=1", width,
-                       height ? height : -2);
+        /* concat needs one frame size and pixel shape for all clips */
+        if (fw > 0)
+            add_fit(&b, tl, c, fw, fh);
+        else if (legacy_w > 0)
+            buf_printf(&b, ",scale=%d:-2,setsar=1", legacy_w);
+        if (fps_num > 0)
+            buf_printf(&b, ",fps=%d/%d", fps_num, fps_den);
         if ((err = add_effects(&b, c, 0)) != FB_JOB_OK)
             return err;
         buf_printf(&b, "[v%d];", i);
 
         if (with_audio) {
-            buf_printf(&b, "[%d:a]atrim=start=%.3f:end=%.3f,"
-                       "asetpts=PTS-STARTPTS", in, secs(c->in), secs(c->out));
+            if (tl->sources[c->source].has_audio)
+                buf_printf(&b, "[%d:a]atrim=start=%.3f:end=%.3f,"
+                           "asetpts=PTS-STARTPTS,", in, secs(c->in),
+                           secs(c->out));
+            else
+                buf_printf(&b, "anullsrc=r=%d:cl=stereo,atrim=duration=%.3f,",
+                           FB_AUDIO_RATE, secs(c->out - c->in));
+            /* one rate and layout for concat; aresample is auto-inserted */
+            buf_printf(&b, "aformat=sample_rates=%d:channel_layouts=stereo",
+                       FB_AUDIO_RATE);
             if ((err = add_effects(&b, c, 1)) != FB_JOB_OK)
                 return err;
             buf_printf(&b, "[a%d];", i);

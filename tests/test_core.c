@@ -122,12 +122,110 @@ static void test_job_errors(void)
     CHECK(FB_JobParse(&job, "garbage\n") != 0);
 }
 
+/* Mixed sizes: 320x240 4:3 25 fps with audio, 640x360 16:9 30 fps without,
+ * and 720x576 PAL with 16:15 pixels (shown as 768x576, also 4:3). */
+static void make_mixed(FBTimeline *tl)
+{
+    FB_TimelineInit(tl);
+    FB_TimelineAddSource(tl, "a.mp4", 5000, 1, 1);
+    FB_SourceSetVideo(&tl->sources[0], 320, 240, 1, 1, 25, 1);
+    FB_TimelineAddSource(tl, "b.mkv", 4000, 1, 0);
+    FB_SourceSetVideo(&tl->sources[1], 640, 360, 0, 0, 30, 1);
+    FB_TimelineAddSource(tl, "dv.avi", 3000, 1, 1);
+    FB_SourceSetVideo(&tl->sources[2], 720, 576, 16, 15, 25, 1);
+    FB_TimelineAppendClip(tl, 0, 0, 2000);
+    FB_TimelineAppendClip(tl, 1, 0, 2000);
+    FB_TimelineAppendClip(tl, 2, 0, 1000);
+}
+
+static void test_fit(void)
+{
+    FBTimeline tl;
+    FBOutput out;
+    FBJob job;
+    int w, h, n, d;
+
+    make_mixed(&tl);
+
+    /* Defaults come from the first clip. */
+    CHECK(FB_TimelineFrameSize(&tl, &w, &h) && w == 320 && h == 240);
+    CHECK(FB_TimelineFrameRate(&tl, &n, &d) && n == 25 && d == 1);
+    CHECK(FB_ClipFit(&tl, &tl.clips[1]) == FB_FIT_FIT);
+    CHECK(FB_ClipFitResult(&tl, &tl.clips[0], w, h) == FB_FITS_NONE);
+    CHECK(FB_ClipFitResult(&tl, &tl.clips[1], w, h) == FB_FITS_LETTERBOX);
+    CHECK(FB_ClipFitResult(&tl, &tl.clips[2], w, h) == FB_FITS_SCALE);
+
+    memset(&out, 0, sizeof(out));
+    strcpy(out.path, "out.mp4");
+    out.quality = FB_QUALITY_FINAL;
+    CHECK(FB_JobBuild(&job, &tl, &out) == FB_JOB_OK);
+    printf("mixed: %s\n", job.filtergraph);
+    /* clip 0 already fits */
+    CHECK(strstr(job.filtergraph, "setpts=PTS-STARTPTS,setsar=1,fps=25/1[v0]"));
+    CHECK(strstr(job.filtergraph, "scale=320:240:force_original_aspect_ratio="
+                 "decrease,pad=320:240:(ow-iw)/2:(oh-ih)/2:color=0x000000,"
+                 "setsar=1,fps=25/1[v1]"));
+    /* square pixels first for PAL DV */
+    CHECK(strstr(job.filtergraph, "scale=iw*sar:ih,setsar=1,scale=320:240"));
+    /* clip 1 has no audio: silence of the clip's length */
+    CHECK(strstr(job.filtergraph, "anullsrc=r=48000:cl=stereo,"
+                 "atrim=duration=2.000,"));
+    CHECK(strstr(job.filtergraph, "concat=n=3:v=1:a=1[outv][outa]"));
+    CHECK(FB_JobEstimateLength(&job) == 5000);   /* atrims don't count */
+
+    /* Per-clip override beats the default; changing the default moves
+     * every clip left at DEFAULT. */
+    tl.clips[1].fit = FB_FIT_FILL;
+    tl.format.fit = FB_FIT_STRETCH;
+    CHECK(FB_ClipFitResult(&tl, &tl.clips[1], w, h) == FB_FITS_CROP);
+    CHECK(FB_JobBuild(&job, &tl, &out) == FB_JOB_OK);
+    CHECK(strstr(job.filtergraph, "force_original_aspect_ratio=increase,"
+                 "crop=320:240,setsar=1,fps=25/1[v1]"));
+    CHECK(strstr(job.filtergraph, "scale=320:240,setsar=1,fps=25/1[v2]"));
+    tl.clips[1].fit = FB_FIT_DEFAULT;
+    CHECK(FB_ClipFitResult(&tl, &tl.clips[1], w, h) == FB_FITS_STRETCH);
+
+    /* Global format set, and split keeps the clip's mode. */
+    tl.format.width = 641;           /* rounded down to even */
+    tl.format.height = 360;
+    tl.format.fps_num = 30000;
+    tl.format.fps_den = 1001;
+    tl.format.fit = FB_FIT_FIT;
+    tl.format.pad_color = 0x102030;
+    tl.clips[0].fit = FB_FIT_FILL;
+    CHECK(FB_TimelineFrameSize(&tl, &w, &h) && w == 640 && h == 360);
+    CHECK(FB_ClipFitResult(&tl, &tl.clips[0], w, h) == FB_FITS_CROP);
+    CHECK(FB_ClipFitResult(&tl, &tl.clips[1], w, h) == FB_FITS_NONE);
+    CHECK(FB_ClipFitResult(&tl, &tl.clips[2], w, h) == FB_FITS_PILLARBOX);
+    CHECK(FB_TimelineSplit(&tl, 1000) == 1);
+    CHECK(tl.clips[1].fit == FB_FIT_FILL);
+    CHECK(FB_JobBuild(&job, &tl, &out) == FB_JOB_OK);
+    CHECK(strstr(job.filtergraph, "color=0x102030"));
+    CHECK(strstr(job.filtergraph, "fps=30000/1001"));
+
+    /* Preview: 320 wide, height from the frame's aspect. */
+    out.quality = FB_QUALITY_PREVIEW;
+    CHECK(FB_JobBuild(&job, &tl, &out) == FB_JOB_OK);
+    CHECK(strstr(job.filtergraph, "scale=320:180:"));
+    /* An output size wins over the timeline's. */
+    out.width = 400;
+    out.height = 300;
+    CHECK(FB_JobBuild(&job, &tl, &out) == FB_JOB_OK);
+    CHECK(strstr(job.filtergraph, "pad=400:300:"));
+
+    CHECK(FB_FitFromName("Stretch") == FB_FIT_STRETCH);
+    CHECK(FB_FitFromName("DEFAULT") == FB_FIT_DEFAULT);
+    CHECK(FB_FitFromName("fitt") == -1);
+    CHECK(strcmp(FB_FitName(FB_FIT_FILL), "fill") == 0);
+}
+
 int main(void)
 {
     FB_RegisterBuiltinModules();
     test_timeline();
     test_job_build_and_roundtrip();
     test_job_errors();
+    test_fit();
     if (failures) {
         printf("%d check(s) failed\n", failures);
         return 1;

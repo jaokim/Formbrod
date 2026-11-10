@@ -1,5 +1,5 @@
 /*
- * media.c - probe a media file for duration and streams.
+ * media.c - probe a media file for duration, streams and video format.
  */
 #include <string.h>
 #include "app.h"
@@ -33,16 +33,17 @@ static void set_why(char *why, size_t len, int averr)
     }
 }
 
-FBProbeResult FB_ProbeMedia(const char *path, fb_ms_t *duration,
-                            int *has_video, int *has_audio,
+FBProbeResult FB_ProbeMedia(const char *path, FBSource *info,
                             char *why, size_t why_len)
 {
     AVFormatContext *fmt = NULL;
+    fb_ms_t *duration = &info->duration;
+    int *has_video = &info->has_video, *has_audio = &info->has_audio;
+    int best;
     unsigned i;
     int err;
 
-    *duration = 0;
-    *has_video = *has_audio = 0;
+    memset(info, 0, sizeof(*info));
     if (why && why_len)
         why[0] = '\0';
 
@@ -74,6 +75,18 @@ FBProbeResult FB_ProbeMedia(const char *path, fb_ms_t *duration,
             *duration = av_rescale_q(st->duration, st->time_base,
                                      (AVRational){ 1, 1000 });
     }
+
+    /* The video format, from the stream the render backend picks for
+     * [n:v] (see find_stream() in local_backend.c). */
+    if ((best = av_find_best_stream(fmt, AVMEDIA_TYPE_VIDEO, -1, -1,
+                                    NULL, 0)) >= 0) {
+        AVStream *st = fmt->streams[best];
+        AVRational sar = av_guess_sample_aspect_ratio(fmt, st, NULL);
+        AVRational fr  = av_guess_frame_rate(fmt, st, NULL);
+
+        FB_SourceSetVideo(info, st->codecpar->width, st->codecpar->height,
+                          sar.num, sar.den, fr.num, fr.den);
+    }
     avformat_close_input(&fmt);
 
     if (!*has_video)
@@ -85,13 +98,11 @@ FBProbeResult FB_ProbeMedia(const char *path, fb_ms_t *duration,
 
 #else
 
-FBProbeResult FB_ProbeMedia(const char *path, fb_ms_t *duration,
-                            int *has_video, int *has_audio,
+FBProbeResult FB_ProbeMedia(const char *path, FBSource *info,
                             char *why, size_t why_len)
 {
     (void)path;
-    *duration = 0;
-    *has_video = *has_audio = 0;
+    memset(info, 0, sizeof(*info));
     if (why && why_len)
         why[0] = '\0';
     return FB_PROBE_NO_LIBAV;

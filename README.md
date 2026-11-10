@@ -20,6 +20,8 @@ Early skeleton. Working so far:
 - [x] Render jobs: the timeline is turned into one ffmpeg filtergraph, with a
       text format for saving or sending jobs
 - [x] Module interface, plus a `fade` module
+- [x] Clips of different size, shape, frame rate and audio can be joined:
+      each is fitted to the output frame (letterbox, crop or stretch)
 - [x] ReAction main window: clip list, playhead, render progress, drag and
       drop
 - [x] ARexx port
@@ -150,9 +152,28 @@ The port is called `FORMBROD`.
 | `RENDERSTATUS` | | `IDLE`, `RUNNING <pos> <total>`, `DONE`, `FAILED`, `CANCELLED` |
 | `CLIPS` | | number of clips |
 | `MODULES` | | module names |
+| `FIT` | `CLIP/N/A,MODE/A` | |
+| `FORMAT` | `WIDTH/N,HEIGHT/N,FPS/K,FIT/K` | `<w> <h> <fps> <fit>` |
 | `QUIT` | | |
 
 Clip and effect numbers start at 0.
+
+### Output format and fitting
+
+Clips of different sizes are fitted into one output frame. By default the
+frame size and frame rate are the first clip's, and clips of another shape
+are scaled to fit with black bars. `FORMAT` changes this for the whole
+project; `0` (or `AUTO` for `FPS`) goes back to the first clip's value.
+`FIT` overrides the mode for one clip. Modes are `FIT` (bars), `FILL` (crop
+the edges), `STRETCH` (ignore aspect) and, for `FIT` only, `DEFAULT` (use
+the project's).
+
+    'FORMAT WIDTH 1280 HEIGHT 720 FPS 25 FIT FIT'
+    'FIT 2 FILL'        /* crop clip 2 instead of adding bars */
+
+All audio is resampled to 48 kHz stereo, and clips without audio get
+silence, so files with and without sound can be joined. The clip list shows
+how each clip is fitted in its Effects column.
 
 ## Writing a module
 

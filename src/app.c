@@ -38,13 +38,11 @@ void App_SetStatus(const char *fmt, ...)
 
 int App_AddFile(const char *path)
 {
-    fb_ms_t dur = 0;
-    int has_v = 0, has_a = 0;
+    FBSource info;
+    char why[128] = "";
     int src;
 
-    char why[128] = "";
-
-    switch (FB_ProbeMedia(path, &dur, &has_v, &has_a, why, sizeof(why))) {
+    switch (FB_ProbeMedia(path, &info, why, sizeof(why))) {
     case FB_PROBE_OK:
         break;
     case FB_PROBE_NO_LIBAV:
@@ -63,8 +61,14 @@ int App_AddFile(const char *path)
         App_SetStatus(FB_Str(MSG_STATUS_CANT_READ), path);
         return -1;
     }
-    src = FB_TimelineAddSource(&App.timeline, path, dur, has_v, has_a);
-    if (src < 0 || FB_TimelineAppendClip(&App.timeline, src, 0, dur) < 0) {
+    src = FB_TimelineAddSource(&App.timeline, path, info.duration,
+                               info.has_video, info.has_audio);
+    if (src >= 0)
+        FB_SourceSetVideo(&App.timeline.sources[src], info.width, info.height,
+                          info.sar_num, info.sar_den,
+                          info.fps_num, info.fps_den);
+    if (src < 0 ||
+        FB_TimelineAppendClip(&App.timeline, src, 0, info.duration) < 0) {
         App_SetStatus("%s", FB_Str(MSG_STATUS_TOO_MANY));
         return -1;
     }
@@ -114,6 +118,53 @@ int App_SetEffectParam(int clip, int effect, const char *name, double value)
     if (effect < 0 || effect >= c->num_effects)
         return -1;
     return FB_EffectSetParam(&c->effects[effect], name, value);
+}
+
+int App_SetClipFit(int clip, int fit)
+{
+    if (clip < 0 || clip >= App.timeline.num_clips) {
+        App_SetStatus("%s", FB_Str(MSG_STATUS_NO_SUCH_CLIP));
+        return -1;
+    }
+    if (fit < FB_FIT_DEFAULT || fit >= FB_FIT_COUNT)
+        return -1;
+    App.timeline.clips[clip].fit = (FBFit)fit;
+    return 0;
+}
+
+int App_SetDefaultFit(int fit)
+{
+    if (fit <= FB_FIT_DEFAULT || fit >= FB_FIT_COUNT)
+        return -1;
+    App.timeline.format.fit = (FBFit)fit;
+    return 0;
+}
+
+int App_SetFrameSize(int width, int height)
+{
+    if (width == 0 && height == 0) {
+        App.timeline.format.width = App.timeline.format.height = 0;
+        return 0;
+    }
+    if (width < 2 || height < 2 || width > 16384 || height > 16384)
+        return -1;
+    /* stored even, as the encoders need */
+    App.timeline.format.width  = width & ~1;
+    App.timeline.format.height = height & ~1;
+    return 0;
+}
+
+int App_SetFrameRate(int num, int den)
+{
+    if (num == 0 && den == 0) {
+        App.timeline.format.fps_num = App.timeline.format.fps_den = 0;
+        return 0;
+    }
+    if (num <= 0 || den <= 0 || num / den > 1000)
+        return -1;
+    App.timeline.format.fps_num = num;
+    App.timeline.format.fps_den = den;
+    return 0;
 }
 
 /* FB_JobErrorString() stays in English for logs and render servers; this is

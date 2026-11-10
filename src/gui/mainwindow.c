@@ -101,10 +101,26 @@ static void fmt_time(char *buf, size_t len, fb_ms_t ms)
              (long)((ms / 100) % 10));
 }
 
+/* Text for how a clip is fitted into the frame, or NULL if it isn't
+ * changed. Shown first in the Effects column for now; a fit-mode chooser
+ * (App_SetClipFit) can go in the clip inspector later. */
+static const char *fit_text(FBFitResult r)
+{
+    switch (r) {
+    case FB_FITS_SCALE:     return FB_Str(MSG_FITS_SCALE);
+    case FB_FITS_LETTERBOX: return FB_Str(MSG_FITS_LETTERBOX);
+    case FB_FITS_PILLARBOX: return FB_Str(MSG_FITS_PILLARBOX);
+    case FB_FITS_CROP:      return FB_Str(MSG_FITS_CROP);
+    case FB_FITS_STRETCH:   return FB_Str(MSG_FITS_STRETCH);
+    default:                return NULL;
+    }
+}
+
 void MainWindow_Refresh(void)
 {
     const FBTimeline *tl = &App.timeline;
     fb_ms_t total = FB_TimelineDuration(tl);
+    int fw = 0, fh = 0;
     int i;
 
     if (!WinObj)
@@ -113,17 +129,21 @@ void MainWindow_Refresh(void)
     IIntuition->SetGadgetAttrs(Gad[GID_CLIPS], Win, NULL,
                                LISTBROWSER_Labels, ~0, TAG_END);
     free_clip_nodes();
+    FB_TimelineFrameSize(tl, &fw, &fh);
     for (i = 0; i < tl->num_clips; i++) {
         const FBClip *c = &tl->clips[i];
-        char num[8], in[16], out[16], fx[64] = "";
+        char num[8], in[16], out[16], fx[96] = "";
+        const char *fit = fit_text(FB_ClipFitResult(tl, c, fw, fh));
         struct Node *n;
         int e;
 
         snprintf(num, sizeof(num), "%d", i + 1);
         fmt_time(in, sizeof(in), c->in);
         fmt_time(out, sizeof(out), c->out);
+        if (fit)
+            strncat(fx, fit, sizeof(fx) - 1);
         for (e = 0; e < c->num_effects; e++) {
-            strncat(fx, e ? ", " : "", sizeof(fx) - strlen(fx) - 1);
+            strncat(fx, fx[0] ? ", " : "", sizeof(fx) - strlen(fx) - 1);
             strncat(fx, c->effects[e].module, sizeof(fx) - strlen(fx) - 1);
         }
         n = LB->AllocListBrowserNode(5,
