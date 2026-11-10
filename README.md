@@ -30,10 +30,50 @@ Early skeleton. Working so far:
 
 ## Building
 
-Cross-compile with the AmigaOS 4 SDK:
+Cross-compile on Linux with the AmigaOS 4 SDK (for example in the
+`walkero/amigagccondocker:os4-gcc11` Docker image):
 
-    make                                   # without ffmpeg
-    make LIBAV=1 LIBAV_PREFIX=/path/to/ffmpeg-ppc
+    sudo apt install lhasa curl     # if lha/lhasa or curl are missing
+    make deps                       # download third-party libraries into deps/
+    make CC=ppc-amigaos-gcc         # links ffmpeg, since deps/ffmpeg now exists
+    make config                     # shows whether ffmpeg will be linked
+
+Without ffmpeg the program builds and runs, but can't read video:
+
+    make CC=ppc-amigaos-gcc LIBAV=0
+
+To use ffmpeg libraries from somewhere else:
+
+    make CC=ppc-amigaos-gcc LIBAV=1 LIBAV_PREFIX=/path/to/ffmpeg-ppc
+
+### Dependencies
+
+Third-party libraries are listed in `tools/deps.list` and fetched by
+`tools/fetch-deps.sh` (`make deps` runs it). Each one is unpacked into
+`deps/<name>/include` and `deps/<name>/lib`. `deps/` is not committed.
+
+    tools/fetch-deps.sh             # everything in the list
+    tools/fetch-deps.sh ffmpeg      # just one
+    tools/fetch-deps.sh -f ffmpeg   # unpack again
+    tools/fetch-deps.sh -l          # what's listed and what's installed
+
+Downloads are cached in `deps/cache/`. If a site can't be reached, download
+the archive yourself and put it there under the name from the URL.
+
+Archives often hold builds for more than one C runtime. Libraries must match
+the program's runtime, and Formbrod builds with newlib, so newlib builds are
+picked. `DEPS_CRT=clib4` prefers clib4 builds instead.
+
+To add a dependency, add a line to `tools/deps.list` (the format is described
+at the top of the file), run `tools/fetch-deps.sh <name>`, and add its
+`-I`/`-L`/`-l` flags to the Makefile. Once you trust a download, pin its
+checksum in the list. The script prints the checksum on every run.
+
+Currently:
+
+| Name | What | Source |
+|---|---|---|
+| `ffmpeg` | ffmpeg 8.0 libraries (libavformat, libavcodec, libavfilter, ...) by Michael Trebilcock | OS4Depot `development/misc/libffmpeg.lha` |
 
 To run the core tests on Linux or macOS:
 

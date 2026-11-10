@@ -5,9 +5,13 @@
 # Native on AmigaOS 4 with the SDK installed:
 #   make CC=gcc
 #
-# libav* (ffmpeg) is linked in when LIBAV=1 and LIBAV_PREFIX points to a
-# PPC build of ffmpeg's libraries:
+# ffmpeg (libav*) is linked in when LIBAV=1. The easy way is to let
+# tools/fetch-deps.sh download it into deps/; LIBAV then turns on by itself:
+#   make deps && make
+# To use ffmpeg libraries from somewhere else:
 #   make LIBAV=1 LIBAV_PREFIX=/opt/ffmpeg-ppc
+# To build without ffmpeg even when deps/ffmpeg exists:
+#   make LIBAV=0
 #
 # The portable core can be tested on any host: make -f Makefile.host test
 #
@@ -20,10 +24,12 @@
 #                    locale/formbrod.cd (needs Python 3)
 
 CC        ?= ppc-amigaos-gcc
-LIBAV     ?= 0
-LIBAV_PREFIX ?= /usr/local/amiga/ffmpeg
+DEPS_DIR  ?= deps
+LIBAV_PREFIX ?= $(DEPS_DIR)/ffmpeg
+LIBAV     ?= $(if $(wildcard $(LIBAV_PREFIX)/include/libavformat/avformat.h),1,0)
 
 TARGET    = Formbrod
+.DEFAULT_GOAL := $(TARGET)
 BUILD     = build/amiga
 
 CFLAGS    = -std=gnu99 -O2 -Wall -Wextra -Wno-unused-parameter \
@@ -35,8 +41,16 @@ ifeq ($(LIBAV),1)
 CFLAGS   += -DHAVE_LIBAV -I$(LIBAV_PREFIX)/include
 LDFLAGS  += -L$(LIBAV_PREFIX)/lib
 LIBS     := -lavfilter -lavformat -lavcodec -lswscale -lswresample \
-            -lavutil -lz -lpthread -lm $(LIBS)
+            -lavutil -lbz2 -lz -lpthread -lm $(LIBS)
 endif
+
+# Downloads third-party libraries listed in tools/deps.list into $(DEPS_DIR).
+deps:
+	DEPS_DIR=$(DEPS_DIR) tools/fetch-deps.sh
+
+# Prints whether this build will link ffmpeg, and from where.
+config:
+	@echo "LIBAV=$(LIBAV) LIBAV_PREFIX=$(LIBAV_PREFIX)"
 
 SRC = src/main.c \
       src/app.c \
@@ -108,4 +122,4 @@ clean:
 test:
 	$(MAKE) -f Makefile.host test
 
-.PHONY: clean test strings catalogs compare-catalogs
+.PHONY: clean test strings catalogs compare-catalogs deps config
