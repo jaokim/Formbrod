@@ -73,6 +73,18 @@ class CatgenTest(unittest.TestCase):
         self.assertEqual(len(chunks["CSET"]), 32)
         self.assertIn("\xe5".encode("iso-8859-1"), data)   # å in Latin-1
 
+    def test_flexcat_layout(self):
+        # Layout taken from a FlexCat-built catalog: length without the NUL,
+        # 1-4 NULs of padding, translations equal to the original left out.
+        errors, _, header, strings = self.check(
+            "MSG_HELLO\nHello\nMSG_BUTTON\n_Spar\nMSG_ADDED\nLade %s\n")
+        self.assertEqual(errors, [])
+        self.assertEqual([sid for sid, _ in strings], [2, 3])
+        data = catgen.build_catalog(header, strings)
+        strs = data[data.index(b"STRS") + 8:]
+        self.assertEqual(strs[:16], b"\0\0\0\2\0\0\0\7Lade %s\0")
+        self.assertEqual(strs[16:32], b"\0\0\0\3\0\0\0\5_Spar\0\0\0")
+
     def test_compare(self):
         _, _, header, strings = self.check("MSG_HELLO\nHej\nMSG_ADDED\nLade till %s\n")
         a = self.write("a.ct", "")

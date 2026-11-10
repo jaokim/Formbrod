@@ -17,10 +17,12 @@ checks that FlexCat and catgen agree.
 .cd and .ct files are read as UTF-8 and written out in ISO-8859-1, which is
 what AmigaOS expects. Text that has no ISO-8859-1 form is an error.
 
-The catalog is the IFF FORM CTLG format read by locale.library:
-FVER (version string), LANG (language name), CSET (code set) and STRS
-(for each string: ID, length including the NUL, the text padded to a
-multiple of four bytes).
+The catalog is the IFF FORM CTLG format read by locale.library, laid out
+exactly as FlexCat writes it: FVER (version string), LANG (language name),
+CSET (code set, 32 bytes) and STRS. In STRS each string is its ID, its
+length without the NUL, then the text followed by one to four NULs so the
+next entry starts on a four-byte boundary. Translations identical to the
+built-in string are left out; locale.library then uses the built-in one.
 """
 import argparse
 import re
@@ -223,6 +225,8 @@ def check(cd, ct_path):
         except CatError as exc:
             errors.append(str(exc))
             continue
+        if text == e["text"]:
+            continue        # same as built in; FlexCat leaves these out too
         out.append((e["id"], text))
     for e in cd:
         if e["name"] not in strings:
@@ -304,9 +308,9 @@ def build_catalog(header, strings):
     cset = struct.pack(">I", codeset) + b"\0" * 28
     strs = bytearray()
     for sid, text in strings:
-        data = encode(text, "string %d" % sid) + b"\0"
+        data = encode(text, "string %d" % sid)
         strs += struct.pack(">II", sid, len(data))
-        strs += data + b"\0" * (-len(data) % 4)
+        strs += data + b"\0" * (4 - len(data) % 4)     # 1..4 NULs
     body = (b"CTLG" + iff_chunk(b"FVER", fver) + iff_chunk(b"LANG", lang) +
             iff_chunk(b"CSET", cset) + iff_chunk(b"STRS", bytes(strs)))
     return b"FORM" + struct.pack(">I", len(body)) + body
@@ -331,11 +335,10 @@ def read_catalog(data):
     pos = 0
     while pos < len(strs):
         sid, slen = struct.unpack(">II", strs[pos:pos + 8])
-        raw = strs[pos + 8:pos + 8 + slen]
-        if not raw.endswith(b"\0"):
+        if strs[pos + 8 + slen:pos + 9 + slen] != b"\0":
             raise CatError("string %d is not NUL-terminated" % sid)
-        strings[sid] = raw[:-1].decode(TARGET_ENCODING)
-        pos += 8 + slen + (-slen % 4)
+        strings[sid] = strs[pos + 8:pos + 8 + slen].decode(TARGET_ENCODING)
+        pos += 8 + slen + (4 - slen % 4)
     return chunks, strings
 
 
@@ -362,9 +365,8 @@ def compare_catalogs(a_path, b_path):
             diffs.append("string %d: %r vs %r"
                          % (sid, a_strs.get(sid), b_strs.get(sid)))
     if not diffs and a_data != b_data:
-        print("note: %s and %s hold the same strings but differ in layout; "
-              "chunks %s vs %s" % (a_path, b_path, sorted(a_chunks),
-                                   sorted(b_chunks)))
+        diffs.append("same strings, but the bytes differ (chunks %s vs %s)"
+                     % (sorted(a_chunks), sorted(b_chunks)))
     return diffs
 
 
@@ -406,7 +408,7 @@ def main(argv=None):
             for d in diffs:
                 print("differs: " + d, file=sys.stderr)
             if not diffs:
-                print("same strings: %s, %s" % (args.a, args.b))
+                print("identical: %s, %s" % (args.a, args.b))
             return 1 if diffs else 0
         if args.cmd == "dump":
             with open(args.catalog, "rb") as f:
