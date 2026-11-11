@@ -397,6 +397,10 @@ Put the playhead inside the clip first
 MSG_STATUS_TRIMMED (153//)
 %s now runs from %s to %s
 ;
+; After Set out on a still picture: file name, then its new length.
+MSG_STATUS_STILL_LENGTH (154//)
+%s is now %s long
+;
 ; ---- Unsaved changes requester ---------------------------------------------
 MSG_UNSAVED_TITLE (160//)
 Unsaved changes

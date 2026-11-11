@@ -228,6 +228,8 @@
 #define MSG_STATUS_OUTSIDE_CLIP_STR      "Put the playhead inside the clip first"
 #define MSG_STATUS_TRIMMED               153
 #define MSG_STATUS_TRIMMED_STR           "%s now runs from %s to %s"
+#define MSG_STATUS_STILL_LENGTH          154
+#define MSG_STATUS_STILL_LENGTH_STR      "%s is now %s long"
 #define MSG_UNSAVED_TITLE                160
 #define MSG_UNSAVED_TITLE_STR            "Unsaved changes"
 #define MSG_UNSAVED_TEXT                 161
@@ -235,7 +237,7 @@
 #define MSG_UNSAVED_BUTTONS              162
 #define MSG_UNSAVED_BUTTONS_STR          "Save|Discard|Cancel"
 
-#define FB_NUM_STRINGS 111
+#define FB_NUM_STRINGS 112
 
 #ifdef FB_STRINGS_ARRAY
 static const struct FBBuiltinString {
@@ -350,6 +352,7 @@ static const struct FBBuiltinString {
     { MSG_STATUS_NOT_OPENED, MSG_STATUS_NOT_OPENED_STR },
     { MSG_STATUS_OUTSIDE_CLIP, MSG_STATUS_OUTSIDE_CLIP_STR },
     { MSG_STATUS_TRIMMED, MSG_STATUS_TRIMMED_STR },
+    { MSG_STATUS_STILL_LENGTH, MSG_STATUS_STILL_LENGTH_STR },
     { MSG_UNSAVED_TITLE, MSG_UNSAVED_TITLE_STR },
     { MSG_UNSAVED_TEXT, MSG_UNSAVED_TEXT_STR },
     { MSG_UNSAVED_BUTTONS, MSG_UNSAVED_BUTTONS_STR },

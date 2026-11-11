@@ -417,6 +417,14 @@ static void trimmed_status(int clip)
     const FBClip *c = &App.timeline.clips[clip];
     char in[24], out[24];
 
+    if (App.timeline.sources[c->source].still) {
+        /* A picture has no place in a file, only a length. */
+        FB_FormatTimecode(out, sizeof(out), FB_US(c->out - c->in),
+                          FB_US(100), 0, Locale_DecimalPoint());
+        App_SetStatus(FB_Str(MSG_STATUS_STILL_LENGTH),
+                      file_part(App.timeline.sources[c->source].path), out);
+        return;
+    }
     FB_FormatTimecode(in, sizeof(in), FB_US(c->in), FB_US(100), 0,
                       Locale_DecimalPoint());
     FB_FormatTimecode(out, sizeof(out), FB_US(c->out), FB_US(100), 0,

@@ -34,6 +34,9 @@ static void set_why(char *why, size_t len, int averr)
     }
 }
 
+/* A picture-only file at most this long is a still picture. */
+#define STILL_MAX_MS 120
+
 static FBProbeResult probe(const char *path, FBSource *info,
                            char *why, size_t why_len)
 {
@@ -88,21 +91,24 @@ static FBProbeResult probe(const char *path, FBSource *info,
         FB_SourceSetVideo(info, st->codecpar->width, st->codecpar->height,
                           sar.num, sar.den, fr.num, fr.den);
     }
-    avformat_close_input(&fmt);
 
-    /* A still picture (PNG, JPEG, ...: the image2 and *_pipe demuxers) is
-     * a clip of any length. */
-    {
-        const char *name = fmt->iformat ? fmt->iformat->name : "";
+    /* A still picture (PNG, JPEG, IFF...) is a clip of any length. ffmpeg
+     * reads them with the image2 or a *_pipe demuxer, but the names differ
+     * between versions, so anything with only a picture that lasts at
+     * most a few frames counts too. (Before closing: that frees fmt.) */
+    if (*has_video && !*has_audio) {
+        const char *name = fmt->iformat && fmt->iformat->name
+                           ? fmt->iformat->name : "";
         size_t n = strlen(name);
 
-        if (*has_video && !*has_audio &&
-            (strcmp(name, "image2") == 0 ||
-             (n > 5 && strcmp(name + n - 5, "_pipe") == 0))) {
+        if (strcmp(name, "image2") == 0 ||
+            (n > 5 && strcmp(name + n - 5, "_pipe") == 0) ||
+            *duration <= STILL_MAX_MS) {
             info->still = 1;
             *duration = 0;
         }
     }
+    avformat_close_input(&fmt);
 
     /* A sound-only file (music) is fine: it goes on a sound track. */
     if (!*has_video && !*has_audio)

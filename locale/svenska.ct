@@ -329,6 +329,9 @@ Ställ positionen inne i klippet först
 MSG_STATUS_TRIMMED
 %s går nu från %s till %s
 ;
+MSG_STATUS_STILL_LENGTH
+%s är nu %s lång
+;
 MSG_UNSAVED_TITLE
 Osparade ändringar
 ;
