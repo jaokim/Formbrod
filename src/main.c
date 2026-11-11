@@ -11,6 +11,7 @@
 #include "app.h"
 #include "gui/mainwindow.h"
 #include "arexx/arexx.h"
+#include "prefs/prefs.h"
 #include "locale/catalog.h"
 #include "version.h"
 
@@ -34,6 +35,10 @@ int main(int argc, char **argv)
         else
             App_AddFile(argv[i]);
     }
+
+    /* Program settings; without them nothing is remembered between runs,
+     * which is no reason to stop. */
+    Prefs_Open();
 
     if (MainWindow_Open() != 0) {
         IDOS->Printf("%s", FB_Str(MSG_ERR_NO_WINDOW));
@@ -72,6 +77,7 @@ int main(int argc, char **argv)
 out:
     ARexx_Cleanup();
     MainWindow_Close();
+    Prefs_Close();
     App_Cleanup();
     Locale_Close();
     return rc;

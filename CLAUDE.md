@@ -15,6 +15,9 @@ through modules and ARexx.
 - `src/gui/` – ReAction. Classes are opened with `OpenClass()` and objects
   made with `NewObject(Class *, ...)`, not reaction_macros.h.
 - `src/arexx/` – the FORMBROD port, using arexx.class.
+- `src/prefs/` – program settings through application.library PrefsObjects
+  (`Prefs_GetString`/`SetString`/`Save`). Only for settings of the program
+  itself; projects use the text format in `src/timeline/project.c`.
 - `src/locale/` – `FB_Str()` over locale.library. `strings.h` is generated
   from `locale/formbrod.cd` by `tools/catgen.py` (`make strings`); don't edit
   it by hand. Translations are `locale/*.ct`.

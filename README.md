@@ -224,10 +224,14 @@ probed again; files that can't be found keep their clips, and the status
 line says how many are missing. Unknown keys are skipped, so newer versions
 can add settings; a file from a newer, incompatible version is refused.
 
-Each file requester (adding files, projects, export) opens in the drawer it
-was last used in. The drawers are kept in the environment variables
-`Formbrod_MediaDrawer`, `Formbrod_ProjectDrawer` and
-`Formbrod_ExportDrawer`, so they last between runs.
+## Settings
+
+Program settings (not project settings) are kept with application.library's
+PrefsObjects, in `ENV:Formbrod.jaokim.github.io.xml` (and `ENVARC:`), and
+can be viewed with PrefsObjectsEditor. So far they are the drawers the file
+requesters last used: `MediaDrawer`, `ProjectDrawer` and `ExportDrawer`, so
+each requester opens where it was last used, also after a restart. Without
+application.library 53 the drawers are only remembered until Formbrod quits.
 
 ## Writing a module
 

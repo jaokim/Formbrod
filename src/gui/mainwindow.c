@@ -32,9 +32,8 @@
  * window title shows the project's name, with " *" while it has changes.
  *
  * Each kind of file requester (media files, projects, export) opens in the
- * drawer it was last used in. The drawers are kept in ENV(ARC):
- * Formbrod_MediaDrawer, Formbrod_ProjectDrawer and Formbrod_ExportDrawer,
- * so they are remembered between runs too.
+ * drawer it was last used in. The drawers are kept in the program's
+ * settings (src/prefs/), so they are remembered between runs too.
  *
  * Files can be dropped on the window (AppWindow); a dropped project file is
  * opened rather than added. Classes are opened with
@@ -73,6 +72,7 @@
 #include "locale/catalog.h"
 #include "gui/timebase.h"
 #include "gui/track.h"
+#include "prefs/prefs.h"
 #include "version.h"
 
 enum {
@@ -136,8 +136,8 @@ static int TitleNow;
 
 /* The drawer each kind of file requester opens in. */
 enum { DRAWER_MEDIA, DRAWER_PROJECT, DRAWER_EXPORT, DRAWER_COUNT };
-static const char *const DrawerVars[DRAWER_COUNT] = {
-    "Formbrod_MediaDrawer", "Formbrod_ProjectDrawer", "Formbrod_ExportDrawer"
+static const char *const DrawerKeys[DRAWER_COUNT] = {
+    "MediaDrawer", "ProjectDrawer", "ExportDrawer"
 };
 static char Drawers[DRAWER_COUNT][FB_PATH_LEN];
 
@@ -652,21 +652,22 @@ static void load_drawers(void)
 {
     int i;
 
-    for (i = 0; i < DRAWER_COUNT; i++)
-        if (IDOS->GetVar(DrawerVars[i], Drawers[i], sizeof(Drawers[i]),
-                         GVF_GLOBAL_ONLY) < 0)
-            Drawers[i][0] = '\0';
+    for (i = 0; i < DRAWER_COUNT; i++) {
+        strncpy(Drawers[i], Prefs_GetString(DrawerKeys[i], ""),
+                sizeof(Drawers[i]) - 1);
+        Drawers[i][sizeof(Drawers[i]) - 1] = '\0';
+    }
 }
 
-/* Keeps the drawer for next time, in ENV: and ENVARC:. */
+/* Keeps the drawer for next time, in the program's settings. */
 static void remember_drawer(int kind, const char *drawer)
 {
     if (strcmp(Drawers[kind], drawer) == 0)
         return;
     strncpy(Drawers[kind], drawer, sizeof(Drawers[kind]) - 1);
     Drawers[kind][sizeof(Drawers[kind]) - 1] = '\0';
-    IDOS->SetVar(DrawerVars[kind], Drawers[kind], -1,
-                 GVF_GLOBAL_ONLY | GVF_SAVE_VAR);
+    Prefs_SetString(DrawerKeys[kind], Drawers[kind]);
+    Prefs_Save();
 }
 
 /* Asks for a file, starting in the drawer last used for this `kind`.
