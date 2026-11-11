@@ -26,9 +26,14 @@ int main(int argc, char **argv)
     if (App_Init() != 0)
         goto out;
 
-    /* Files on the command line are added as clips. */
-    for (i = 1; i < argc; i++)
-        App_AddFile(argv[i]);
+    /* Files on the command line are added as clips; a project file is
+     * opened instead. */
+    for (i = 1; i < argc; i++) {
+        if (App_IsProjectFile(argv[i]))
+            App_OpenProject(argv[i]);
+        else
+            App_AddFile(argv[i]);
+    }
 
     if (MainWindow_Open() != 0) {
         IDOS->Printf("%s", FB_Str(MSG_ERR_NO_WINDOW));

@@ -25,6 +25,8 @@ Early skeleton. Working so far:
 - [x] ReAction main window: clip list, playhead, render progress, menus
       (with About, Quit, effects and the default fit mode), drag and
       drop
+- [x] Projects saved and opened as hand-editable text files; file
+      requesters remember their drawers
 - [x] ARexx port
 - [x] Translatable GUI through locale.library catalogs (English, Swedish)
 - [x] Local rendering with libav* (`src/backend/local_backend.c`): decode,
@@ -158,9 +160,13 @@ The port is called `FORMBROD`.
 | `MODULES` | | module names |
 | `FIT` | `CLIP/N/A,MODE/A` | |
 | `FORMAT` | `WIDTH/N,HEIGHT/N,FPS/K,FIT/K` | `<w> <h> <fps> <fit>` |
+| `NEWPROJECT` | | |
+| `OPENPROJECT` | `FILE/A` | |
+| `SAVEPROJECT` | `FILE` (default: the current file) | path saved to |
 | `QUIT` | | |
 
-Clip and effect numbers start at 0.
+Clip and effect numbers start at 0. `NEWPROJECT`, `OPENPROJECT` and `QUIT`
+don't ask about unsaved changes; a script can `SAVEPROJECT` first.
 
 ### Output format and fitting
 
@@ -178,6 +184,50 @@ the project's).
 All audio is resampled to 48 kHz stereo, and clips without audio get
 silence, so files with and without sound can be joined. The clip list shows
 how each clip is fitted in its Effects column.
+
+## Project files
+
+*Project → Save project* writes the timeline to a text file that can be
+opened again with *Open project*, given on the command line, or dropped on
+the window. It is plain text so it can be fixed by hand, for example when
+the video files have moved:
+
+    FORMBROD-PROJECT 1
+    ; Formbrod project. One setting per line; ';' starts a comment.
+    OUTPUT-SIZE 0 0
+    OUTPUT-RATE 0 0
+    OUTPUT-FIT fit
+    PAD-COLOR 000000
+
+    SOURCE 1 clips/intro.mp4
+    SOURCE 2 Video:Holiday 2026/beach.mov
+
+    ; CLIP <source> <in> <out>
+    CLIP 1 1000 5000
+    CLIP 2 0 20000
+        FIT fill
+        EFFECT fade
+            PARAM in 0.5
+
+- `SOURCE <n> <path>` lists the files, numbered from 1. The path is the rest
+  of the line, spaces and all. A path without a volume name (no `:`) is
+  relative to the drawer the project file is in; files inside that drawer
+  are saved that way, so a project drawer can be moved as a whole.
+- `CLIP <source> <in> <out>` takes a part of a source (times in ms). `FIT`,
+  `EFFECT` and `PARAM` lines belong to the clip above them. Indentation is
+  only for reading.
+- `OUTPUT-SIZE`, `OUTPUT-RATE` (`0` = the first clip's), `OUTPUT-FIT` and
+  `PAD-COLOR` are the output format.
+
+Only paths and edits are stored. When a project is opened its files are
+probed again; files that can't be found keep their clips, and the status
+line says how many are missing. Unknown keys are skipped, so newer versions
+can add settings; a file from a newer, incompatible version is refused.
+
+Each file requester (adding files, projects, export) opens in the drawer it
+was last used in. The drawers are kept in the environment variables
+`Formbrod_MediaDrawer`, `Formbrod_ProjectDrawer` and
+`Formbrod_ExportDrawer`, so they last between runs.
 
 ## Writing a module
 

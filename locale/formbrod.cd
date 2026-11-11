@@ -260,3 +260,97 @@ Built without ffmpeg: video can't be read or exported.
 ;
 MSG_ABOUT_OK (124//)
 OK
+;
+; ---- Projects ---------------------------------------------------------------
+MSG_MENU_NEW (130//)
+New
+;
+MSG_MENU_OPEN (131//)
+Open project...
+;
+MSG_MENU_SAVE (132//)
+Save project
+;
+MSG_MENU_SAVE_AS (133//)
+Save project as...
+;
+MSG_REQ_OPEN_PROJECT (134//)
+Open project
+;
+MSG_REQ_SAVE_PROJECT (135//)
+Save project as
+;
+; Name of a project that hasn't been saved yet.
+MSG_UNTITLED (136//)
+Untitled
+;
+; Window title. The first %s is the project's file name (or MSG_UNTITLED),
+; the second is " *" when it has unsaved changes and "" otherwise.
+MSG_WINDOW_TITLE_PROJECT (137//)
+Formbrod - %s%s
+;
+MSG_STATUS_NEW_PROJECT (138//)
+New project
+;
+; %s is the file path.
+MSG_STATUS_SAVED (139//)
+Saved %s
+;
+; %s is the file path.
+MSG_STATUS_CANT_SAVE (140//)
+Can't save %s
+;
+; %s is the file path.
+MSG_STATUS_OPENED (141//)
+Opened %s
+;
+; %s is the file path, %d how many of its video files weren't found. The
+; project file is text, so the paths can be fixed in any text editor.
+MSG_STATUS_OPENED_MISSING (142//)
+Opened %s. Files not found: %d (fix their paths in the project file)
+;
+; %s is the file path.
+MSG_STATUS_CANT_OPEN_PROJECT (143//)
+Can't read %s
+;
+; The first %s is the file path, %d the line, the second %s one of the
+; MSG_PROJECT_ reasons below.
+MSG_STATUS_BAD_PROJECT (144//)
+%s, line %d: %s
+;
+MSG_PROJECT_NOT_PROJECT (145//)
+not a Formbrod project
+;
+MSG_PROJECT_TOO_NEW (146//)
+made by a newer Formbrod
+;
+MSG_PROJECT_BAD_LINE (147//)
+this line can't be read
+;
+MSG_PROJECT_BAD_SOURCE (148//)
+the clip's source isn't listed
+;
+MSG_PROJECT_TOO_MANY (149//)
+too many files, clips or effects
+;
+; Saving the project failed because it has never been saved and no file
+; was given (ARexx SAVEPROJECT without FILE).
+MSG_STATUS_NO_PROJECT_FILE (150//)
+The project has no file name yet
+;
+; The project couldn't be opened. The first %s is the file path, the
+; second MSG_PROJECT_NOT_PROJECT or MSG_PROJECT_TOO_NEW.
+MSG_STATUS_NOT_OPENED (151//)
+%s: %s
+;
+; ---- Unsaved changes requester ---------------------------------------------
+MSG_UNSAVED_TITLE (160//)
+Unsaved changes
+;
+; %s is the project's file name.
+MSG_UNSAVED_TEXT (161//)
+%s has changes that aren't saved.
+;
+; The buttons, separated by '|'. The last one cancels.
+MSG_UNSAVED_BUTTONS (162//)
+Save|Discard|Cancel

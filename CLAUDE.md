@@ -46,6 +46,10 @@ through modules and ARexx.
   the GUI shows `App_JobErrorString()` instead.
 - **The job text format is versioned** (`FB_JOB_VERSION`). Parsers ignore
   unknown keys, so add keys rather than change existing ones.
+- **Project files are text for people** (`src/timeline/project.c`,
+  `FB_PROJECT_VERSION`). They hold paths and edits only, never probed
+  info, and keep the same add-keys rule. The editing model's tracks will
+  need new keys (or version 2, which older readers refuse).
 
 ## Building and testing
 

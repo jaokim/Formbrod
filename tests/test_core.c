@@ -8,6 +8,7 @@
 #include "formbrod/job.h"
 #include "formbrod/module.h"
 #include "formbrod/timeview.h"
+#include "formbrod/project.h"
 
 static int failures;
 
@@ -351,6 +352,132 @@ static void test_timeview(void)
     CHECK(FB_TimelineLocate(&tl, -1, NULL) == -1);
 }
 
+static void test_paths(void)
+{
+    char buf[FB_PATH_LEN];
+
+    FB_PathDir("Work:Proj/edit.fbp", buf, sizeof(buf));
+    CHECK(strcmp(buf, "Work:Proj") == 0);
+    FB_PathDir("Work:edit.fbp", buf, sizeof(buf));
+    CHECK(strcmp(buf, "Work:") == 0);
+    FB_PathDir("edit.fbp", buf, sizeof(buf));
+    CHECK(strcmp(buf, "") == 0);
+
+    CHECK(FB_PathJoin("Work:Proj", "a.mp4", buf, sizeof(buf)) == 0);
+    CHECK(strcmp(buf, "Work:Proj/a.mp4") == 0);
+    CHECK(FB_PathJoin("Work:", "a.mp4", buf, sizeof(buf)) == 0);
+    CHECK(strcmp(buf, "Work:a.mp4") == 0);
+    CHECK(FB_PathJoin("Work:Proj", "Video:b.mp4", buf, sizeof(buf)) == 0);
+    CHECK(strcmp(buf, "Video:b.mp4") == 0);
+    CHECK(FB_PathJoin("Work:Proj", "x", buf, 8) == -1);
+
+    CHECK(FB_PathRelative("Work:Proj", "work:proj/clips/a.mp4",
+                          buf, sizeof(buf)) == 1);
+    CHECK(strcmp(buf, "clips/a.mp4") == 0);
+    CHECK(FB_PathRelative("Work:", "Work:a.mp4", buf, sizeof(buf)) == 1);
+    CHECK(strcmp(buf, "a.mp4") == 0);
+    CHECK(FB_PathRelative("Work:Proj", "Work:Project2/a.mp4",
+                          buf, sizeof(buf)) == 0);
+    CHECK(strcmp(buf, "Work:Project2/a.mp4") == 0);
+    CHECK(FB_PathRelative("", "Work:a.mp4", buf, sizeof(buf)) == 0);
+    CHECK(strcmp(buf, "Work:a.mp4") == 0);
+}
+
+static void test_project_roundtrip(void)
+{
+    static FBTimeline tl, back;
+    static char text[16384];
+    FBEffect *fx;
+    int n, line;
+
+    FB_TimelineInit(&tl);
+    FB_TimelineAddSource(&tl, "Work:Proj/clips/intro.mp4", 8000, 1, 1);
+    FB_TimelineAddSource(&tl, "Video:Holiday 2026/beach.mov", 20000, 1, 0);
+    FB_TimelineAppendClip(&tl, 0, 1000, 5000);
+    FB_TimelineAppendClip(&tl, 1, 0, 20000);
+    tl.clips[1].fit = FB_FIT_FILL;
+    fx = FB_ClipAddEffect(&tl.clips[1], "fade");
+    FB_EffectSetParam(fx, "in", 0.5);
+    FB_EffectSetParam(fx, "out", 1.25);
+    tl.format.width = 1280;
+    tl.format.height = 720;
+    tl.format.fps_num = 30000;
+    tl.format.fps_den = 1001;
+    tl.format.fit = FB_FIT_STRETCH;
+    tl.format.pad_color = 0x102030;
+
+    n = FB_ProjectWrite(&tl, "Work:Proj", text, sizeof(text));
+    CHECK(n > 0);
+    CHECK(strstr(text, "SOURCE 1 clips/intro.mp4\n") != NULL);
+    CHECK(strstr(text, "SOURCE 2 Video:Holiday 2026/beach.mov\n") != NULL);
+    CHECK(FB_ProjectWrite(&tl, "Work:Proj", text, 64) == -1);
+
+    n = FB_ProjectWrite(&tl, "Work:Proj", text, sizeof(text));
+    CHECK(FB_ProjectParse(&back, text, "Work:Proj", &line) == FB_PROJECT_OK);
+    CHECK(back.num_sources == 2 && back.num_clips == 2);
+    CHECK(strcmp(back.sources[0].path, "Work:Proj/clips/intro.mp4") == 0);
+    CHECK(strcmp(back.sources[1].path, "Video:Holiday 2026/beach.mov") == 0);
+    CHECK(back.clips[0].source == 0 && back.clips[0].in == 1000 &&
+          back.clips[0].out == 5000 && back.clips[0].fit == FB_FIT_DEFAULT);
+    CHECK(back.clips[1].source == 1 && back.clips[1].fit == FB_FIT_FILL);
+    CHECK(back.clips[1].num_effects == 1);
+    CHECK(strcmp(back.clips[1].effects[0].module, "fade") == 0);
+    CHECK(FB_EffectGetParam(&back.clips[1].effects[0], "in", 0) == 0.5);
+    CHECK(FB_EffectGetParam(&back.clips[1].effects[0], "out", 0) == 1.25);
+    CHECK(back.format.width == 1280 && back.format.height == 720);
+    CHECK(back.format.fps_num == 30000 && back.format.fps_den == 1001);
+    CHECK(back.format.fit == FB_FIT_STRETCH);
+    CHECK(back.format.pad_color == 0x102030);
+
+    /* Saved somewhere else, the whole project moves with its drawer. */
+    CHECK(FB_ProjectParse(&back, text, "DH1:Moved", NULL) == FB_PROJECT_OK);
+    CHECK(strcmp(back.sources[0].path, "DH1:Moved/clips/intro.mp4") == 0);
+}
+
+static void test_project_hand_edited(void)
+{
+    static FBTimeline tl;
+    int line;
+
+    /* Comments, indentation, CRLF, an unknown key and a path with spaces. */
+    CHECK(FB_ProjectParse(&tl,
+        "; my project\r\n"
+        "FORMBROD-PROJECT 1\r\n"
+        "\r\n"
+        "  SOURCE 1   Work:My Videos/a.mp4  \r\n"
+        "SHINY-NEW-KEY whatever\r\n"
+        "# CLIP 1 0 10\r\n"
+        "CLIP 1 0 3000\r\n"
+        "\tEFFECT fade\r\n"
+        "\t\tPARAM in 1\r\n", NULL, &line) == FB_PROJECT_OK);
+    CHECK(tl.num_sources == 1 && tl.num_clips == 1);
+    CHECK(strcmp(tl.sources[0].path, "Work:My Videos/a.mp4") == 0);
+    CHECK(tl.clips[0].num_effects == 1);
+
+    CHECK(FB_ProjectParse(&tl, "FORMBROD-JOB 1\n", NULL, &line)
+          == FB_PROJECT_NOT_PROJECT);
+    CHECK(FB_ProjectParse(&tl, "", NULL, &line) == FB_PROJECT_NOT_PROJECT);
+    CHECK(FB_ProjectParse(&tl, "FORMBROD-PROJECT 99\n", NULL, &line)
+          == FB_PROJECT_TOO_NEW);
+    CHECK(FB_ProjectParse(&tl,
+        "FORMBROD-PROJECT 1\nSOURCE 1 a.mp4\nCLIP 2 0 100\n", "Work:", &line)
+          == FB_PROJECT_BAD_SOURCE);
+    CHECK(line == 3);
+    CHECK(FB_ProjectParse(&tl,
+        "FORMBROD-PROJECT 1\nSOURCE 1 a.mp4\nCLIP 1 500 100\n", "", &line)
+          == FB_PROJECT_BAD_LINE);
+    CHECK(FB_ProjectParse(&tl,
+        "FORMBROD-PROJECT 1\nSOURCE 2 a.mp4\n", "", &line)
+          == FB_PROJECT_BAD_LINE);
+    CHECK(line == 2);
+    CHECK(FB_ProjectParse(&tl,
+        "FORMBROD-PROJECT 1\nEFFECT fade\n", "", &line)
+          == FB_PROJECT_BAD_LINE);
+    CHECK(FB_ProjectParse(&tl,
+        "FORMBROD-PROJECT 1\nSOURCE 1 a\nCLIP 1 0 9\nPARAM in x\n", "", &line)
+          == FB_PROJECT_BAD_LINE);
+}
+
 int main(void)
 {
     FB_RegisterBuiltinModules();
@@ -359,6 +486,9 @@ int main(void)
     test_job_errors();
     test_fit();
     test_timeview();
+    test_paths();
+    test_project_roundtrip();
+    test_project_hand_edited();
     if (failures) {
         printf("%d check(s) failed\n", failures);
         return 1;
