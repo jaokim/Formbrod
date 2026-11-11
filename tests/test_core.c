@@ -8,6 +8,7 @@
 #include "formbrod/job.h"
 #include "formbrod/module.h"
 #include "formbrod/timeview.h"
+#include "formbrod/log.h"
 #include "formbrod/project.h"
 
 static int failures;
@@ -732,6 +733,82 @@ static void test_project_tracks(void)
     CHECK(FB_ProjectParse(&back,
         "FORMBROD-PROJECT 2\nSOURCE 1 a\nTRACK video\nCLIP 1 0 100\n"
         "VOLUME -1\n", "", &line) == FB_PROJECT_BAD_LINE);
+/* Reads the log back without the time stamps (the first 9 characters). */
+static void read_log(const char *path, char *buf, size_t len)
+{
+    FILE *f = fopen(path, "r");
+    char line[1200];
+    size_t used = 0;
+
+    buf[0] = '\0';
+    if (!f)
+        return;
+    while (fgets(line, sizeof(line), f)) {
+        size_t n = strlen(line);
+
+        if (n > 9 && used + n - 9 < len) {
+            memcpy(buf + used, line + 9, n - 9);
+            used += n - 9;
+            buf[used] = '\0';
+        }
+    }
+    fclose(f);
+}
+
+static void test_log(void)
+{
+    const char *path = "build/host/test.log";
+    static char text[8192];
+    char graph[400];
+    int i;
+
+    CHECK(FB_LogOpen("", FB_LOG_INFO) == -1 && !FB_LogIsOpen());
+    FB_Log(FB_LOG_ERROR, "app", "nowhere");          /* no log: ignored */
+
+    CHECK(FB_LogOpen(path, FB_LOG_INFO) == 0 && FB_LogIsOpen());
+    CHECK(FB_LogWants(FB_LOG_WARNING) && !FB_LogWants(FB_LOG_DEBUG));
+    FB_Log(FB_LOG_INFO, "app", "Started %d\n", 1);
+    FB_Log(FB_LOG_DEBUG, "app", "too detailed");
+    for (i = 0; i < 250; i++)
+        FB_Log(FB_LOG_WARNING, "ffmpeg", "[swscaler] unknown range");
+    FB_Log(FB_LOG_ERROR, "render", "Failed");
+    FB_Log(FB_LOG_ERROR, "render", "Failed");
+    FB_LogText(FB_LOG_INFO, "job", "INPUT 0 a.mp4\nOUTPUT b.mp4\n");
+    /* A long filtergraph is broken after each ';'. */
+    strcpy(graph, "[0:v]trim=start=0:end=1,setpts=PTS-STARTPTS,"
+                  "scale=320:240:force_original_aspect_ratio=decrease[v0];"
+                  "[0:a]atrim=start=0:end=1,asetpts=PTS-STARTPTS[a0];"
+                  "[v0][a0]concat=n=1:v=1:a=1[outv][outa]");
+    FB_LogText(FB_LOG_INFO, "job", graph);
+    FB_LogClose();
+    CHECK(!FB_LogIsOpen());
+
+    read_log(path, text, sizeof(text));
+    CHECK(strstr(text, "info    app     Started 1\n") == text);
+    CHECK(strstr(text, "too detailed") == NULL);
+    CHECK(strstr(text, "warning ffmpeg  [swscaler] unknown range\n"
+                       "warning ffmpeg  (the line above repeated 249 more "
+                       "times)\n") != NULL);
+    CHECK(strstr(text, "error   render  Failed\nerror   render  (the line "
+                       "above repeated 1 more time)\n") != NULL);
+    CHECK(strstr(text, "info    job     INPUT 0 a.mp4\n"
+                       "info    job     OUTPUT b.mp4\n") != NULL);
+    CHECK(strstr(text, "info    job     [0:v]trim=start=0:end=1,setpts=PTS-"
+                       "STARTPTS,scale=320:240:force_original_aspect_ratio="
+                       "decrease[v0];\n") != NULL);
+    CHECK(strstr(text, "info    job     [v0][a0]concat=n=1:v=1:a=1[outv]"
+                       "[outa]\n") != NULL);
+
+    /* Opening again starts a new file. */
+    CHECK(FB_LogOpen(path, FB_LOG_DEBUG) == 0);
+    FB_Log(FB_LOG_DEBUG, "app", "fresh");
+    FB_LogClose();
+    read_log(path, text, sizeof(text));
+    CHECK(strcmp(text, "debug   app     fresh\n") == 0);
+
+    CHECK(FB_LogLevelFromName("warning", FB_LOG_INFO) == FB_LOG_WARNING);
+    CHECK(FB_LogLevelFromName("loud", FB_LOG_INFO) == FB_LOG_INFO);
+    CHECK(strcmp(FB_LogLevelName(FB_LOG_DEBUG), "debug") == 0);
 }
 
 int main(void)
@@ -739,6 +816,7 @@ int main(void)
     FB_RegisterBuiltinModules();
     test_timeline();
     test_tracks();
+    test_log();
     test_job_build_and_roundtrip();
     test_job_tracks();
     test_job_errors();

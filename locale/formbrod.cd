@@ -157,6 +157,10 @@ MSG_STATUS_WRONG_TRACK (66//)
 MSG_STATUS_NO_SUCH_TRACK (67//)
 There is no such track
 ;
+; Settings, Write log file was turned on. %s is the file.
+MSG_STATUS_LOG_ON (68//)
+Writing a log to %s
+;
 ; ---- Render job errors ----------------------------------------------------
 MSG_JOB_EMPTY (70//)
 The timeline is empty
@@ -262,6 +266,10 @@ Stretch to frame
 ; Settings menu, a checkmark item. Off is for slower Amigas.
 MSG_MENU_SHOW_PICTURES (116//)
 Show frame pictures
+;
+; Settings menu, a checkmark item.
+MSG_MENU_WRITE_LOG (117//)
+Write log file
 ;
 ; ---- About requester ------------------------------------------------------
 MSG_ABOUT_TITLE (120//)

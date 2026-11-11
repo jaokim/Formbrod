@@ -94,6 +94,8 @@
 #define MSG_STATUS_WRONG_TRACK_STR       "%s can't go on that kind of track"
 #define MSG_STATUS_NO_SUCH_TRACK         67
 #define MSG_STATUS_NO_SUCH_TRACK_STR     "There is no such track"
+#define MSG_STATUS_LOG_ON                68
+#define MSG_STATUS_LOG_ON_STR            "Writing a log to %s"
 #define MSG_JOB_EMPTY                    70
 #define MSG_JOB_EMPTY_STR                "The timeline is empty"
 #define MSG_JOB_BAD_SOURCE               71
@@ -156,6 +158,8 @@
 #define MSG_MENU_FIT_STRETCH_STR         "Stretch to frame"
 #define MSG_MENU_SHOW_PICTURES           116
 #define MSG_MENU_SHOW_PICTURES_STR       "Show frame pictures"
+#define MSG_MENU_WRITE_LOG               117
+#define MSG_MENU_WRITE_LOG_STR           "Write log file"
 #define MSG_ABOUT_TITLE                  120
 #define MSG_ABOUT_TITLE_STR              "About Formbrod"
 #define MSG_ABOUT_TEXT                   121
@@ -217,7 +221,7 @@
 #define MSG_UNSAVED_BUTTONS              162
 #define MSG_UNSAVED_BUTTONS_STR          "Save|Discard|Cancel"
 
-#define FB_NUM_STRINGS 102
+#define FB_NUM_STRINGS 104
 
 #ifdef FB_STRINGS_ARRAY
 static const struct FBBuiltinString {
@@ -265,6 +269,7 @@ static const struct FBBuiltinString {
     { MSG_STATUS_NO_DURATION, MSG_STATUS_NO_DURATION_STR },
     { MSG_STATUS_WRONG_TRACK, MSG_STATUS_WRONG_TRACK_STR },
     { MSG_STATUS_NO_SUCH_TRACK, MSG_STATUS_NO_SUCH_TRACK_STR },
+    { MSG_STATUS_LOG_ON, MSG_STATUS_LOG_ON_STR },
     { MSG_JOB_EMPTY, MSG_JOB_EMPTY_STR },
     { MSG_JOB_BAD_SOURCE, MSG_JOB_BAD_SOURCE_STR },
     { MSG_JOB_UNKNOWN_MODULE, MSG_JOB_UNKNOWN_MODULE_STR },
@@ -296,6 +301,7 @@ static const struct FBBuiltinString {
     { MSG_MENU_FIT_FILL, MSG_MENU_FIT_FILL_STR },
     { MSG_MENU_FIT_STRETCH, MSG_MENU_FIT_STRETCH_STR },
     { MSG_MENU_SHOW_PICTURES, MSG_MENU_SHOW_PICTURES_STR },
+    { MSG_MENU_WRITE_LOG, MSG_MENU_WRITE_LOG_STR },
     { MSG_ABOUT_TITLE, MSG_ABOUT_TITLE_STR },
     { MSG_ABOUT_TEXT, MSG_ABOUT_TEXT_STR },
     { MSG_ABOUT_LIBAV, MSG_ABOUT_LIBAV_STR },

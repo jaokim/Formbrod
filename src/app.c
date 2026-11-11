@@ -5,6 +5,10 @@
 #include "app.h"
 #include "formbrod/module.h"
 #include "formbrod/project.h"
+#include "formbrod/log.h"
+#include "formbrod/backend.h"
+#include "prefs/prefs.h"
+#include "version.h"
 #include "locale/catalog.h"
 
 FBApp App;
@@ -36,6 +40,74 @@ void App_SetStatus(const char *fmt, ...)
     va_start(ap, fmt);
     vsnprintf(App.status, sizeof(App.status), fmt, ap);
     va_end(ap);
+    /* What the user was told, in their language. */
+    FB_Log(FB_LOG_INFO, "status", "%s", App.status);
+}
+
+/* The job and an ffmpeg command line that does the same thing, so a
+ * render can be tried on another computer. */
+static void log_job(const FBJob *job)
+{
+    static char text[FB_FILTERGRAPH_LEN + 8192];
+
+    if (!FB_LogWants(FB_LOG_INFO))
+        return;
+    if (FB_JobWrite(job, text, sizeof(text)) > 0) {
+        FB_Log(FB_LOG_INFO, "job", "Job:");
+        FB_LogText(FB_LOG_INFO, "job", text);
+    }
+    if (FB_JobToCommandLine(job, text, sizeof(text)) > 0) {
+        FB_Log(FB_LOG_INFO, "job", "The same as an ffmpeg command:");
+        FB_LogText(FB_LOG_INFO, "job", text);
+    }
+}
+
+/* ---- Log --------------------------------------------------------------- */
+
+#define LOG_FILE_DEFAULT "T:Formbrod.log"
+
+int App_LogEnabled(void)
+{
+    return strcmp(Prefs_GetString("Log", "1"), "0") != 0;
+}
+
+const char *App_LogFile(void)
+{
+    const char *path = Prefs_GetString("LogFile", LOG_FILE_DEFAULT);
+
+    return *path ? path : LOG_FILE_DEFAULT;
+}
+
+void App_StartLog(void)
+{
+    FBLogLevel level = FB_LogLevelFromName(Prefs_GetString("LogLevel",
+                                                           "info"),
+                                           FB_LOG_INFO);
+
+    if (!App_LogEnabled() || FB_LogOpen(App_LogFile(), level) != 0)
+        return;
+    FB_Log(FB_LOG_INFO, "app", "Formbrod " FB_VERSION " (" FB_VERSION_DATE
+           "), log level %s", FB_LogLevelName(level));
+    FB_BackendLogStart();
+}
+
+void App_StopLog(void)
+{
+    if (!FB_LogIsOpen())
+        return;
+    FB_BackendLogStop();
+    FB_Log(FB_LOG_INFO, "app", "Log closed");
+    FB_LogClose();
+}
+
+void App_SetLogging(int on)
+{
+    Prefs_SetString("Log", on ? "1" : "0");
+    Prefs_Save();
+    if (on && !FB_LogIsOpen())
+        App_StartLog();
+    else if (!on)
+        App_StopLog();
 }
 
 /* ---- Projects ---------------------------------------------------------- */
@@ -444,9 +516,12 @@ int App_Export(const char *path, int preview)
 
     err = FB_JobBuild(&job, &App.timeline, &out);
     if (err != FB_JOB_OK) {
+        FB_Log(FB_LOG_ERROR, "job", "Can't build the job: %s",
+               FB_JobErrorString(err));
         App_SetStatus("%s", App_JobErrorString(err));
         return -1;
     }
+    log_job(&job);
     if (App.backend->Submit(App.backend, &job) != 0) {
         App_SetStatus("%s", App.backend->Result(App.backend).message);
         return -1;

@@ -86,6 +86,13 @@ def read_lines(path):
     """Yields (line number, text) with backslash-continued lines joined."""
     with open(path, encoding="utf-8") as f:
         raw = f.read().split("\n")
+    # The Amiga build converts these files to ISO-8859-1 with iconv, which
+    # stops at the first character Latin-1 doesn't have (comments too).
+    for n, text in enumerate(raw, 1):
+        for ch in text:
+            if ord(ch) > 0xFF:
+                raise CatError("%s:%d: %r isn't in ISO-8859-1 (Latin-1)"
+                               % (path, n, ch))
     i = 0
     while i < len(raw):
         start = i + 1

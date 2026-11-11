@@ -49,6 +49,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "formbrod/backend.h"
+#include "formbrod/log.h"
 
 #ifdef HAVE_LIBAV
 #include <libavformat/avformat.h>
@@ -60,6 +61,7 @@
 #include <libavutil/channel_layout.h>
 #include <libavutil/opt.h>
 #include <libavutil/pixdesc.h>
+#include <libavutil/log.h>
 
 #if LIBAVCODEC_VERSION_INT >= AV_VERSION_INT(59, 24, 100)
 #define FB_CH_LAYOUT 1          /* AVChannelLayout API (ffmpeg 5.1+) */
@@ -117,6 +119,12 @@ typedef struct LocalPriv {
 
 static void finish(LocalPriv *p, FBRenderState state, const char *msg)
 {
+    if (state == FB_RENDER_FAILED)
+        FB_Log(FB_LOG_ERROR, "render", "Failed: %s", msg);
+    else if (state == FB_RENDER_DONE)
+        FB_Log(FB_LOG_INFO, "render", "Done: %s", msg);
+    else if (state == FB_RENDER_CANCELLED)
+        FB_Log(FB_LOG_INFO, "render", "Cancelled");
     p->progress.state = state;
     p->result.state = state;
     strncpy(p->result.message, msg, sizeof(p->result.message) - 1);
@@ -395,6 +403,7 @@ static int open_inputs(LocalPriv *p)
         Input *in = &p->in[i];
 
         in->st[KIND_VIDEO].index = in->st[KIND_AUDIO].index = -1;
+        FB_Log(FB_LOG_INFO, "render", "Input %d: %s", i, p->job.inputs[i]);
         ret = avformat_open_input(&in->fmt, p->job.inputs[i], NULL, NULL);
         if (ret < 0)
             return fail(p, ret, "Can't open %s", p->job.inputs[i]);
@@ -444,6 +453,24 @@ static int open_decoder(LocalPriv *p, int input, int kind, int nth)
         return fail(p, ret, "Can't open the %s decoder for %s",
                     kind_name(kind), p->job.inputs[input]);
     is->index = idx;
+    if (kind == KIND_VIDEO)
+        FB_Log(FB_LOG_INFO, "render",
+               "Input %d video: stream %d, %s, %dx%d, %s, range %s, "
+               "colour space %s, %d/%d fps", input, idx, codec->name,
+               is->dec->width, is->dec->height,
+               av_get_pix_fmt_name(is->dec->pix_fmt) ?
+                   av_get_pix_fmt_name(is->dec->pix_fmt) : "unknown",
+               av_color_range_name(is->dec->color_range) ?
+                   av_color_range_name(is->dec->color_range) : "unknown",
+               av_color_space_name(is->dec->colorspace) ?
+                   av_color_space_name(is->dec->colorspace) : "unknown",
+               is->dec->framerate.num, is->dec->framerate.den);
+    else
+        FB_Log(FB_LOG_INFO, "render",
+               "Input %d audio: stream %d, %s, %d Hz, %s", input, idx,
+               codec->name, is->dec->sample_rate,
+               av_get_sample_fmt_name(is->dec->sample_fmt) ?
+                   av_get_sample_fmt_name(is->dec->sample_fmt) : "unknown");
     /* Like the ffmpeg CLI, start every input at 0 so trim times match. */
     if (in->fmt->start_time != AV_NOPTS_VALUE)
         is->ts_offset = av_rescale_q(in->fmt->start_time, AV_TIME_BASE_Q,
@@ -679,6 +706,21 @@ static int open_encoder(LocalPriv *p, int kind, const AVCodec *codec,
     if (p->out->oformat->flags & AVFMT_GLOBALHEADER)
         enc->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
 
+    if (kind == KIND_VIDEO)
+        FB_Log(FB_LOG_INFO, "render",
+               "Video encoder: %s, %dx%d, %s, %d/%d fps, %lld bit/s",
+               codec->name, enc->width, enc->height,
+               av_get_pix_fmt_name(enc->pix_fmt) ?
+                   av_get_pix_fmt_name(enc->pix_fmt) : "unknown",
+               enc->framerate.num, enc->framerate.den,
+               (long long)enc->bit_rate);
+    else
+        FB_Log(FB_LOG_INFO, "render",
+               "Audio encoder: %s, %d Hz, %s, %lld bit/s", codec->name,
+               enc->sample_rate,
+               av_get_sample_fmt_name(enc->sample_fmt) ?
+                   av_get_sample_fmt_name(enc->sample_fmt) : "unknown",
+               (long long)enc->bit_rate);
     ret = avcodec_open2(enc, codec, NULL);
     if (ret < 0)
         return fail(p, ret, "Can't open the %s encoder %s", kind_name(kind),
@@ -722,6 +764,7 @@ static int local_setup(LocalPriv *p)
     if (!p->pkt || !p->frame)
         return fail(p, AVERROR(ENOMEM), "Out of memory");
 
+    FB_Log(FB_LOG_INFO, "render", "Rendering %s", job->output.path);
     if (open_inputs(p) < 0)
         return -1;
 
@@ -761,6 +804,13 @@ static int local_setup(LocalPriv *p)
             return fail(p, 0, "The filtergraph is too long");
         }
     }
+
+    /* What was added to the job's graph to suit the encoders. */
+    FB_Log(FB_LOG_INFO, "render", "Encoders: %s, %s", codec[KIND_VIDEO]->name,
+           codec[KIND_AUDIO] ? codec[KIND_AUDIO]->name : "no audio");
+    FB_Log(FB_LOG_DEBUG, "render", "Conversion added to the filtergraph:");
+    FB_LogText(FB_LOG_DEBUG, "render",
+               graph_text + strlen(job->filtergraph));
 
     p->graph = avfilter_graph_alloc();
     if (!p->graph) {
@@ -1092,6 +1142,91 @@ static void local_slice(LocalPriv *p)
         if (read_input(p, i) < 0)
             return;
     }
+}
+
+/* ---- ffmpeg's messages ---------------------------------------------------- */
+
+/* ffmpeg sends messages in pieces; they're collected until a newline. */
+static char LinePart[1024];
+static size_t LinePartLen;
+static int PrintPrefix = 1;
+
+static FBLogLevel from_av_level(int level)
+{
+    if (level <= AV_LOG_ERROR)
+        return FB_LOG_ERROR;
+    if (level <= AV_LOG_WARNING)
+        return FB_LOG_WARNING;
+    if (level <= AV_LOG_INFO)
+        return FB_LOG_INFO;
+    return FB_LOG_DEBUG;
+}
+
+static void log_callback(void *avcl, int level, const char *fmt, va_list vl)
+{
+    char piece[1024];
+    size_t n;
+
+    if (level > av_log_get_level())
+        return;
+    /* Adds "[h264 @ 0x...]" in front, like ffmpeg's own output. */
+    av_log_format_line(avcl, level, fmt, vl, piece, sizeof(piece),
+                       &PrintPrefix);
+    n = strlen(piece);
+    if (n > sizeof(LinePart) - 1 - LinePartLen)
+        n = sizeof(LinePart) - 1 - LinePartLen;
+    memcpy(LinePart + LinePartLen, piece, n);
+    LinePartLen += n;
+    LinePart[LinePartLen] = '\0';
+    if (LinePartLen > 0 && (LinePart[LinePartLen - 1] == '\n' ||
+                            LinePartLen == sizeof(LinePart) - 1)) {
+        FB_Log(from_av_level(level), "ffmpeg", "%s", LinePart);
+        LinePartLen = 0;
+        LinePart[0] = '\0';
+    }
+}
+
+void FB_BackendLogStart(void)
+{
+    static const int av_level[] = {
+        AV_LOG_ERROR, AV_LOG_WARNING, AV_LOG_INFO, AV_LOG_VERBOSE
+    };
+    unsigned f = avformat_version(), c = avcodec_version();
+    unsigned fl = avfilter_version(), u = avutil_version();
+
+    FB_Log(FB_LOG_INFO, "app", "ffmpeg %s: avformat %u.%u.%u, "
+           "avcodec %u.%u.%u, avfilter %u.%u.%u, avutil %u.%u.%u",
+           av_version_info(),
+           f >> 16, (f >> 8) & 0xFF, f & 0xFF,
+           c >> 16, (c >> 8) & 0xFF, c & 0xFF,
+           fl >> 16, (fl >> 8) & 0xFF, fl & 0xFF,
+           u >> 16, (u >> 8) & 0xFF, u & 0xFF);
+    FB_Log(FB_LOG_DEBUG, "app", "ffmpeg configuration: %s",
+           avcodec_configuration());
+    if (!FB_LogIsOpen())
+        return;     /* leave ffmpeg printing to the shell as before */
+    av_log_set_level(av_level[FB_LogGetLevel()]);
+    av_log_set_callback(log_callback);
+}
+
+void FB_BackendLogStop(void)
+{
+    if (LinePartLen > 0)
+        FB_Log(FB_LOG_INFO, "ffmpeg", "%s", LinePart);
+    LinePartLen = 0;
+    av_log_set_callback(av_log_default_callback);
+}
+
+#else
+
+void FB_BackendLogStart(void)
+{
+    FB_Log(FB_LOG_INFO, "app", "Built without libav: rendering and reading "
+           "files are off");
+}
+
+void FB_BackendLogStop(void)
+{
 }
 
 #endif /* HAVE_LIBAV */

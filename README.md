@@ -254,10 +254,32 @@ Program settings (not project settings) are kept with application.library's
 PrefsObjects, in `ENV:Formbrod.jaokim.github.io.xml` (and `ENVARC:`), and
 can be viewed with PrefsObjectsEditor. So far they are the drawers the file
 requesters last used: `MediaDrawer`, `ProjectDrawer` and `ExportDrawer`, so
-each requester opens where it was last used, also after a restart; and
+each requester opens where it was last used, also after a restart;
 `ShowPictures` (*Settings → Show frame pictures*): `0` makes the film strip
-show plain blocks with file names and decode nothing, for slower Amigas. Without
+show plain blocks with file names and decode nothing, for slower Amigas;
+and for the log file `Log`, `LogFile` and `LogLevel` (see below). Without
 application.library 53 the drawers are only remembered until Formbrod quits.
+
+## Log file
+
+Formbrod writes a log to `T:Formbrod.log`, started afresh each time it
+runs. It is the place to look when a render goes wrong. It holds:
+
+- the program and ffmpeg library versions;
+- every file read, with its length, size, pixel shape, frame rate and
+  whether it has sound, or why it couldn't be read;
+- every render: the job, **the same thing as an `ffmpeg` command line**
+  (to try on another computer), the decoders and encoders used with their
+  pixel formats and colour range, and how it ended;
+- everything ffmpeg itself reports, which used to go to the shell window.
+  A message ffmpeg repeats for every frame is written once, followed by
+  how many times it came again;
+- the status line messages.
+
+*Settings → Write log file* turns it off and on. The settings `LogFile`
+(another path) and `LogLevel` (`error`, `warning`, `info` (default) or
+`debug`, which adds ffmpeg's detailed messages and the conversion filters
+added for the encoders) can be changed with PrefsObjectsEditor.
 
 ## Writing a module
 

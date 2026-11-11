@@ -139,6 +139,11 @@ class CatgenTest(unittest.TestCase):
         with self.assertRaises(catgen.CatError):
             catgen.parse_cd(path)
 
+    def test_not_latin1(self):
+        path = self.write("arrow.cd", "; Settings \u2192 Log\nA (1//)\na\n")
+        with self.assertRaises(catgen.CatError):
+            catgen.parse_cd(path)
+
     def test_ids_out_of_order(self):
         path = self.write("order.cd", "A (2//)\na\nB (1//)\nb\n")
         with self.assertRaises(catgen.CatError):

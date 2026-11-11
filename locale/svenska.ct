@@ -127,6 +127,9 @@ MSG_STATUS_WRONG_TRACK
 MSG_STATUS_NO_SUCH_TRACK
 Det spåret finns inte
 ;
+MSG_STATUS_LOG_ON
+Skriver en logg till %s
+;
 MSG_JOB_EMPTY
 Tidslinjen är tom
 ;
@@ -220,6 +223,9 @@ Sträck ut till bilden
 ;
 MSG_MENU_SHOW_PICTURES
 Visa bildrutor
+;
+MSG_MENU_WRITE_LOG
+Skriv loggfil
 ;
 MSG_ABOUT_TITLE
 Om Formbröd
