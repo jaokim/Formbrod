@@ -856,6 +856,38 @@ static void test_still(void)
     CHECK(job.length == 7000);
 }
 
+static void test_time_text(void)
+{
+    char buf[32];
+    fb_ms_t ms;
+
+    CHECK(strcmp(FB_FormatTimeMs(buf, sizeof(buf), 65000, '.'), "1:05") == 0);
+    CHECK(strcmp(FB_FormatTimeMs(buf, sizeof(buf), 65500, ','), "1:05,5") == 0);
+    CHECK(strcmp(FB_FormatTimeMs(buf, sizeof(buf), 65250, '.'), "1:05.25") == 0);
+    CHECK(strcmp(FB_FormatTimeMs(buf, sizeof(buf), 65004, '.'), "1:05.004") == 0);
+    CHECK(strcmp(FB_FormatTimeMs(buf, sizeof(buf), 3725125, '.'),
+                 "1:02:05.125") == 0);
+    CHECK(strcmp(FB_FormatTimeMs(buf, sizeof(buf), 0, '.'), "0:00") == 0);
+
+    CHECK(FB_ParseTime("1:05.5", ',', &ms) == 0 && ms == 65500);
+    CHECK(FB_ParseTime(" 1:05,25 ", ',', &ms) == 0 && ms == 65250);
+    CHECK(FB_ParseTime("65.5", '.', &ms) == 0 && ms == 65500);
+    CHECK(FB_ParseTime("12s", '.', &ms) == 0 && ms == 12000);
+    CHECK(FB_ParseTime(".5", '.', &ms) == 0 && ms == 500);
+    CHECK(FB_ParseTime("1:02:05", '.', &ms) == 0 && ms == 3725000);
+    CHECK(FB_ParseTime("0:00.0019", '.', &ms) == 0 && ms == 1);
+    CHECK(FB_ParseTime("1:75", '.', &ms) == -1);
+    CHECK(FB_ParseTime("", '.', &ms) == -1);
+    CHECK(FB_ParseTime("abc", '.', &ms) == -1);
+    CHECK(FB_ParseTime("1:", '.', &ms) == -1);
+    CHECK(FB_ParseTime(":30", '.', &ms) == -1);
+    CHECK(FB_ParseTime("1:2:3:4", '.', &ms) == -1);
+    CHECK(FB_ParseTime("1:05s", '.', &ms) == -1);
+    /* What's written reads back the same. */
+    FB_FormatTimeMs(buf, sizeof(buf), 3725125, ',');
+    CHECK(FB_ParseTime(buf, ',', &ms) == 0 && ms == 3725125);
+}
+
 int main(void)
 {
     FB_RegisterBuiltinModules();
@@ -868,6 +900,7 @@ int main(void)
     test_job_errors();
     test_fit();
     test_timeview();
+    test_time_text();
     test_paths();
     test_project_roundtrip();
     test_project_hand_edited();

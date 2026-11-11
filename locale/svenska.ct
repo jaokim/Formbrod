@@ -73,6 +73,12 @@ Dra åt höger för att zooma in kring positionen, åt vänster för att se mer 
 MSG_HINT_PLAYHEAD
 Klicka eller dra för att flytta positionen
 ;
+MSG_LABEL_LENGTH
+Längd
+;
+MSG_HINT_TIMES
+Skriv en tid som 1:05,5, eller sekunder som 12,5, och tryck Retur
+;
 MSG_REQ_ADD_FILE
 Lägg till videofil
 ;
@@ -331,6 +337,12 @@ MSG_STATUS_TRIMMED
 ;
 MSG_STATUS_STILL_LENGTH
 %s är nu %s lång
+;
+MSG_STATUS_BAD_TIME
+%s är ingen tid; skriv den som 1:05,5
+;
+MSG_STATUS_BAD_TRIM
+Klippet måste sluta efter att det börjar, och inom sin fil
 ;
 MSG_UNSAVED_TITLE
 Osparade ändringar

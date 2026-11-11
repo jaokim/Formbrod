@@ -38,7 +38,8 @@ Early skeleton. Working so far:
 - [x] Tracks: each added file gets its own track; picture tracks are laid
       on top of each other and all sound is mixed. Cutting closes gaps
 - [x] Set in / Set out at the playhead (buttons, Edit menu, I and O keys),
-      and still pictures (PNG, JPEG...) as clips of any length
+      typed In / Out / Length for the selected clip, and still pictures
+      (PNG, JPEG...) as clips of any length
 - [ ] Track editor under the film strip: clip boxes, trimming, moving
 - [ ] Real thumbnails, waveforms
 - [ ] Remote rendering on a render server
@@ -55,6 +56,9 @@ Early skeleton. Working so far:
 - Put the playhead *after* the end of a clip and choose **Set out** to make
   it longer, as far as its file goes; a still picture can be any length.
   The timeline goes on a little past its last clip for this.
+- Or type the times: select a clip in the list and use the **In**, **Out**
+  and **Length** fields under it. Write `1:05.5` or plain seconds like
+  `12.5`, then press Return. A still picture only has a length.
 - **Split** cuts the selected clip's track at the playhead, or all tracks
   if no clip is selected.
 

@@ -439,8 +439,10 @@ int App_TrimClip(int clip, fb_ms_t in, fb_ms_t out)
         App_SetStatus("%s", FB_Str(MSG_STATUS_NO_SUCH_CLIP));
         return -1;
     }
-    if (FB_TimelineTrimClip(&App.timeline, clip, in, out) != 0)
+    if (FB_TimelineTrimClip(&App.timeline, clip, in, out) != 0) {
+        App_SetStatus("%s", FB_Str(MSG_STATUS_BAD_TRIM));
         return -1;
+    }
     App.modified = 1;
     trimmed_status(clip);
     return 0;

@@ -58,6 +58,10 @@
 #define MSG_HINT_ZOOM_STR                "Drag right to zoom in around the playhead, left to see more of the edit"
 #define MSG_HINT_PLAYHEAD                35
 #define MSG_HINT_PLAYHEAD_STR            "Click or drag to move the playhead"
+#define MSG_LABEL_LENGTH                 36
+#define MSG_LABEL_LENGTH_STR             "Length"
+#define MSG_HINT_TIMES                   37
+#define MSG_HINT_TIMES_STR               "Type a time like 1:05.5, or seconds like 12.5, and press Return"
 #define MSG_REQ_ADD_FILE                 40
 #define MSG_REQ_ADD_FILE_STR             "Add video file"
 #define MSG_REQ_EXPORT                   41
@@ -230,6 +234,10 @@
 #define MSG_STATUS_TRIMMED_STR           "%s now runs from %s to %s"
 #define MSG_STATUS_STILL_LENGTH          154
 #define MSG_STATUS_STILL_LENGTH_STR      "%s is now %s long"
+#define MSG_STATUS_BAD_TIME              155
+#define MSG_STATUS_BAD_TIME_STR          "%s isn't a time; write it like 1:05.5"
+#define MSG_STATUS_BAD_TRIM              156
+#define MSG_STATUS_BAD_TRIM_STR          "The clip has to end after it starts, and within its file"
 #define MSG_UNSAVED_TITLE                160
 #define MSG_UNSAVED_TITLE_STR            "Unsaved changes"
 #define MSG_UNSAVED_TEXT                 161
@@ -237,7 +245,7 @@
 #define MSG_UNSAVED_BUTTONS              162
 #define MSG_UNSAVED_BUTTONS_STR          "Save|Discard|Cancel"
 
-#define FB_NUM_STRINGS 112
+#define FB_NUM_STRINGS 116
 
 #ifdef FB_STRINGS_ARRAY
 static const struct FBBuiltinString {
@@ -267,6 +275,8 @@ static const struct FBBuiltinString {
     { MSG_TRACK_EMPTY, MSG_TRACK_EMPTY_STR },
     { MSG_HINT_ZOOM, MSG_HINT_ZOOM_STR },
     { MSG_HINT_PLAYHEAD, MSG_HINT_PLAYHEAD_STR },
+    { MSG_LABEL_LENGTH, MSG_LABEL_LENGTH_STR },
+    { MSG_HINT_TIMES, MSG_HINT_TIMES_STR },
     { MSG_REQ_ADD_FILE, MSG_REQ_ADD_FILE_STR },
     { MSG_REQ_EXPORT, MSG_REQ_EXPORT_STR },
     { MSG_STATUS_WELCOME, MSG_STATUS_WELCOME_STR },
@@ -353,6 +363,8 @@ static const struct FBBuiltinString {
     { MSG_STATUS_OUTSIDE_CLIP, MSG_STATUS_OUTSIDE_CLIP_STR },
     { MSG_STATUS_TRIMMED, MSG_STATUS_TRIMMED_STR },
     { MSG_STATUS_STILL_LENGTH, MSG_STATUS_STILL_LENGTH_STR },
+    { MSG_STATUS_BAD_TIME, MSG_STATUS_BAD_TIME_STR },
+    { MSG_STATUS_BAD_TRIM, MSG_STATUS_BAD_TRIM_STR },
     { MSG_UNSAVED_TITLE, MSG_UNSAVED_TITLE_STR },
     { MSG_UNSAVED_TEXT, MSG_UNSAVED_TEXT_STR },
     { MSG_UNSAVED_BUTTONS, MSG_UNSAVED_BUTTONS_STR },

@@ -60,6 +60,7 @@
 #include <gadgets/listbrowser.h>
 #include <gadgets/slider.h>
 #include <gadgets/scroller.h>
+#include <gadgets/string.h>
 #include <intuition/icclass.h>
 #include <gadgets/fuelgauge.h>
 #include <images/label.h>
@@ -80,7 +81,7 @@ enum {
     GID_ADD = 1, GID_SPLIT, GID_REMOVE, GID_FADE, GID_PREVIEW, GID_EXPORT,
     GID_CLIPS, GID_POSITION, GID_PROGRESS, GID_STATUS,
     GID_RULER, GID_FILMSTRIP, GID_SCROLL, GID_ZOOM,
-    GID_SET_IN, GID_SET_OUT, GID_LAST
+    GID_SET_IN, GID_SET_OUT, GID_IN, GID_OUT, GID_LENGTH, GID_LAST
 };
 
 /* Menu commands without a button. Menu items for button actions use the
@@ -106,9 +107,10 @@ static struct {
     { NULL, NULL, "gadgets/fuelgauge.gadget" },
     { NULL, NULL, "images/label.image" },
     { NULL, NULL, "gadgets/scroller.gadget" },
+    { NULL, NULL, "gadgets/string.gadget" },
 };
 enum { C_WINDOW, C_LAYOUT, C_BUTTON, C_LISTBROWSER, C_SLIDER, C_FUELGAUGE,
-       C_LABEL, C_SCROLLER, C_COUNT };
+       C_LABEL, C_SCROLLER, C_STRING, C_COUNT };
 
 static struct ListBrowserIFace *LB;   /* listbrowser.gadget interface */
 static struct MsgPort *AppPort;
@@ -126,6 +128,9 @@ static struct HintInfo Hints[] = {
     { GID_ZOOM,      -1, NULL, 0 },
     { GID_RULER,     -1, NULL, 0 },
     { GID_FILMSTRIP, -1, NULL, 0 },
+    { GID_IN,        -1, NULL, 0 },
+    { GID_OUT,       -1, NULL, 0 },
+    { GID_LENGTH,    -1, NULL, 0 },
     { -1, -1, NULL, 0 }
 };
 static BOOL TrackClassesMade;
@@ -632,16 +637,78 @@ static void handle_menupick(uint16 code)
     }
 }
 
+/* ---- In, Out and Length of the selected clip ------------------------ */
+
+static char InText[24], OutText[24], LengthText[24];
+
+static void set_field(uint32 id, char *text, BOOL disabled)
+{
+    IIntuition->SetGadgetAttrs(Gad[id], Win, NULL,
+                               STRINGA_TextVal, text,
+                               GA_Disabled,     disabled,
+                               TAG_END);
+}
+
+/* Shows the clip's times, or empty fields if no clip is selected. A still
+ * picture only has a length. */
+static void update_clip_fields(int clip)
+{
+    const FBTimeline *tl = &App.timeline;
+    char dp = Locale_DecimalPoint();
+    BOOL none = clip < 0 || clip >= tl->num_clips;
+    BOOL still = !none && tl->sources[tl->clips[clip].source].still;
+
+    InText[0] = OutText[0] = LengthText[0] = '\0';
+    if (!none) {
+        const FBClip *c = &tl->clips[clip];
+
+        if (!still) {
+            FB_FormatTimeMs(InText, sizeof(InText), c->in, dp);
+            FB_FormatTimeMs(OutText, sizeof(OutText), c->out, dp);
+        }
+        FB_FormatTimeMs(LengthText, sizeof(LengthText), c->out - c->in, dp);
+    }
+    set_field(GID_IN, InText, none || still);
+    set_field(GID_OUT, OutText, none || still);
+    set_field(GID_LENGTH, LengthText, none);
+}
+
+/* A field was changed (Return or Tab): trim the selected clip to it. */
+static void clip_field_changed(uint32 id)
+{
+    const FBTimeline *tl = &App.timeline;
+    int clip = selected_clip();
+    STRPTR text = NULL;
+    const FBClip *c;
+    fb_ms_t t;
+
+    if (clip < 0 || clip >= tl->num_clips)
+        return;
+    c = &tl->clips[clip];
+    IIntuition->GetAttr(STRINGA_TextVal, (Object *)Gad[id], (uint32 *)&text);
+    if (!text || FB_ParseTime(text, Locale_DecimalPoint(), &t) != 0) {
+        App_SetStatus(FB_Str(MSG_STATUS_BAD_TIME), text ? text : "");
+        return;
+    }
+    if (id == GID_IN)
+        App_TrimClip(clip, t, c->out);
+    else if (id == GID_OUT)
+        App_TrimClip(clip, c->in, t);
+    else
+        App_TrimClip(clip, c->in, c->in + t);
+}
+
 void MainWindow_Refresh(void)
 {
     const FBTimeline *tl = &App.timeline;
     fb_ms_t total = FB_TimelineDuration(tl);
     int fw = 0, fh = 0;
-    int i;
+    int i, sel;
 
     if (!WinObj)
         return;
 
+    sel = selected_clip();
     IIntuition->SetGadgetAttrs(Gad[GID_CLIPS], Win, NULL,
                                LISTBROWSER_Labels, ~0, TAG_END);
     free_clip_nodes();
@@ -677,8 +744,14 @@ void MainWindow_Refresh(void)
         if (n)
             IExec->AddTail(&ClipList, n);
     }
+    /* Keep the same clip selected, so its fields stay. */
+    if (sel >= tl->num_clips)
+        sel = -1;
     IIntuition->SetGadgetAttrs(Gad[GID_CLIPS], Win, NULL,
-                               LISTBROWSER_Labels, &ClipList, TAG_END);
+                               LISTBROWSER_Labels,   &ClipList,
+                               LISTBROWSER_Selected, sel,
+                               TAG_END);
+    update_clip_fields(sel);
 
     Timebase_SetTimeline(&TB, tl);
     IIntuition->SetGadgetAttrs(Gad[GID_RULER], Win, NULL,
@@ -876,6 +949,11 @@ static void handle_gadget(uint32 id)
                      path, sizeof(path)))
             App_AddFile(path);
         break;
+    case GID_IN:
+    case GID_OUT:
+    case GID_LENGTH:
+        clip_field_changed(id);
+        break;
     case GID_SET_IN:
     case GID_SET_OUT: {
         fb_ms_t at = FB_MS(TB.playhead);
@@ -968,7 +1046,7 @@ static Object *track(Class *cls, uint32 id, CONST_STRPTR empty_text)
 
 int MainWindow_Open(void)
 {
-    Object *buttons, *timeline, *viewrow, *root;
+    Object *buttons, *timeline, *viewrow, *cliprow, *root;
     struct Screen *scr;
     int i;
 
@@ -987,6 +1065,8 @@ int MainWindow_Open(void)
     Hints[0].hi_Text = FB_Str(MSG_HINT_ZOOM);
     Hints[1].hi_Text = FB_Str(MSG_HINT_PLAYHEAD);
     Hints[2].hi_Text = FB_Str(MSG_HINT_PLAYHEAD);
+    Hints[3].hi_Text = Hints[4].hi_Text = Hints[5].hi_Text =
+        FB_Str(MSG_HINT_TIMES);
 
     LB = (struct ListBrowserIFace *)IExec->GetInterface(
              (struct Library *)classes[C_LISTBROWSER].base, "main", 1, NULL);
@@ -1068,6 +1148,25 @@ int MainWindow_Open(void)
         SLIDER_Orientation, SLIDER_HORIZONTAL,
         TAG_END);
 
+    for (i = GID_IN; i <= GID_LENGTH; i++)
+        Gad[i] = (struct Gadget *)IIntuition->NewObject(CLS(C_STRING), NULL,
+            GA_ID,            i,
+            GA_RelVerify,     TRUE,
+            GA_TabCycle,      TRUE,
+            GA_Disabled,      TRUE,
+            STRINGA_MaxChars, sizeof(InText) - 1,
+            STRINGA_TextVal,  "",
+            TAG_END);
+    cliprow = IIntuition->NewObject(CLS(C_LAYOUT), NULL,
+        LAYOUT_Orientation, LAYOUT_ORIENT_HORIZ,
+        LAYOUT_AddChild,    Gad[GID_IN],
+        CHILD_Label,        label(FB_Str(MSG_COL_IN)),
+        LAYOUT_AddChild,    Gad[GID_OUT],
+        CHILD_Label,        label(FB_Str(MSG_COL_OUT)),
+        LAYOUT_AddChild,    Gad[GID_LENGTH],
+        CHILD_Label,        label(FB_Str(MSG_LABEL_LENGTH)),
+        TAG_END);
+
     viewrow = IIntuition->NewObject(CLS(C_LAYOUT), NULL,
         LAYOUT_Orientation, LAYOUT_ORIENT_HORIZ,
         LAYOUT_AddChild,    Gad[GID_POSITION],
@@ -1103,6 +1202,8 @@ int MainWindow_Open(void)
         LAYOUT_AddChild,    viewrow,
         CHILD_WeightedHeight, 0,
         LAYOUT_AddChild,    Gad[GID_CLIPS],
+        LAYOUT_AddChild,    cliprow,
+        CHILD_WeightedHeight, 0,
         LAYOUT_AddChild,    Gad[GID_PROGRESS],
         CHILD_WeightedHeight, 0,
         CHILD_Label,        label(FB_Str(MSG_LABEL_RENDER)),

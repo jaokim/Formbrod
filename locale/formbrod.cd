@@ -94,6 +94,14 @@ Drag right to zoom in around the playhead, left to see more of the edit
 MSG_HINT_PLAYHEAD (35//)
 Click or drag to move the playhead
 ;
+; Fields under the clip list for the selected clip: In, Out (the column
+; titles) and this.
+MSG_LABEL_LENGTH (36//)
+Length
+;
+MSG_HINT_TIMES (37//)
+Type a time like 1:05.5, or seconds like 12.5, and press Return
+;
 ; ---- File requester titles ------------------------------------------------
 MSG_REQ_ADD_FILE (40//)
 Add video file
@@ -400,6 +408,14 @@ MSG_STATUS_TRIMMED (153//)
 ; After Set out on a still picture: file name, then its new length.
 MSG_STATUS_STILL_LENGTH (154//)
 %s is now %s long
+;
+; A typed time that couldn't be read; %s is what was typed.
+MSG_STATUS_BAD_TIME (155//)
+%s isn't a time; write it like 1:05.5
+;
+; Trimming that would make the clip end before it starts or go past its file.
+MSG_STATUS_BAD_TRIM (156//)
+The clip has to end after it starts, and within its file
 ;
 ; ---- Unsaved changes requester ---------------------------------------------
 MSG_UNSAVED_TITLE (160//)
