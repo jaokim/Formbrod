@@ -141,6 +141,8 @@ static const char *const DrawerKeys[DRAWER_COUNT] = {
 };
 static char Drawers[DRAWER_COUNT][FB_PATH_LEN];
 
+static void update_title(void);
+
 #define CLS(i) (classes[i].cls)
 
 static Object *button(uint32 id, const char *text)
