@@ -154,8 +154,58 @@
 #define MSG_ABOUT_NO_LIBAV_STR           "Built without ffmpeg: video can't be read or exported."
 #define MSG_ABOUT_OK                     124
 #define MSG_ABOUT_OK_STR                 "OK"
+#define MSG_MENU_NEW                     130
+#define MSG_MENU_NEW_STR                 "New"
+#define MSG_MENU_OPEN                    131
+#define MSG_MENU_OPEN_STR                "Open project..."
+#define MSG_MENU_SAVE                    132
+#define MSG_MENU_SAVE_STR                "Save project"
+#define MSG_MENU_SAVE_AS                 133
+#define MSG_MENU_SAVE_AS_STR             "Save project as..."
+#define MSG_REQ_OPEN_PROJECT             134
+#define MSG_REQ_OPEN_PROJECT_STR         "Open project"
+#define MSG_REQ_SAVE_PROJECT             135
+#define MSG_REQ_SAVE_PROJECT_STR         "Save project as"
+#define MSG_UNTITLED                     136
+#define MSG_UNTITLED_STR                 "Untitled"
+#define MSG_WINDOW_TITLE_PROJECT         137
+#define MSG_WINDOW_TITLE_PROJECT_STR     "Formbrod - %s%s"
+#define MSG_STATUS_NEW_PROJECT           138
+#define MSG_STATUS_NEW_PROJECT_STR       "New project"
+#define MSG_STATUS_SAVED                 139
+#define MSG_STATUS_SAVED_STR             "Saved %s"
+#define MSG_STATUS_CANT_SAVE             140
+#define MSG_STATUS_CANT_SAVE_STR         "Can't save %s"
+#define MSG_STATUS_OPENED                141
+#define MSG_STATUS_OPENED_STR            "Opened %s"
+#define MSG_STATUS_OPENED_MISSING        142
+#define MSG_STATUS_OPENED_MISSING_STR    "Opened %s. Files not found: %d (fix their paths in the project file)"
+#define MSG_STATUS_CANT_OPEN_PROJECT     143
+#define MSG_STATUS_CANT_OPEN_PROJECT_STR "Can't read %s"
+#define MSG_STATUS_BAD_PROJECT           144
+#define MSG_STATUS_BAD_PROJECT_STR       "%s, line %d: %s"
+#define MSG_PROJECT_NOT_PROJECT          145
+#define MSG_PROJECT_NOT_PROJECT_STR      "not a Formbrod project"
+#define MSG_PROJECT_TOO_NEW              146
+#define MSG_PROJECT_TOO_NEW_STR          "made by a newer Formbrod"
+#define MSG_PROJECT_BAD_LINE             147
+#define MSG_PROJECT_BAD_LINE_STR         "this line can't be read"
+#define MSG_PROJECT_BAD_SOURCE           148
+#define MSG_PROJECT_BAD_SOURCE_STR       "the clip's source isn't listed"
+#define MSG_PROJECT_TOO_MANY             149
+#define MSG_PROJECT_TOO_MANY_STR         "too many files, clips or effects"
+#define MSG_STATUS_NO_PROJECT_FILE       150
+#define MSG_STATUS_NO_PROJECT_FILE_STR   "The project has no file name yet"
+#define MSG_STATUS_NOT_OPENED            151
+#define MSG_STATUS_NOT_OPENED_STR        "%s: %s"
+#define MSG_UNSAVED_TITLE                160
+#define MSG_UNSAVED_TITLE_STR            "Unsaved changes"
+#define MSG_UNSAVED_TEXT                 161
+#define MSG_UNSAVED_TEXT_STR             "%s has changes that aren't saved."
+#define MSG_UNSAVED_BUTTONS              162
+#define MSG_UNSAVED_BUTTONS_STR          "Save|Discard|Cancel"
 
-#define FB_NUM_STRINGS 71
+#define FB_NUM_STRINGS 96
 
 #ifdef FB_STRINGS_ARRAY
 static const struct FBBuiltinString {
@@ -233,6 +283,31 @@ static const struct FBBuiltinString {
     { MSG_ABOUT_LIBAV, MSG_ABOUT_LIBAV_STR },
     { MSG_ABOUT_NO_LIBAV, MSG_ABOUT_NO_LIBAV_STR },
     { MSG_ABOUT_OK, MSG_ABOUT_OK_STR },
+    { MSG_MENU_NEW, MSG_MENU_NEW_STR },
+    { MSG_MENU_OPEN, MSG_MENU_OPEN_STR },
+    { MSG_MENU_SAVE, MSG_MENU_SAVE_STR },
+    { MSG_MENU_SAVE_AS, MSG_MENU_SAVE_AS_STR },
+    { MSG_REQ_OPEN_PROJECT, MSG_REQ_OPEN_PROJECT_STR },
+    { MSG_REQ_SAVE_PROJECT, MSG_REQ_SAVE_PROJECT_STR },
+    { MSG_UNTITLED, MSG_UNTITLED_STR },
+    { MSG_WINDOW_TITLE_PROJECT, MSG_WINDOW_TITLE_PROJECT_STR },
+    { MSG_STATUS_NEW_PROJECT, MSG_STATUS_NEW_PROJECT_STR },
+    { MSG_STATUS_SAVED, MSG_STATUS_SAVED_STR },
+    { MSG_STATUS_CANT_SAVE, MSG_STATUS_CANT_SAVE_STR },
+    { MSG_STATUS_OPENED, MSG_STATUS_OPENED_STR },
+    { MSG_STATUS_OPENED_MISSING, MSG_STATUS_OPENED_MISSING_STR },
+    { MSG_STATUS_CANT_OPEN_PROJECT, MSG_STATUS_CANT_OPEN_PROJECT_STR },
+    { MSG_STATUS_BAD_PROJECT, MSG_STATUS_BAD_PROJECT_STR },
+    { MSG_PROJECT_NOT_PROJECT, MSG_PROJECT_NOT_PROJECT_STR },
+    { MSG_PROJECT_TOO_NEW, MSG_PROJECT_TOO_NEW_STR },
+    { MSG_PROJECT_BAD_LINE, MSG_PROJECT_BAD_LINE_STR },
+    { MSG_PROJECT_BAD_SOURCE, MSG_PROJECT_BAD_SOURCE_STR },
+    { MSG_PROJECT_TOO_MANY, MSG_PROJECT_TOO_MANY_STR },
+    { MSG_STATUS_NO_PROJECT_FILE, MSG_STATUS_NO_PROJECT_FILE_STR },
+    { MSG_STATUS_NOT_OPENED, MSG_STATUS_NOT_OPENED_STR },
+    { MSG_UNSAVED_TITLE, MSG_UNSAVED_TITLE_STR },
+    { MSG_UNSAVED_TEXT, MSG_UNSAVED_TEXT_STR },
+    { MSG_UNSAVED_BUTTONS, MSG_UNSAVED_BUTTONS_STR },
 };
 #endif
 

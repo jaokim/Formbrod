@@ -27,7 +27,16 @@
  * GTMENUITEM_USERDATA; for actions that have a button it is the button's
  * GID, so both go through the same code.
  *
- * Files can be dropped on the window (AppWindow). Classes are opened with
+ * Projects are opened and saved from the Project menu. Before New, Open
+ * and Quit throw away unsaved changes, a requester offers to save them. The
+ * window title shows the project's name, with " *" while it has changes.
+ *
+ * Each kind of file requester (media files, projects, export) opens in the
+ * drawer it was last used in. The drawers are kept in the program's
+ * settings (src/prefs/), so they are remembered between runs too.
+ *
+ * Files can be dropped on the window (AppWindow); a dropped project file is
+ * opened rather than added. Classes are opened with
  * OpenClass() and objects created with NewObject() on the Class pointer, so
  * nothing depends on reaction_macros.h.
  */
@@ -57,11 +66,13 @@
 #include <libraries/gadtools.h>
 
 #include "app.h"
+#include "formbrod/project.h"
 #include "mainwindow.h"
 #include "formbrod/module.h"
 #include "locale/catalog.h"
 #include "gui/timebase.h"
 #include "gui/track.h"
+#include "prefs/prefs.h"
 #include "version.h"
 
 enum {
@@ -74,6 +85,7 @@ enum {
  * button's GID. */
 enum {
     MID_CANCEL = 100, MID_ABOUT, MID_QUIT, MID_FIT_MENU,
+    MID_NEW, MID_OPEN, MID_SAVE, MID_SAVE_AS,
     MID_FIT_FIT, MID_FIT_FILL, MID_FIT_STRETCH,
     MID_EFFECT = 200     /* + module index */
 };
@@ -116,6 +128,20 @@ static struct HintInfo Hints[] = {
 static BOOL TrackClassesMade;
 static struct Menu *Menus;
 static APTR VisualInfo;
+
+/* Two title buffers, used in turn: Intuition keeps the pointer it was
+ * given, so the one on show is never written to. */
+static char Titles[2][FB_PATH_LEN + 64];
+static int TitleNow;
+
+/* The drawer each kind of file requester opens in. */
+enum { DRAWER_MEDIA, DRAWER_PROJECT, DRAWER_EXPORT, DRAWER_COUNT };
+static const char *const DrawerKeys[DRAWER_COUNT] = {
+    "MediaDrawer", "ProjectDrawer", "ExportDrawer"
+};
+static char Drawers[DRAWER_COUNT][FB_PATH_LEN];
+
+static void update_title(void);
 
 #define CLS(i) (classes[i].cls)
 
@@ -372,7 +398,8 @@ static void add_fit_item(struct NewMenu *nm, int *n, const char *label,
 }
 
 /* Builds the menu strip for `scr`. The shortcuts follow the Amiga style
- * guide (O open, Q quit, ? about) and are the same in every language. */
+ * guide (N new, O open, S save, A save as, Q quit, ? about) and are the
+ * same in every language. Adding a file is I, for import. */
 static BOOL make_menus(struct Screen *scr)
 {
     int nmods = FB_NumModules();
@@ -384,7 +411,12 @@ static BOOL make_menus(struct Screen *scr)
         return FALSE;
 
     add_menu(nm, &n, NM_TITLE, FB_Str(MSG_MENU_PROJECT), NULL, 0);
-    add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_ADD),      "O", GID_ADD);
+    add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_NEW),      "N", MID_NEW);
+    add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_OPEN),     "O", MID_OPEN);
+    add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_SAVE),     "S", MID_SAVE);
+    add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_SAVE_AS),  "A", MID_SAVE_AS);
+    add_menu(nm, &n, NM_ITEM, NM_BARLABEL,               NULL, 0);
+    add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_ADD),      "I", GID_ADD);
     add_menu(nm, &n, NM_ITEM, NM_BARLABEL,               NULL, 0);
     add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_PREVIEW),  "P", GID_PREVIEW);
     add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_EXPORT),   "E", GID_EXPORT);
@@ -466,6 +498,9 @@ static void show_about(void)
 
 static void handle_gadget(uint32 id);
 static int selected_clip(void);
+static BOOL may_discard(void);
+static void open_project(void);
+static BOOL save_project(BOOL ask);
 
 static void handle_menu(uint32 id)
 {
@@ -489,11 +524,26 @@ static void handle_menu(uint32 id)
         return;
     }
     switch (id) {
+    case MID_NEW:
+        if (may_discard())
+            App_NewProject();
+        MainWindow_Refresh();
+        break;
+    case MID_OPEN:
+        open_project();
+        MainWindow_Refresh();
+        break;
+    case MID_SAVE:
+    case MID_SAVE_AS:
+        save_project(id == MID_SAVE_AS);
+        MainWindow_Refresh();
+        break;
     case MID_ABOUT:
         show_about();
         break;
     case MID_QUIT:
-        App.quit = 1;
+        if (may_discard())
+            App.quit = 1;
         break;
     case MID_CANCEL:
         App_CancelRender();
@@ -586,6 +636,7 @@ void MainWindow_Refresh(void)
         GA_Disabled, total <= 0 && !App.rendering,
         TAG_END);
     IIntuition->SetGadgetAttrs(Gad[GID_STATUS], Win, NULL, GA_Text, App.status, TAG_END);
+    update_title();
     sync_menus();
 }
 
@@ -599,25 +650,133 @@ void MainWindow_SetProgress(const FBProgress *p)
                                FUELGAUGE_Level, level, TAG_END);
 }
 
-static int ask_file(const char *title, int save, char *buf, size_t len)
+static void load_drawers(void)
+{
+    int i;
+
+    for (i = 0; i < DRAWER_COUNT; i++) {
+        strncpy(Drawers[i], Prefs_GetString(DrawerKeys[i], ""),
+                sizeof(Drawers[i]) - 1);
+        Drawers[i][sizeof(Drawers[i]) - 1] = '\0';
+    }
+}
+
+/* Keeps the drawer for next time, in the program's settings. */
+static void remember_drawer(int kind, const char *drawer)
+{
+    if (strcmp(Drawers[kind], drawer) == 0)
+        return;
+    strncpy(Drawers[kind], drawer, sizeof(Drawers[kind]) - 1);
+    Drawers[kind][sizeof(Drawers[kind]) - 1] = '\0';
+    Prefs_SetString(DrawerKeys[kind], Drawers[kind]);
+    Prefs_Save();
+}
+
+/* Asks for a file, starting in the drawer last used for this `kind`.
+ * `file` is the name filled in to begin with (NULL for none). */
+static int ask_file(int kind, const char *title, int save, const char *file,
+                    char *buf, size_t len)
 {
     struct FileRequester *fr;
+    char dir[FB_PATH_LEN];
+    const char *drawer = Drawers[kind];
     int ok = 0;
 
+    /* Before any file has been added, start where the project is. */
+    if (!drawer[0] && App.project[0]) {
+        FB_PathDir(App.project, dir, sizeof(dir));
+        drawer = dir;
+    }
     fr = IAsl->AllocAslRequestTags(ASL_FileRequest,
-        ASLFR_Window,       Win,
-        ASLFR_TitleText,    title,
-        ASLFR_DoSaveMode,   save,
+        ASLFR_Window,        Win,
+        ASLFR_TitleText,     title,
+        ASLFR_DoSaveMode,    save,
+        ASLFR_InitialDrawer, drawer,
+        ASLFR_InitialFile,   file ? file : "",
         TAG_END);
     if (!fr)
         return 0;
     if (IAsl->AslRequestTags(fr, TAG_END)) {
         strncpy(buf, fr->fr_Drawer, len - 1);
         buf[len - 1] = '\0';
-        ok = IDOS->AddPart(buf, fr->fr_File, len) != 0;
+        ok = fr->fr_File[0] && IDOS->AddPart(buf, fr->fr_File, len) != 0;
+        if (ok)
+            remember_drawer(kind, fr->fr_Drawer);
     }
     IAsl->FreeAslRequest(fr);
     return ok;
+}
+
+/* ---- Projects --------------------------------------------------------- */
+
+static const char *project_name(void)
+{
+    return App.project[0] ? (const char *)IDOS->FilePart(App.project)
+                          : FB_Str(MSG_UNTITLED);
+}
+
+static void update_title(void)
+{
+    char want[sizeof(Titles[0])];
+
+    snprintf(want, sizeof(want), FB_Str(MSG_WINDOW_TITLE_PROJECT),
+             project_name(), App.modified ? " *" : "");
+    if (strcmp(want, Titles[TitleNow]) == 0)
+        return;
+    TitleNow ^= 1;
+    strcpy(Titles[TitleNow], want);
+    if (WinObj)
+        IIntuition->SetAttrs(WinObj, WA_Title, Titles[TitleNow], TAG_END);
+}
+
+/* Saves the project, asking for a file if `ask` or it has none yet.
+ * FALSE if it wasn't saved. */
+static BOOL save_project(BOOL ask)
+{
+    char path[FB_PATH_LEN];
+
+    if (!ask && App.project[0])
+        return App_SaveProject(NULL) == 0;
+    if (!ask_file(DRAWER_PROJECT, FB_Str(MSG_REQ_SAVE_PROJECT), TRUE,
+                  App.project[0] ? project_name() : NULL, path, sizeof(path)))
+        return FALSE;
+    return App_SaveProject(path) == 0;
+}
+
+/* Before something replaces the project: if it has unsaved changes, asks
+ * whether to save them. FALSE means stop (Cancel, or saving failed). */
+static BOOL may_discard(void)
+{
+    struct EasyStruct es;
+
+    if (!App.modified)
+        return TRUE;
+    memset(&es, 0, sizeof(es));
+    es.es_StructSize   = sizeof(es);
+    es.es_Title        = (STRPTR)FB_Str(MSG_UNSAVED_TITLE);
+    es.es_TextFormat   = (STRPTR)FB_Str(MSG_UNSAVED_TEXT);
+    es.es_GadgetFormat = (STRPTR)FB_Str(MSG_UNSAVED_BUTTONS);
+    switch (IIntuition->EasyRequest(Win, &es, NULL, project_name())) {
+    case 1:                       /* Save */
+        if (save_project(FALSE))
+            return TRUE;
+        MainWindow_Refresh();     /* show why it wasn't saved */
+        return FALSE;
+    case 2:                       /* Discard */
+        return TRUE;
+    default:                      /* Cancel */
+        return FALSE;
+    }
+}
+
+static void open_project(void)
+{
+    char path[FB_PATH_LEN];
+
+    if (may_discard() &&
+        ask_file(DRAWER_PROJECT, FB_Str(MSG_REQ_OPEN_PROJECT), FALSE, NULL,
+                 path, sizeof(path)))
+        App_OpenProject(path);
 }
 
 static int selected_clip(void)
@@ -652,7 +811,8 @@ static void handle_gadget(uint32 id)
         zoom_to(value);
         return;
     case GID_ADD:
-        if (ask_file(FB_Str(MSG_REQ_ADD_FILE), FALSE, path, sizeof(path)))
+        if (ask_file(DRAWER_MEDIA, FB_Str(MSG_REQ_ADD_FILE), FALSE, NULL,
+                     path, sizeof(path)))
             App_AddFile(path);
         break;
     case GID_SPLIT:
@@ -676,7 +836,8 @@ static void handle_gadget(uint32 id)
     case GID_EXPORT:
         if (App.rendering)
             App_CancelRender();
-        else if (ask_file(FB_Str(MSG_REQ_EXPORT), TRUE, path, sizeof(path)))
+        else if (ask_file(DRAWER_EXPORT, FB_Str(MSG_REQ_EXPORT), TRUE, NULL,
+                          path, sizeof(path)))
             App_Export(path, FALSE);
         break;
     }
@@ -694,9 +855,13 @@ static void handle_appmessages(void)
             char path[FB_PATH_LEN];
             struct WBArg *arg = &am->am_ArgList[i];
 
-            if (IDOS->NameFromLock(arg->wa_Lock, path, sizeof(path)) &&
-                IDOS->AddPart(path, arg->wa_Name, sizeof(path)))
+            if (!IDOS->NameFromLock(arg->wa_Lock, path, sizeof(path)) ||
+                !IDOS->AddPart(path, arg->wa_Name, sizeof(path)))
+                continue;
+            if (!App_IsProjectFile(path))
                 App_AddFile(path);
+            else if (may_discard())
+                App_OpenProject(path);
         }
         IExec->ReplyMsg((struct Message *)am);
     }
@@ -864,6 +1029,9 @@ int MainWindow_Open(void)
     /* The menus are laid out for the screen the window opens on, so lock
      * that screen and open the window there. Without menus the window is
      * still usable through the buttons. */
+    load_drawers();
+    update_title();                /* no window yet: just fills Titles */
+
     scr = IIntuition->LockPubScreen(NULL);
     if (!scr)
         return -1;
@@ -872,7 +1040,7 @@ int MainWindow_Open(void)
 
     WinObj = IIntuition->NewObject(CLS(C_WINDOW), NULL,
         WA_PubScreen,       scr,
-        WA_Title,           FB_Str(MSG_WINDOW_TITLE),
+        WA_Title,           Titles[TitleNow],
         WA_Activate,        TRUE,
         WA_DepthGadget,     TRUE,
         WA_DragBar,         TRUE,
@@ -926,7 +1094,8 @@ void MainWindow_Handle(uint32 sigs)
            != WMHI_LASTMSG) {
         switch (result & WMHI_CLASSMASK) {
         case WMHI_CLOSEWINDOW:
-            App.quit = 1;
+            if (may_discard())
+                App.quit = 1;
             break;
         case WMHI_GADGETUP:
             handle_gadget(result & WMHI_GADGETMASK);

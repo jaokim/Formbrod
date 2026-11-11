@@ -217,3 +217,78 @@ Byggd utan ffmpeg: video kan inte läsas eller exporteras.
 ;
 MSG_ABOUT_OK
 OK
+;
+MSG_MENU_NEW
+Nytt
+;
+MSG_MENU_OPEN
+Öppna projekt...
+;
+MSG_MENU_SAVE
+Spara projekt
+;
+MSG_MENU_SAVE_AS
+Spara projekt som...
+;
+MSG_REQ_OPEN_PROJECT
+Öppna projekt
+;
+MSG_REQ_SAVE_PROJECT
+Spara projekt som
+;
+MSG_UNTITLED
+Namnlöst
+;
+MSG_WINDOW_TITLE_PROJECT
+Formbröd - %s%s
+;
+MSG_STATUS_NEW_PROJECT
+Nytt projekt
+;
+MSG_STATUS_SAVED
+Sparade %s
+;
+MSG_STATUS_CANT_SAVE
+Kan inte spara %s
+;
+MSG_STATUS_OPENED
+Öppnade %s
+;
+MSG_STATUS_OPENED_MISSING
+Öppnade %s. Filer som saknas: %d (rätta sökvägarna i projektfilen)
+;
+MSG_STATUS_CANT_OPEN_PROJECT
+Kan inte läsa %s
+;
+MSG_STATUS_BAD_PROJECT
+%s, rad %d: %s
+;
+MSG_PROJECT_NOT_PROJECT
+inte ett Formbröd-projekt
+;
+MSG_PROJECT_TOO_NEW
+gjort av en nyare Formbröd
+;
+MSG_PROJECT_BAD_LINE
+raden går inte att läsa
+;
+MSG_PROJECT_BAD_SOURCE
+klippets källfil finns inte i listan
+;
+MSG_PROJECT_TOO_MANY
+för många filer, klipp eller effekter
+;
+MSG_STATUS_NO_PROJECT_FILE
+Projektet har inget filnamn än
+;
+MSG_STATUS_NOT_OPENED
+%s: %s
+;
+MSG_UNSAVED_TITLE
+Osparade ändringar
+;
+MSG_UNSAVED_TEXT
+%s har ändringar som inte är sparade.
+;
+MSG_UNSAVED_BUTTONS
+Spara|Släng|Avbryt

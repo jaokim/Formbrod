@@ -59,7 +59,9 @@ SRC = src/main.c \
       src/gui/track.c \
       src/locale/catalog.c \
       src/arexx/arexx.c \
+      src/prefs/prefs.c \
       src/timeline/timeline.c \
+      src/timeline/project.c \
       src/timeline/timeview.c \
       src/job/job.c \
       src/job/module.c \

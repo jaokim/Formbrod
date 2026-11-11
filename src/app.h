@@ -16,12 +16,25 @@ typedef struct FBApp {
     int         rendering;
     int         quit;
     char        status[256];   /* last status line, shown in the window */
+    char        project[FB_PATH_LEN]; /* project file, "" = never saved */
+    int         modified;      /* changed since it was opened or saved */
 } FBApp;
 
 extern FBApp App;
 
 int  App_Init(void);
 void App_Cleanup(void);
+
+/* Projects (see formbrod/project.h for the file format). New and Open
+ * replace the timeline without asking; the GUI asks about unsaved changes
+ * first. Save with path NULL saves to App.project. 0 on success. */
+int  App_NewProject(void);
+int  App_OpenProject(const char *path);
+int  App_SaveProject(const char *path);
+
+/* Whether the file starts like a project file, so a file given on the
+ * command line or dropped on the window can be opened rather than added. */
+int  App_IsProjectFile(const char *path);
 
 /* Adds a file as a source and appends it as one clip. 0 on success. */
 int  App_AddFile(const char *path);

@@ -11,6 +11,7 @@
 #include "app.h"
 #include "gui/mainwindow.h"
 #include "arexx/arexx.h"
+#include "prefs/prefs.h"
 #include "locale/catalog.h"
 #include "version.h"
 
@@ -26,9 +27,18 @@ int main(int argc, char **argv)
     if (App_Init() != 0)
         goto out;
 
-    /* Files on the command line are added as clips. */
-    for (i = 1; i < argc; i++)
-        App_AddFile(argv[i]);
+    /* Files on the command line are added as clips; a project file is
+     * opened instead. */
+    for (i = 1; i < argc; i++) {
+        if (App_IsProjectFile(argv[i]))
+            App_OpenProject(argv[i]);
+        else
+            App_AddFile(argv[i]);
+    }
+
+    /* Program settings; without them nothing is remembered between runs,
+     * which is no reason to stop. */
+    Prefs_Open();
 
     if (MainWindow_Open() != 0) {
         IDOS->Printf("%s", FB_Str(MSG_ERR_NO_WINDOW));
@@ -67,6 +77,7 @@ int main(int argc, char **argv)
 out:
     ARexx_Cleanup();
     MainWindow_Close();
+    Prefs_Close();
     App_Cleanup();
     Locale_Close();
     return rc;

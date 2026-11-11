@@ -17,6 +17,10 @@
  *   FIT CLIP/N/A,MODE/A                 DEFAULT|FIT|FILL|STRETCH
  *   FORMAT WIDTH/N,HEIGHT/N,FPS/K,FIT/K set output format; returns
  *                                       "<w> <h> <fps> <fit>" (0 = auto)
+ *   NEWPROJECT                          empty the timeline (no questions)
+ *   OPENPROJECT FILE/A                  replaces the timeline (no questions)
+ *   SAVEPROJECT FILE                    without FILE: the current file;
+ *                                       returns the path saved to
  *   QUIT
  */
 #include <stdio.h>
@@ -48,6 +52,33 @@ static void cmd_open(struct ARexxCmd *cmd, struct RexxMsg *rm)
     (void)rm;
     result[0] = '\0';
     set_result(cmd, App_AddFile((STRPTR)cmd->ac_ArgList[0]) ? RC_ERROR : 0);
+}
+
+static void cmd_newproject(struct ARexxCmd *cmd, struct RexxMsg *rm)
+{
+    (void)rm;
+    result[0] = '\0';
+    set_result(cmd, App_NewProject() ? RC_ERROR : 0);
+}
+
+static void cmd_openproject(struct ARexxCmd *cmd, struct RexxMsg *rm)
+{
+    (void)rm;
+    result[0] = '\0';
+    set_result(cmd, App_OpenProject((const char *)cmd->ac_ArgList[0])
+                    ? RC_ERROR : 0);
+}
+
+static void cmd_saveproject(struct ARexxCmd *cmd, struct RexxMsg *rm)
+{
+    int rc;
+
+    (void)rm;
+    result[0] = '\0';
+    rc = App_SaveProject((const char *)cmd->ac_ArgList[0]);
+    if (rc == 0)
+        snprintf(result, sizeof(result), "%s", App.project);
+    set_result(cmd, rc ? RC_ERROR : 0);
 }
 
 static void cmd_split(struct ARexxCmd *cmd, struct RexxMsg *rm)
@@ -224,6 +255,9 @@ static struct ARexxCmd commands[] = {
     { "FIT",          12, cmd_fit,          "CLIP/N/A,MODE/A",   0, NULL, 0, 0, NULL },
     { "FORMAT",       13, cmd_format,
       "WIDTH/N,HEIGHT/N,FPS/K,FIT/K",                             0, NULL, 0, 0, NULL },
+    { "NEWPROJECT",   14, cmd_newproject,   NULL,                0, NULL, 0, 0, NULL },
+    { "OPENPROJECT",  15, cmd_openproject,  "FILE/A",            0, NULL, 0, 0, NULL },
+    { "SAVEPROJECT",  16, cmd_saveproject,  "FILE",              0, NULL, 0, 0, NULL },
     { NULL,           0,  NULL,             NULL,                0, NULL, 0, 0, NULL }
 };
 
