@@ -144,7 +144,7 @@ MSG_STATUS_NO_VIDEO (64//)
 MSG_STATUS_NO_DURATION (65//)
 Can't tell how long %s is
 ;
-; Settings → Write log file was turned on. %s is the file.
+; Settings, Write log file was turned on. %s is the file.
 MSG_STATUS_LOG_ON (68//)
 Writing a log to %s
 ;
