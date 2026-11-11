@@ -623,7 +623,7 @@ void MainWindow_Refresh(void)
     FB_TimelineFrameSize(tl, &fw, &fh);
     for (i = 0; i < tl->num_clips; i++) {
         const FBClip *c = &tl->clips[i];
-        char num[8], track[8], start[16], in[16], out[16], fx[96] = "";
+        char num[12], track[12], start[16], in[16], out[16], fx[96] = "";
         const char *fit = fit_text(FB_ClipFitResult(tl, c, fw, fh));
         struct Node *n;
         int e;
