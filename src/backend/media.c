@@ -89,7 +89,8 @@ FBProbeResult FB_ProbeMedia(const char *path, FBSource *info,
     }
     avformat_close_input(&fmt);
 
-    if (!*has_video)
+    /* A sound-only file (music) is fine: it goes on a sound track. */
+    if (!*has_video && !*has_audio)
         return FB_PROBE_NO_VIDEO;
     if (*duration <= 0)
         return FB_PROBE_NO_DURATION;

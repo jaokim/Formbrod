@@ -38,6 +38,10 @@
 #define MSG_COL_OUT_STR                  "Out"
 #define MSG_COL_EFFECTS                  24
 #define MSG_COL_EFFECTS_STR              "Effects"
+#define MSG_COL_TRACK                    25
+#define MSG_COL_TRACK_STR                "Track"
+#define MSG_COL_START                    26
+#define MSG_COL_START_STR                "Starts"
 #define MSG_LABEL_PLAYHEAD               30
 #define MSG_LABEL_PLAYHEAD_STR           "Playhead"
 #define MSG_LABEL_RENDER                 31
@@ -83,9 +87,13 @@
 #define MSG_STATUS_CANT_OPEN             63
 #define MSG_STATUS_CANT_OPEN_STR         "Can't open %s: %s"
 #define MSG_STATUS_NO_VIDEO              64
-#define MSG_STATUS_NO_VIDEO_STR          "%s has no video in it"
+#define MSG_STATUS_NO_VIDEO_STR          "%s has no picture or sound in it"
 #define MSG_STATUS_NO_DURATION           65
 #define MSG_STATUS_NO_DURATION_STR       "Can't tell how long %s is"
+#define MSG_STATUS_WRONG_TRACK           66
+#define MSG_STATUS_WRONG_TRACK_STR       "%s can't go on that kind of track"
+#define MSG_STATUS_NO_SUCH_TRACK         67
+#define MSG_STATUS_NO_SUCH_TRACK_STR     "There is no such track"
 #define MSG_JOB_EMPTY                    70
 #define MSG_JOB_EMPTY_STR                "The timeline is empty"
 #define MSG_JOB_BAD_SOURCE               71
@@ -98,6 +106,8 @@
 #define MSG_JOB_OVERFLOW_STR             "The edit is too complex (filtergraph too long)"
 #define MSG_JOB_UNKNOWN                  75
 #define MSG_JOB_UNKNOWN_STR              "Unknown error"
+#define MSG_JOB_NEED_SIZE                76
+#define MSG_JOB_NEED_SIZE_STR            "The frame size isn't known (the files haven't been read)"
 #define MSG_ERR_NO_WINDOW                80
 #define MSG_ERR_NO_WINDOW_STR            "Formbrod: can't open window (are the ReAction classes installed?)\012"
 #define MSG_ERR_NO_AREXX                 81
@@ -144,6 +154,8 @@
 #define MSG_MENU_FIT_FILL_STR            "Fill frame, crop edges"
 #define MSG_MENU_FIT_STRETCH             115
 #define MSG_MENU_FIT_STRETCH_STR         "Stretch to frame"
+#define MSG_MENU_SHOW_PICTURES           116
+#define MSG_MENU_SHOW_PICTURES_STR       "Show frame pictures"
 #define MSG_ABOUT_TITLE                  120
 #define MSG_ABOUT_TITLE_STR              "About Formbrod"
 #define MSG_ABOUT_TEXT                   121
@@ -205,7 +217,7 @@
 #define MSG_UNSAVED_BUTTONS              162
 #define MSG_UNSAVED_BUTTONS_STR          "Save|Discard|Cancel"
 
-#define FB_NUM_STRINGS 96
+#define FB_NUM_STRINGS 102
 
 #ifdef FB_STRINGS_ARRAY
 static const struct FBBuiltinString {
@@ -225,6 +237,8 @@ static const struct FBBuiltinString {
     { MSG_COL_IN, MSG_COL_IN_STR },
     { MSG_COL_OUT, MSG_COL_OUT_STR },
     { MSG_COL_EFFECTS, MSG_COL_EFFECTS_STR },
+    { MSG_COL_TRACK, MSG_COL_TRACK_STR },
+    { MSG_COL_START, MSG_COL_START_STR },
     { MSG_LABEL_PLAYHEAD, MSG_LABEL_PLAYHEAD_STR },
     { MSG_LABEL_RENDER, MSG_LABEL_RENDER_STR },
     { MSG_LABEL_ZOOM, MSG_LABEL_ZOOM_STR },
@@ -249,12 +263,15 @@ static const struct FBBuiltinString {
     { MSG_STATUS_CANT_OPEN, MSG_STATUS_CANT_OPEN_STR },
     { MSG_STATUS_NO_VIDEO, MSG_STATUS_NO_VIDEO_STR },
     { MSG_STATUS_NO_DURATION, MSG_STATUS_NO_DURATION_STR },
+    { MSG_STATUS_WRONG_TRACK, MSG_STATUS_WRONG_TRACK_STR },
+    { MSG_STATUS_NO_SUCH_TRACK, MSG_STATUS_NO_SUCH_TRACK_STR },
     { MSG_JOB_EMPTY, MSG_JOB_EMPTY_STR },
     { MSG_JOB_BAD_SOURCE, MSG_JOB_BAD_SOURCE_STR },
     { MSG_JOB_UNKNOWN_MODULE, MSG_JOB_UNKNOWN_MODULE_STR },
     { MSG_JOB_NOT_EXPRESSIBLE, MSG_JOB_NOT_EXPRESSIBLE_STR },
     { MSG_JOB_OVERFLOW, MSG_JOB_OVERFLOW_STR },
     { MSG_JOB_UNKNOWN, MSG_JOB_UNKNOWN_STR },
+    { MSG_JOB_NEED_SIZE, MSG_JOB_NEED_SIZE_STR },
     { MSG_ERR_NO_WINDOW, MSG_ERR_NO_WINDOW_STR },
     { MSG_ERR_NO_AREXX, MSG_ERR_NO_AREXX_STR },
     { MSG_FITS_SCALE, MSG_FITS_SCALE_STR },
@@ -278,6 +295,7 @@ static const struct FBBuiltinString {
     { MSG_MENU_FIT_FIT, MSG_MENU_FIT_FIT_STR },
     { MSG_MENU_FIT_FILL, MSG_MENU_FIT_FILL_STR },
     { MSG_MENU_FIT_STRETCH, MSG_MENU_FIT_STRETCH_STR },
+    { MSG_MENU_SHOW_PICTURES, MSG_MENU_SHOW_PICTURES_STR },
     { MSG_ABOUT_TITLE, MSG_ABOUT_TITLE_STR },
     { MSG_ABOUT_TEXT, MSG_ABOUT_TEXT_STR },
     { MSG_ABOUT_LIBAV, MSG_ABOUT_LIBAV_STR },

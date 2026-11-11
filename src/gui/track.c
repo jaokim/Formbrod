@@ -14,6 +14,7 @@
 #include <proto/intuition.h>
 #include <proto/graphics.h>
 #include <proto/utility.h>
+#include <proto/dos.h>
 
 #include <intuition/gadgetclass.h>
 #include <intuition/icclass.h>
@@ -39,6 +40,7 @@ Class *TrackClass, *RulerClass, *FilmstripClass;
 #define HOLE_PITCH   12          /* sprocket holes, pixels apart */
 #define HOLE_W       5
 #define FILM_BAND    7           /* sprocket-hole band above and below */
+#define MAX_NAMES    32          /* file names shown at once, plain mode */
 #define FS_MAX_CELLS 160         /* 160 * 48 px is wider than any screen */
 
 static void set_rgb(struct RastPort *rp, uint32 rgb)
@@ -421,6 +423,7 @@ static uint32 ruler_dispatch(Class *cl, Object *o, Msg msg)
 
 struct FilmData {
     int         cell_w, cell_h;
+    BOOL        pictures;      /* FALSE: plain blocks, nothing decoded */
     FBThumbFunc thumb;
     APTR        thumb_data;
     FBCell      cells[FS_MAX_CELLS];
@@ -449,18 +452,24 @@ static BOOL film_set(struct FilmData *fd, struct TagItem *tags, BOOL init)
             fd->thumb_data = (APTR)ti->ti_Data;
             changed = TRUE;
             break;
+        case FILMSTRIP_Pictures:
+            fd->pictures = ti->ti_Data != 0;
+            changed = TRUE;
+            break;
         }
     }
     return changed;
 }
+
+/* A colour per source, used by the dummy pictures and the plain blocks. */
+static const uint32 sky[]    = { 0x378ADD, 0x534AB7, 0x1D9E75,
+                                 0xD85A30, 0xD4537E, 0x888780 };
 
 /* Until there are real thumbnails: a little landscape whose colours come
  * from the source and whose horizon and sun move with the time, so
  * zooming and scrolling can be tried out. */
 static void film_dummy_frame(const FBThumbRequest *r)
 {
-    static const uint32 sky[]    = { 0x378ADD, 0x534AB7, 0x1D9E75,
-                                     0xD85A30, 0xD4537E, 0x888780 };
     static const uint32 ground[] = { 0x639922, 0x5F5E5A, 0x085041,
                                      0x712B13, 0x72243E, 0x444441 };
     int k = r->source % 6;
@@ -481,6 +490,24 @@ static void film_dummy_frame(const FBThumbRequest *r)
     fill_clipped(r->rp, &r->clip, sun, top + 3, sun + 4, top + 6);
 }
 
+/* The file part of `path`, in white, from x on, cut off at the film's
+ * right edge. Drawn after all the blocks, so a long name runs on over the
+ * clip's next cells. */
+static void name_at(struct RastPort *rp, struct DrawInfo *dri,
+                    const struct Rectangle *film, long x, long top, long h,
+                    const char *path)
+{
+    struct TextFont *font = dri->dri_Font;
+    const char *name = IDOS->FilePart(path);
+
+    if (font->tf_YSize > h)
+        return;
+    IGraphics->SetFont(rp, font);
+    set_rgb(rp, 0xFFFFFF);
+    draw_text(rp, font, x, top + (h - font->tf_YSize) / 2,
+              film->MaxX - x + 1, name);
+}
+
 static void film_draw(struct FilmData *fd, struct trackDraw *d)
 {
     struct RastPort *rp = d->trd_RPort;
@@ -494,7 +521,9 @@ static void film_draw(struct FilmData *fd, struct trackDraw *d)
     int hole_h = band > 4 ? band - 4 : 1;
     struct Rectangle film;
     long x;
-    int i, n;
+    int i, n, prev_clip, num_names = 0;
+    long name_x[MAX_NAMES];
+    int name_src[MAX_NAMES];
 
     if (right < 0)
         return;
@@ -517,14 +546,17 @@ static void film_draw(struct FilmData *fd, struct trackDraw *d)
 
     /* One picture per cell: the frame from the middle of the cell. */
     n = FB_ViewCells(v, fd->cell_w, fd->cells, FS_MAX_CELLS);
+    prev_clip = -1;
     for (i = 0; i < n; i++) {
         const FBCell *c = &fd->cells[i];
         FBThumbRequest req;
         fb_us_t st;
         int clip = FB_TimelineLocate(tl, c->mid, &st);
 
-        if (clip < 0)
+        if (clip < 0) {
+            prev_clip = -1;
             continue;
+        }
         req.source      = tl->clips[clip].source;
         req.source_t    = st;
         req.rp          = rp;
@@ -541,18 +573,38 @@ static void film_draw(struct FilmData *fd, struct trackDraw *d)
         req.clip.MaxY = req.cell.Top + req.cell.Height - 1;
         if (req.clip.MinX > req.clip.MaxX)
             continue;
-        if (!fd->thumb) {
+        if (!fd->pictures) {
+            /* Plain: the file's colour, and its name where it starts. */
+            set_rgb(rp, sky[req.source % 6]);
+            fill_clipped(rp, &req.clip, req.clip.MinX, req.clip.MinY,
+                         req.clip.MaxX, req.clip.MaxY);
+            if (clip != prev_clip && num_names < MAX_NAMES) {
+                name_x[num_names] = req.clip.MinX + 2;
+                name_src[num_names++] = req.source;
+            }
+        } else if (!fd->thumb) {
             film_dummy_frame(&req);
         } else if (!fd->thumb(fd->thumb_data, &req)) {
             set_rgb(rp, COL_LOADING);   /* not made yet */
             fill_clipped(rp, &req.clip, req.clip.MinX, req.clip.MinY,
                          req.clip.MaxX, req.clip.MaxY);
         }
+        prev_clip = clip;
     }
 
-    /* Where one clip ends and the next starts. */
+    /* The names last, over the blocks after where each clip starts. */
+    for (i = 0; i < num_names; i++)
+        name_at(rp, d->trd_DrInfo, &film, name_x[i], top + band,
+                fd->cell_h, tl->sources[name_src[i]].path);
+
+    /* Where a picture clip starts, other than at the very beginning. */
     set_rgb(rp, COL_CUT);
-    for (i = 1; i < tl->num_clips; i++) {
+    for (i = 0; i < tl->num_clips; i++) {
+        const FBClip *c = &tl->clips[i];
+        const FBTrack *tr = &tl->tracks[c->track];
+
+        if (c->start <= 0 || tr->kind != FB_TRACK_VIDEO || tr->hidden)
+            continue;
         x = FB_ViewTimeToX(v, FB_TimelineClipStart(tl, i));
         fill_clipped(rp, &film, left + x - 1, top, left + x, bottom);
     }
@@ -571,6 +623,7 @@ static uint32 film_dispatch(Class *cl, Object *o, Msg msg)
             memset(fd, 0, sizeof(*fd));
             fd->cell_w = FB_CELL_W_DEFAULT;
             fd->cell_h = FB_CELL_H_DEFAULT;
+            fd->pictures = TRUE;
             film_set(fd, ((struct opSet *)msg)->ops_AttrList, TRUE);
         }
         return (uint32)o;

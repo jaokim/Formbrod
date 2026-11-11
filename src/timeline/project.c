@@ -122,7 +122,7 @@ int FB_ProjectWrite(const FBTimeline *tl, const char *project_dir,
                     char *out, size_t len)
 {
     Buf b;
-    int i, e, p;
+    int i, e, p, t;
 
     b.p = out;
     b.len = len;
@@ -153,13 +153,32 @@ int FB_ProjectWrite(const FBTimeline *tl, const char *project_dir,
         buf_printf(&b, "SOURCE %d %s\n", i + 1, rel);
     }
 
-    if (tl->num_clips > 0)
-        buf_printf(&b, "\n; CLIP <source> <in> <out>\n");
+    if (tl->num_tracks > 0)
+        buf_printf(&b,
+            "\n; TRACK video|audio, bottom first; picture tracks higher up\n"
+            "; are drawn on top. CLIP <source> <in> <out>; each clip\n"
+            "; follows the one before it, unless AT gives its start.\n");
+    for (t = 0; t < tl->num_tracks; t++) {
+        fb_ms_t cursor = 0;
+
+        buf_printf(&b, "\nTRACK %s\n", FB_TrackKindName(tl->tracks[t].kind));
+        if (tl->tracks[t].muted)
+            buf_printf(&b, "    MUTED\n");
+        if (tl->tracks[t].hidden)
+            buf_printf(&b, "    HIDDEN\n");
+
     for (i = 0; i < tl->num_clips; i++) {
         const FBClip *c = &tl->clips[i];
 
+        if (c->track != t)
+            continue;
         buf_printf(&b, "CLIP %d %lld %lld\n", c->source + 1,
                    (long long)c->in, (long long)c->out);
+        if (c->start != cursor)
+            buf_printf(&b, "    AT %lld\n", (long long)c->start);
+        cursor = FB_ClipEnd(c);
+        if (c->volume != 1.0)
+            buf_printf(&b, "    VOLUME %.10g\n", c->volume);
         if (c->fit != FB_FIT_DEFAULT)
             buf_printf(&b, "    FIT %s\n", FB_FitName(c->fit));
         for (e = 0; e < c->num_effects; e++) {
@@ -170,6 +189,7 @@ int FB_ProjectWrite(const FBTimeline *tl, const char *project_dir,
                 buf_printf(&b, "        PARAM %s %.10g\n",
                            fx->params[p].name, fx->params[p].value);
         }
+    }
     }
 
     return b.overflow ? -1 : (int)b.used;
@@ -231,6 +251,7 @@ FBProjectError FB_ProjectParse(FBTimeline *tl, const char *text,
     const char *p = text;
     FBClip *clip = NULL;
     FBEffect *fx = NULL;
+    int track = -1;
     int n = 0, seen_header = 0;
 
     FB_TimelineInit(tl);
@@ -311,11 +332,47 @@ FBProjectError FB_ProjectParse(FBTimeline *tl, const char *text,
                 FAIL(FB_PROJECT_BAD_LINE);
             if (src < 1 || src > tl->num_sources)
                 FAIL(FB_PROJECT_BAD_SOURCE);
-            idx = FB_TimelineAppendClip(tl, src - 1, in, out);
+            /* Version 1 had no TRACK lines: its clips make one picture
+             * track. */
+            if (track < 0 &&
+                (track = FB_TimelineAddTrack(tl, FB_TRACK_VIDEO)) < 0)
+                FAIL(FB_PROJECT_TOO_MANY);
+            idx = FB_TimelineAppendToTrack(tl, track, src - 1, in, out);
             if (idx < 0)
                 FAIL(FB_PROJECT_TOO_MANY);
             clip = &tl->clips[idx];
             fx = NULL;
+        } else if (strcmp(line, "TRACK") == 0) {
+            int kind = FB_TrackKindFromName(val);
+
+            if (kind < 0)
+                FAIL(FB_PROJECT_BAD_LINE);
+            if ((track = FB_TimelineAddTrack(tl, (FBTrackKind)kind)) < 0)
+                FAIL(FB_PROJECT_TOO_MANY);
+            clip = NULL;
+            fx = NULL;
+        } else if (strcmp(line, "MUTED") == 0 || strcmp(line, "HIDDEN") == 0) {
+            if (track < 0 || *val)
+                FAIL(FB_PROJECT_BAD_LINE);
+            if (line[0] == 'M')
+                tl->tracks[track].muted = 1;
+            else
+                tl->tracks[track].hidden = 1;
+        } else if (strcmp(line, "AT") == 0) {
+            long long at;
+
+            /* The clip is the last on its track so far, and starts where
+             * the one before it ends: it can only move later. */
+            if (!clip || read_ll(&val, &at) != 0 || *val || at < clip->start)
+                FAIL(FB_PROJECT_BAD_LINE);
+            clip->start = at;
+        } else if (strcmp(line, "VOLUME") == 0) {
+            char *end;
+            double v = strtod(val, &end);
+
+            if (!clip || end == val || *end || v < 0.0)
+                FAIL(FB_PROJECT_BAD_LINE);
+            clip->volume = v;
         } else if (strcmp(line, "FIT") == 0) {
             int fit = FB_FitFromName(val);
 

@@ -295,31 +295,19 @@ int FB_ViewCells(const FBTimeView *v, int cell_w, FBCell *cells, int max)
 
 fb_us_t FB_TimelineClipStart(const FBTimeline *tl, int clip)
 {
-    fb_ms_t pos = 0;
-    int i;
-
-    for (i = 0; i < clip && i < tl->num_clips; i++)
-        pos += tl->clips[i].out - tl->clips[i].in;
-    return FB_US(pos);
+    if (clip < 0 || clip >= tl->num_clips)
+        return 0;
+    return FB_US(tl->clips[clip].start);
 }
 
 int FB_TimelineLocate(const FBTimeline *tl, fb_us_t t, fb_us_t *source_t)
 {
-    fb_us_t pos = 0;
     int i;
 
     if (t < 0)
         return -1;
-    for (i = 0; i < tl->num_clips; i++) {
-        const FBClip *c = &tl->clips[i];
-        fb_us_t len = FB_US(c->out - c->in);
-
-        if (t < pos + len) {
-            if (source_t)
-                *source_t = FB_US(c->in) + (t - pos);
-            return i;
-        }
-        pos += len;
-    }
-    return -1;
+    i = FB_TimelineClipAt(tl, FB_MS(t), NULL);
+    if (i >= 0 && source_t)
+        *source_t = FB_US(tl->clips[i].in) + (t - FB_US(tl->clips[i].start));
+    return i;
 }

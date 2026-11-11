@@ -210,7 +210,9 @@ int App_SaveProject(const char *path)
     return 0;
 }
 
-int App_AddFile(const char *path)
+/* Probes a file and adds it as a source. Returns the source index, or -1
+ * with the status line saying why. */
+static int add_source(const char *path)
 {
     FBSource info;
     char why[128] = "";
@@ -237,12 +239,63 @@ int App_AddFile(const char *path)
     }
     src = FB_TimelineAddSource(&App.timeline, path, info.duration,
                                info.has_video, info.has_audio);
-    if (src >= 0)
-        FB_SourceSetVideo(&App.timeline.sources[src], info.width, info.height,
-                          info.sar_num, info.sar_den,
-                          info.fps_num, info.fps_den);
-    if (src < 0 ||
-        FB_TimelineAppendClip(&App.timeline, src, 0, info.duration) < 0) {
+    if (src < 0) {
+        App_SetStatus("%s", FB_Str(MSG_STATUS_TOO_MANY));
+        return -1;
+    }
+    FB_SourceSetVideo(&App.timeline.sources[src], info.width, info.height,
+                      info.sar_num, info.sar_den, info.fps_num, info.fps_den);
+    return src;
+}
+
+/* Undoes add_source() when the clip couldn't be placed. */
+static void drop_last_source(void)
+{
+    if (App.timeline.num_sources > 0)
+        App.timeline.num_sources--;
+}
+
+int App_AddFile(const char *path)
+{
+    FBTimeline *tl = &App.timeline;
+    int src = add_source(path);
+
+    if (src < 0)
+        return -1;
+    /* Always a new track: a picture track (playing the file's sound too)
+     * for a video, a sound track for music. */
+    if (FB_TimelineAppendToTrack(tl, tl->num_tracks, src, 0,
+                                 tl->sources[src].duration) < 0) {
+        drop_last_source();
+        App_SetStatus("%s", FB_Str(MSG_STATUS_TOO_MANY));
+        return -1;
+    }
+    App.modified = 1;
+    App_SetStatus(FB_Str(MSG_STATUS_ADDED), path);
+    return tl->num_tracks - 1;
+}
+
+int App_AppendFile(int track, const char *path)
+{
+    FBTimeline *tl = &App.timeline;
+    const FBSource *s;
+    int src;
+
+    if (track < 0 || track >= tl->num_tracks) {
+        App_SetStatus("%s", FB_Str(MSG_STATUS_NO_SUCH_TRACK));
+        return -1;
+    }
+    if ((src = add_source(path)) < 0)
+        return -1;
+    s = &tl->sources[src];
+    if (tl->tracks[track].kind == FB_TRACK_VIDEO ? !s->has_video
+                                                 : !s->has_audio) {
+        drop_last_source();
+        App_SetStatus(FB_Str(MSG_STATUS_WRONG_TRACK), path);
+        return -1;
+    }
+    if (FB_TimelineAppendToTrack(tl, track, src, 0, s->duration) < 0) {
+        drop_last_source();
         App_SetStatus("%s", FB_Str(MSG_STATUS_TOO_MANY));
         return -1;
     }
@@ -251,9 +304,9 @@ int App_AddFile(const char *path)
     return 0;
 }
 
-int App_Split(fb_ms_t at)
+int App_Split(int track, fb_ms_t at)
 {
-    if (FB_TimelineSplit(&App.timeline, at) < 0) {
+    if (FB_TimelineSplit(&App.timeline, track, at) < 0) {
         App_SetStatus("%s", FB_Str(MSG_STATUS_NOTHING_TO_SPLIT));
         return -1;
     }
@@ -367,6 +420,7 @@ const char *App_JobErrorString(FBJobError err)
     case FB_JOB_UNKNOWN_MODULE:  return FB_Str(MSG_JOB_UNKNOWN_MODULE);
     case FB_JOB_NOT_EXPRESSIBLE: return FB_Str(MSG_JOB_NOT_EXPRESSIBLE);
     case FB_JOB_OVERFLOW:        return FB_Str(MSG_JOB_OVERFLOW);
+    case FB_JOB_NEED_SIZE:       return FB_Str(MSG_JOB_NEED_SIZE);
     }
     return FB_Str(MSG_JOB_UNKNOWN);
 }

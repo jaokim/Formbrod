@@ -12,7 +12,7 @@ the project doc *Filmroll gadget plan*; this file describes what is built.
 | `FBTimebase` | `src/gui/timebase.c` | One view plus the playhead, shared by all tracks so they stay in sync. |
 | `track` | `src/gui/track.c` | Base gadget class: click or drag to move the playhead, draws the playhead, takes the view's width in `GM_LAYOUT`. |
 | `ruler` | `src/gui/track.c` | Subclass: tick marks and timecodes. |
-| `filmstrip` | `src/gui/track.c` | Subclass: thumbnails, sprocket holes, marks between clips. |
+| `filmstrip` | `src/gui/track.c` | Subclass: the edit as a film roll. Each cell shows the picture on the highest picture track at that time; sprocket holes; a mark where a picture clip starts. With `FILMSTRIP_Pictures` off: plain blocks with file names. |
 
 Subclasses only implement `TRACKM_DRAWCONTENT` (and `GM_DOMAIN` for their
 height). A waveform track, or a lane added by a module, is another
@@ -59,6 +59,7 @@ with time, so zooming and scrolling can be tried before thumbnails exist.
 | `FILMSTRIP_CellHeight` | `uint32` | I | Default 27. |
 | `FILMSTRIP_ThumbFunc` | `FBThumbFunc` | IS | See above. |
 | `FILMSTRIP_ThumbData` | `APTR` | IS | Passed to the function. |
+| `FILMSTRIP_Pictures` | `BOOL` | IS | Default `TRUE`. `FALSE` draws each clip as a block in its file's colour with the file name, and never calls the thumbnail function. The window sets it from the `ShowPictures` setting. |
 
 The gadgets never change the timeline. Edits (trim, move) will be reported
 to the window and applied through `App_*` calls, so ARexx and the GUI keep

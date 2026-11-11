@@ -86,7 +86,7 @@ enum {
 enum {
     MID_CANCEL = 100, MID_ABOUT, MID_QUIT, MID_FIT_MENU,
     MID_NEW, MID_OPEN, MID_SAVE, MID_SAVE_AS,
-    MID_FIT_FIT, MID_FIT_FILL, MID_FIT_STRETCH,
+    MID_FIT_FIT, MID_FIT_FILL, MID_FIT_STRETCH, MID_SHOW_PICTURES,
     MID_EFFECT = 200     /* + module index */
 };
 
@@ -281,6 +281,23 @@ static uint32 idcmp_hook(struct Hook *hook, Object *winobj,
     return 0;
 }
 
+/* ---- Frame pictures --------------------------------------------------- */
+
+/* Whether the film strip shows pictures, from the "ShowPictures" setting.
+ * Off is for slower Amigas: then nothing is decoded for thumbnails. */
+static BOOL show_pictures(void)
+{
+    return strcmp(Prefs_GetString("ShowPictures", "1"), "0") != 0;
+}
+
+static void set_show_pictures(BOOL on)
+{
+    Prefs_SetString("ShowPictures", on ? "1" : "0");
+    Prefs_Save();
+    IIntuition->SetGadgetAttrs(Gad[GID_FILMSTRIP], Win, NULL,
+                               FILMSTRIP_Pictures, on, TAG_END);
+}
+
 /* ---- Menus ------------------------------------------------------------ */
 
 static FBFit current_fit(void)
@@ -347,6 +364,12 @@ static int update_menu_items(BOOL apply)
                     flags &= ~ITEMENABLED;
                 if (is_fit_id(id)) {
                     if (id == want_fit)
+                        flags |= CHECKED;
+                    else
+                        flags &= ~CHECKED;
+                }
+                if (id == MID_SHOW_PICTURES) {
+                    if (show_pictures())
                         flags |= CHECKED;
                     else
                         flags &= ~CHECKED;
@@ -447,6 +470,10 @@ static BOOL make_menus(struct Screen *scr)
     add_fit_item(nm, &n, FB_Str(MSG_MENU_FIT_FIT),       FB_FIT_FIT);
     add_fit_item(nm, &n, FB_Str(MSG_MENU_FIT_FILL),      FB_FIT_FILL);
     add_fit_item(nm, &n, FB_Str(MSG_MENU_FIT_STRETCH),   FB_FIT_STRETCH);
+    add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_SHOW_PICTURES), NULL,
+             MID_SHOW_PICTURES);
+    nm[n - 1].nm_Flags = CHECKIT | MENUTOGGLE |
+                         (show_pictures() ? CHECKED : 0);
 
     nm[n].nm_Type = NM_END;
 
@@ -524,6 +551,11 @@ static void handle_menu(uint32 id)
         return;
     }
     switch (id) {
+    case MID_SHOW_PICTURES:
+        /* A toggle: the menu has already flipped its checkmark, and
+         * sync_menus() keeps it in step with the setting either way. */
+        set_show_pictures(!show_pictures());
+        break;
     case MID_NEW:
         if (may_discard())
             App_NewProject();
@@ -591,12 +623,14 @@ void MainWindow_Refresh(void)
     FB_TimelineFrameSize(tl, &fw, &fh);
     for (i = 0; i < tl->num_clips; i++) {
         const FBClip *c = &tl->clips[i];
-        char num[8], in[16], out[16], fx[96] = "";
+        char num[8], track[8], start[16], in[16], out[16], fx[96] = "";
         const char *fit = fit_text(FB_ClipFitResult(tl, c, fw, fh));
         struct Node *n;
         int e;
 
         snprintf(num, sizeof(num), "%d", i + 1);
+        snprintf(track, sizeof(track), "%d", c->track + 1);
+        fmt_time(start, sizeof(start), c->start);
         fmt_time(in, sizeof(in), c->in);
         fmt_time(out, sizeof(out), c->out);
         if (fit)
@@ -605,13 +639,15 @@ void MainWindow_Refresh(void)
             strncat(fx, fx[0] ? ", " : "", sizeof(fx) - strlen(fx) - 1);
             strncat(fx, c->effects[e].module, sizeof(fx) - strlen(fx) - 1);
         }
-        n = LB->AllocListBrowserNode(5,
+        n = LB->AllocListBrowserNode(7,
             LBNA_Column, 0, LBNCA_CopyText, TRUE, LBNCA_Text, num,
-            LBNA_Column, 1, LBNCA_CopyText, TRUE,
+            LBNA_Column, 1, LBNCA_CopyText, TRUE, LBNCA_Text, track,
+            LBNA_Column, 2, LBNCA_CopyText, TRUE,
                             LBNCA_Text, IDOS->FilePart(tl->sources[c->source].path),
-            LBNA_Column, 2, LBNCA_CopyText, TRUE, LBNCA_Text, in,
-            LBNA_Column, 3, LBNCA_CopyText, TRUE, LBNCA_Text, out,
-            LBNA_Column, 4, LBNCA_CopyText, TRUE, LBNCA_Text, fx,
+            LBNA_Column, 3, LBNCA_CopyText, TRUE, LBNCA_Text, start,
+            LBNA_Column, 4, LBNCA_CopyText, TRUE, LBNCA_Text, in,
+            LBNA_Column, 5, LBNCA_CopyText, TRUE, LBNCA_Text, out,
+            LBNA_Column, 6, LBNCA_CopyText, TRUE, LBNCA_Text, fx,
             TAG_END);
         if (n)
             IExec->AddTail(&ClipList, n);
@@ -816,7 +852,10 @@ static void handle_gadget(uint32 id)
             App_AddFile(path);
         break;
     case GID_SPLIT:
-        App_Split(FB_MS(TB.playhead));
+        /* The selected clip's track, or every track if none is. */
+        clip = selected_clip();
+        App_Split(clip >= 0 ? App.timeline.clips[clip].track : -1,
+                  FB_MS(TB.playhead));
         break;
     case GID_REMOVE:
         if ((clip = selected_clip()) >= 0)
@@ -879,6 +918,7 @@ static Object *track(Class *cls, uint32 id, CONST_STRPTR empty_text)
         TRACK_Timebase,  &TB,
         TRACK_Timeline,  &App.timeline,
         TRACK_EmptyText, empty_text,
+        FILMSTRIP_Pictures, show_pictures(),
         TAG_END);
 
     Gad[id] = (struct Gadget *)o;
@@ -916,12 +956,14 @@ int MainWindow_Open(void)
     AppPort = IExec->AllocSysObjectTags(ASOT_PORT, TAG_END);
     IExec->NewList(&ClipList);
 
-    Columns = LB->AllocLBColumnInfo(5,
+    Columns = LB->AllocLBColumnInfo(7,
         LBCIA_Column, 0, LBCIA_Title, FB_Str(MSG_COL_NUMBER),  LBCIA_Weight, 5,
-        LBCIA_Column, 1, LBCIA_Title, FB_Str(MSG_COL_FILE),    LBCIA_Weight, 45,
-        LBCIA_Column, 2, LBCIA_Title, FB_Str(MSG_COL_IN),      LBCIA_Weight, 15,
-        LBCIA_Column, 3, LBCIA_Title, FB_Str(MSG_COL_OUT),     LBCIA_Weight, 15,
-        LBCIA_Column, 4, LBCIA_Title, FB_Str(MSG_COL_EFFECTS), LBCIA_Weight, 20,
+        LBCIA_Column, 1, LBCIA_Title, FB_Str(MSG_COL_TRACK),   LBCIA_Weight, 7,
+        LBCIA_Column, 2, LBCIA_Title, FB_Str(MSG_COL_FILE),    LBCIA_Weight, 33,
+        LBCIA_Column, 3, LBCIA_Title, FB_Str(MSG_COL_START),   LBCIA_Weight, 12,
+        LBCIA_Column, 4, LBCIA_Title, FB_Str(MSG_COL_IN),      LBCIA_Weight, 12,
+        LBCIA_Column, 5, LBCIA_Title, FB_Str(MSG_COL_OUT),     LBCIA_Weight, 12,
+        LBCIA_Column, 6, LBCIA_Title, FB_Str(MSG_COL_EFFECTS), LBCIA_Weight, 19,
         TAG_END);
 
     buttons = IIntuition->NewObject(CLS(C_LAYOUT), NULL,

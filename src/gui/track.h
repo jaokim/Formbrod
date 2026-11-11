@@ -6,10 +6,12 @@
  *              when clicked or dragged, and draws the playhead. Subclasses
  *              only draw their content, in TRACKM_DRAWCONTENT.
  *   ruler      timecodes and tick marks.
- *   filmstrip  the clips as a film strip: one thumbnail per cell, sprocket
- *              holes, and a mark where one clip ends and the next starts.
- *              Thumbnails come from FILMSTRIP_ThumbFunc; until there is
- *              one (or it has nothing yet), a placeholder frame is drawn.
+ *   filmstrip  the edit as a film strip: per cell, the picture on the
+ *              highest picture track, plus sprocket holes and a mark where
+ *              a clip starts. Thumbnails come from FILMSTRIP_ThumbFunc;
+ *              until there is one (or it has nothing yet), a placeholder
+ *              frame is drawn. With FILMSTRIP_Pictures off, each clip is a
+ *              plain block in its file's colour with the file name.
  *
  * Later: a waveform subclass for sound, and effect/title lanes. A module
  * that adds a kind of lane subclasses TrackClass the same way.
@@ -40,6 +42,10 @@ struct FBTimebase;
 #define FILMSTRIP_CellHeight (TRACK_Dummy + 102) /* uint32, default 27   (I)  */
 #define FILMSTRIP_ThumbFunc  (TRACK_Dummy + 103) /* FBThumbFunc          (IS) */
 #define FILMSTRIP_ThumbData  (TRACK_Dummy + 104) /* APTR, passed to it   (IS) */
+#define FILMSTRIP_Pictures   (TRACK_Dummy + 105) /* BOOL, default TRUE   (IS)
+                                                    FALSE: plain blocks with
+                                                    file names, nothing is
+                                                    decoded (slow Amigas)    */
 
 #define FB_CELL_W_DEFAULT 48
 #define FB_CELL_H_DEFAULT 27

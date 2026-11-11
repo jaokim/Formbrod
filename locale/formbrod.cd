@@ -58,6 +58,12 @@ Out
 MSG_COL_EFFECTS (24//)
 Effects
 ;
+MSG_COL_TRACK (25//)
+Track
+;
+MSG_COL_START (26//)
+Starts
+;
 ; ---- Labels ---------------------------------------------------------------
 MSG_LABEL_PLAYHEAD (30//)
 Playhead
@@ -138,11 +144,18 @@ Can't open %s: %s
 ;
 ; %s is the file path.
 MSG_STATUS_NO_VIDEO (64//)
-%s has no video in it
+%s has no picture or sound in it
 ;
 ; %s is the file path.
 MSG_STATUS_NO_DURATION (65//)
 Can't tell how long %s is
+;
+; Append file: a sound-only file onto a picture track, or the other way.
+MSG_STATUS_WRONG_TRACK (66//)
+%s can't go on that kind of track
+;
+MSG_STATUS_NO_SUCH_TRACK (67//)
+There is no such track
 ;
 ; ---- Render job errors ----------------------------------------------------
 MSG_JOB_EMPTY (70//)
@@ -162,6 +175,9 @@ The edit is too complex (filtergraph too long)
 ;
 MSG_JOB_UNKNOWN (75//)
 Unknown error
+;
+MSG_JOB_NEED_SIZE (76//)
+The frame size isn't known (the files haven't been read)
 ;
 ; ---- Shell messages at startup --------------------------------------------
 MSG_ERR_NO_WINDOW (80//)
@@ -242,6 +258,10 @@ Fill frame, crop edges
 ;
 MSG_MENU_FIT_STRETCH (115//)
 Stretch to frame
+;
+; Settings menu, a checkmark item. Off is for slower Amigas.
+MSG_MENU_SHOW_PICTURES (116//)
+Show frame pictures
 ;
 ; ---- About requester ------------------------------------------------------
 MSG_ABOUT_TITLE (120//)
