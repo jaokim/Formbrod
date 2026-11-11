@@ -733,6 +733,8 @@ static void test_project_tracks(void)
     CHECK(FB_ProjectParse(&back,
         "FORMBROD-PROJECT 2\nSOURCE 1 a\nTRACK video\nCLIP 1 0 100\n"
         "VOLUME -1\n", "", &line) == FB_PROJECT_BAD_LINE);
+}
+
 /* Reads the log back without the time stamps (the first 9 characters). */
 static void read_log(const char *path, char *buf, size_t len)
 {
