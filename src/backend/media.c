@@ -3,6 +3,7 @@
  */
 #include <string.h>
 #include "app.h"
+#include "formbrod/log.h"
 
 #ifdef HAVE_LIBAV
 #include <libavformat/avformat.h>
@@ -33,8 +34,8 @@ static void set_why(char *why, size_t len, int averr)
     }
 }
 
-FBProbeResult FB_ProbeMedia(const char *path, FBSource *info,
-                            char *why, size_t why_len)
+static FBProbeResult probe(const char *path, FBSource *info,
+                           char *why, size_t why_len)
 {
     AVFormatContext *fmt = NULL;
     fb_ms_t *duration = &info->duration;
@@ -98,8 +99,8 @@ FBProbeResult FB_ProbeMedia(const char *path, FBSource *info,
 
 #else
 
-FBProbeResult FB_ProbeMedia(const char *path, FBSource *info,
-                            char *why, size_t why_len)
+static FBProbeResult probe(const char *path, FBSource *info,
+                           char *why, size_t why_len)
 {
     (void)path;
     memset(info, 0, sizeof(*info));
@@ -109,3 +110,28 @@ FBProbeResult FB_ProbeMedia(const char *path, FBSource *info,
 }
 
 #endif
+
+FBProbeResult FB_ProbeMedia(const char *path, FBSource *info,
+                            char *why, size_t why_len)
+{
+    static const char *const names[] = {
+        "ok", "built without libav", "can't open", "no video",
+        "no length"
+    };
+    FBProbeResult r = probe(path, info, why, why_len);
+
+    if (r == FB_PROBE_OK)
+        FB_Log(FB_LOG_INFO, "probe",
+               "%s: %lld ms, %s %dx%d (pixel shape %d:%d) at %d/%d fps, %s",
+               path, (long long)info->duration,
+               info->has_video ? "picture" : "no picture",
+               info->width, info->height, info->sar_num, info->sar_den,
+               info->fps_num, info->fps_den,
+               info->has_audio ? "sound" : "no sound");
+    else
+        FB_Log(FB_LOG_WARNING, "probe", "%s: %s%s%s", path,
+               (unsigned)r < sizeof(names) / sizeof(names[0]) ? names[r]
+                                                              : "failed",
+               why && *why ? ": " : "", why && *why ? why : "");
+    return r;
+}

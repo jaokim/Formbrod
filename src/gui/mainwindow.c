@@ -86,7 +86,7 @@ enum {
 enum {
     MID_CANCEL = 100, MID_ABOUT, MID_QUIT, MID_FIT_MENU,
     MID_NEW, MID_OPEN, MID_SAVE, MID_SAVE_AS,
-    MID_FIT_FIT, MID_FIT_FILL, MID_FIT_STRETCH,
+    MID_FIT_FIT, MID_FIT_FILL, MID_FIT_STRETCH, MID_WRITE_LOG,
     MID_EFFECT = 200     /* + module index */
 };
 
@@ -351,6 +351,12 @@ static int update_menu_items(BOOL apply)
                     else
                         flags &= ~CHECKED;
                 }
+                if (id == MID_WRITE_LOG) {
+                    if (App_LogEnabled())
+                        flags |= CHECKED;
+                    else
+                        flags &= ~CHECKED;
+                }
                 if (flags != sub->Flags) {
                     stale++;
                     if (apply)
@@ -447,6 +453,9 @@ static BOOL make_menus(struct Screen *scr)
     add_fit_item(nm, &n, FB_Str(MSG_MENU_FIT_FIT),       FB_FIT_FIT);
     add_fit_item(nm, &n, FB_Str(MSG_MENU_FIT_FILL),      FB_FIT_FILL);
     add_fit_item(nm, &n, FB_Str(MSG_MENU_FIT_STRETCH),   FB_FIT_STRETCH);
+    add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_WRITE_LOG), NULL, MID_WRITE_LOG);
+    nm[n - 1].nm_Flags = CHECKIT | MENUTOGGLE |
+                         (App_LogEnabled() ? CHECKED : 0);
 
     nm[n].nm_Type = NM_END;
 
@@ -524,6 +533,13 @@ static void handle_menu(uint32 id)
         return;
     }
     switch (id) {
+    case MID_WRITE_LOG:
+        /* A toggle: the menu has already flipped its checkmark. */
+        App_SetLogging(!App_LogEnabled());
+        if (App_LogEnabled())
+            App_SetStatus(FB_Str(MSG_STATUS_LOG_ON), App_LogFile());
+        MainWindow_Refresh();
+        break;
     case MID_NEW:
         if (may_discard())
             App_NewProject();

@@ -144,6 +144,10 @@ MSG_STATUS_NO_VIDEO (64//)
 MSG_STATUS_NO_DURATION (65//)
 Can't tell how long %s is
 ;
+; Settings → Write log file was turned on. %s is the file.
+MSG_STATUS_LOG_ON (68//)
+Writing a log to %s
+;
 ; ---- Render job errors ----------------------------------------------------
 MSG_JOB_EMPTY (70//)
 The timeline is empty
@@ -242,6 +246,10 @@ Fill frame, crop edges
 ;
 MSG_MENU_FIT_STRETCH (115//)
 Stretch to frame
+;
+; Settings menu, a checkmark item.
+MSG_MENU_WRITE_LOG (117//)
+Write log file
 ;
 ; ---- About requester ------------------------------------------------------
 MSG_ABOUT_TITLE (120//)

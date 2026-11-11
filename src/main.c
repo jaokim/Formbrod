@@ -24,6 +24,11 @@ int main(int argc, char **argv)
     int i;
 
     Locale_Open();          /* before App_Init(), which sets a status line */
+    /* Program settings; without them nothing is remembered between runs,
+     * which is no reason to stop. They come first because they say where
+     * the log goes. */
+    Prefs_Open();
+    App_StartLog();
     if (App_Init() != 0)
         goto out;
 
@@ -35,10 +40,6 @@ int main(int argc, char **argv)
         else
             App_AddFile(argv[i]);
     }
-
-    /* Program settings; without them nothing is remembered between runs,
-     * which is no reason to stop. */
-    Prefs_Open();
 
     if (MainWindow_Open() != 0) {
         IDOS->Printf("%s", FB_Str(MSG_ERR_NO_WINDOW));
@@ -77,8 +78,9 @@ int main(int argc, char **argv)
 out:
     ARexx_Cleanup();
     MainWindow_Close();
-    Prefs_Close();
     App_Cleanup();
+    App_StopLog();
+    Prefs_Close();
     Locale_Close();
     return rc;
 }

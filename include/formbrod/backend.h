@@ -50,4 +50,10 @@ struct FBBackend {
 
 FBBackend *FB_CreateLocalBackend(void);
 
+/* Logs the libav versions and, if the log (formbrod/log.h) is open, sends
+ * ffmpeg's own messages there instead of to the shell. Stop puts them
+ * back. Call after FB_LogOpen() and before FB_LogClose(). */
+void FB_BackendLogStart(void);
+void FB_BackendLogStop(void);
+
 #endif

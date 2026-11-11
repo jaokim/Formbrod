@@ -18,6 +18,10 @@ through modules and ARexx.
 - `src/prefs/` – program settings through application.library PrefsObjects
   (`Prefs_GetString`/`SetString`/`Save`). Only for settings of the program
   itself; projects use the text format in `src/timeline/project.c`.
+- `src/log/` – the log file (`FB_Log()`, `include/formbrod/log.h`), plain
+  stdio. Log what helps explain a failure (files read, jobs, codecs, ffmpeg's
+  own messages via `FB_BackendLogStart()`); `App_StartLog()` opens it from
+  the settings.
 - `src/locale/` – `FB_Str()` over locale.library. `strings.h` is generated
   from `locale/formbrod.cd` by `tools/catgen.py` (`make strings`); don't edit
   it by hand. Translations are `locale/*.ct`.

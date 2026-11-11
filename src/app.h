@@ -73,4 +73,14 @@ typedef enum {
 FBProbeResult FB_ProbeMedia(const char *path, FBSource *info,
                             char *why, size_t why_len);
 
+/* The log file (formbrod/log.h), from the settings "Log" (1/0, default
+ * 1), "LogFile" (default T:Formbrod.log) and "LogLevel" (error, warning,
+ * info, debug). StartLog starts a new file; SetLogging turns it on or off
+ * and saves that. */
+int         App_LogEnabled(void);
+const char *App_LogFile(void);
+void        App_StartLog(void);
+void        App_StopLog(void);
+void        App_SetLogging(int on);
+
 #endif
