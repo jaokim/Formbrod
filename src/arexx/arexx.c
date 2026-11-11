@@ -9,6 +9,8 @@
  *   APPEND TRACK/N/A,FILE/A             add a file after the last clip on
  *                                       an existing track
  *   SPLIT AT/N/A,TRACK/N                split at AT ms, on TRACK or on all
+ *   TRIM CLIP/N/A,IN/N,OUT/N            set a clip's in/out points (ms in
+ *                                       its file); left out = unchanged
  *   TRACKS                              number of tracks
  *   REMOVE CLIP/N/A
  *   EFFECT CLIP/N/A,MODULE/A            add an effect, returns its index
@@ -71,6 +73,24 @@ static void cmd_append(struct ARexxCmd *cmd, struct RexxMsg *rm)
     set_result(cmd, App_AppendFile(*(int32 *)cmd->ac_ArgList[0],
                                    (const char *)cmd->ac_ArgList[1])
                     ? RC_ERROR : 0);
+}
+
+static void cmd_trim(struct ARexxCmd *cmd, struct RexxMsg *rm)
+{
+    int clip = *(int32 *)cmd->ac_ArgList[0];
+    const FBClip *c;
+
+    (void)rm;
+    result[0] = '\0';
+    if (clip < 0 || clip >= App.timeline.num_clips) {
+        set_result(cmd, RC_ERROR);
+        return;
+    }
+    c = &App.timeline.clips[clip];
+    set_result(cmd, App_TrimClip(clip,
+        cmd->ac_ArgList[1] ? *(int32 *)cmd->ac_ArgList[1] : c->in,
+        cmd->ac_ArgList[2] ? *(int32 *)cmd->ac_ArgList[2] : c->out)
+        ? RC_ERROR : 0);
 }
 
 static void cmd_tracks(struct ARexxCmd *cmd, struct RexxMsg *rm)
@@ -289,6 +309,7 @@ static struct ARexxCmd commands[] = {
     { "SAVEPROJECT",  16, cmd_saveproject,  "FILE",              0, NULL, 0, 0, NULL },
     { "APPEND",       17, cmd_append,       "TRACK/N/A,FILE/A",  0, NULL, 0, 0, NULL },
     { "TRACKS",       18, cmd_tracks,       NULL,                0, NULL, 0, 0, NULL },
+    { "TRIM",         19, cmd_trim,         "CLIP/N/A,IN/N,OUT/N", 0, NULL, 0, 0, NULL },
     { NULL,           0,  NULL,             NULL,                0, NULL, 0, 0, NULL }
 };
 

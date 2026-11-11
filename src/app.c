@@ -6,6 +6,7 @@
 #include "formbrod/module.h"
 #include "formbrod/project.h"
 #include "formbrod/log.h"
+#include "formbrod/timeview.h"
 #include "formbrod/backend.h"
 #include "prefs/prefs.h"
 #include "version.h"
@@ -210,6 +211,7 @@ int App_OpenProject(const char *path)
             src->duration  = info.duration;
             src->has_video = info.has_video;
             src->has_audio = info.has_audio;
+            src->still     = info.still;
             FB_SourceSetVideo(src, info.width, info.height,
                               info.sar_num, info.sar_den,
                               info.fps_num, info.fps_den);
@@ -317,7 +319,17 @@ static int add_source(const char *path)
     }
     FB_SourceSetVideo(&App.timeline.sources[src], info.width, info.height,
                       info.sar_num, info.sar_den, info.fps_num, info.fps_den);
+    App.timeline.sources[src].still = info.still;
     return src;
+}
+
+/* How long a new clip of a source is: all of it, or for a still picture
+ * FB_STILL_LENGTH (Set out or TRIM makes it longer). */
+static fb_ms_t new_clip_length(int src)
+{
+    const FBSource *s = &App.timeline.sources[src];
+
+    return s->still ? FB_STILL_LENGTH : s->duration;
 }
 
 /* Undoes add_source() when the clip couldn't be placed. */
@@ -337,7 +349,7 @@ int App_AddFile(const char *path)
     /* Always a new track: a picture track (playing the file's sound too)
      * for a video, a sound track for music. */
     if (FB_TimelineAppendToTrack(tl, tl->num_tracks, src, 0,
-                                 tl->sources[src].duration) < 0) {
+                                 new_clip_length(src)) < 0) {
         drop_last_source();
         App_SetStatus("%s", FB_Str(MSG_STATUS_TOO_MANY));
         return -1;
@@ -366,7 +378,8 @@ int App_AppendFile(int track, const char *path)
         App_SetStatus(FB_Str(MSG_STATUS_WRONG_TRACK), path);
         return -1;
     }
-    if (FB_TimelineAppendToTrack(tl, track, src, 0, s->duration) < 0) {
+    if (FB_TimelineAppendToTrack(tl, track, src, 0, new_clip_length(src))
+        < 0) {
         drop_last_source();
         App_SetStatus("%s", FB_Str(MSG_STATUS_TOO_MANY));
         return -1;
@@ -384,6 +397,93 @@ int App_Split(int track, fb_ms_t at)
     }
     App.modified = 1;
     return 0;
+}
+
+/* ---- Trimming --------------------------------------------------------- */
+
+static const char *file_part(const char *path)
+{
+    const char *p = path, *name = path;
+
+    for (; *p; p++)
+        if (*p == '/' || *p == ':')
+            name = p + 1;
+    return name;
+}
+
+/* "Holiday.mp4 now runs from 0:12.4 to 0:31.0" */
+static void trimmed_status(int clip)
+{
+    const FBClip *c = &App.timeline.clips[clip];
+    char in[24], out[24];
+
+    FB_FormatTimecode(in, sizeof(in), FB_US(c->in), FB_US(100), 0,
+                      Locale_DecimalPoint());
+    FB_FormatTimecode(out, sizeof(out), FB_US(c->out), FB_US(100), 0,
+                      Locale_DecimalPoint());
+    App_SetStatus(FB_Str(MSG_STATUS_TRIMMED),
+                  file_part(App.timeline.sources[c->source].path), in, out);
+}
+
+int App_TrimClip(int clip, fb_ms_t in, fb_ms_t out)
+{
+    if (clip < 0 || clip >= App.timeline.num_clips) {
+        App_SetStatus("%s", FB_Str(MSG_STATUS_NO_SUCH_CLIP));
+        return -1;
+    }
+    if (FB_TimelineTrimClip(&App.timeline, clip, in, out) != 0)
+        return -1;
+    App.modified = 1;
+    trimmed_status(clip);
+    return 0;
+}
+
+/* The clip Set in / Set out work on: `clip`, or if that is -1 the picture
+ * seen at `at`. */
+static int clip_for(int clip, fb_ms_t at)
+{
+    if (clip < 0)
+        clip = FB_TimelineClipAt(&App.timeline, at, NULL);
+    if (clip < 0 || clip >= App.timeline.num_clips) {
+        App_SetStatus("%s", FB_Str(MSG_STATUS_NO_CLIP_HERE));
+        return -1;
+    }
+    return clip;
+}
+
+int App_SetIn(int clip, fb_ms_t at)
+{
+    const FBClip *c;
+
+    if ((clip = clip_for(clip, at)) < 0)
+        return -1;
+    c = &App.timeline.clips[clip];
+    if (at < c->start || at >= FB_ClipEnd(c)) {
+        App_SetStatus("%s", FB_Str(MSG_STATUS_OUTSIDE_CLIP));
+        return -1;
+    }
+    return App_TrimClip(clip, c->in + (at - c->start), c->out);
+}
+
+int App_SetOut(int clip, fb_ms_t at)
+{
+    const FBClip *c;
+    fb_ms_t out, dur;
+
+    if ((clip = clip_for(clip, at)) < 0)
+        return -1;
+    c = &App.timeline.clips[clip];
+    if (at <= c->start) {
+        App_SetStatus("%s", FB_Str(MSG_STATUS_OUTSIDE_CLIP));
+        return -1;
+    }
+    /* Past the clip's end makes it longer, as far as the file goes (a
+     * still picture can be any length). */
+    out = c->in + (at - c->start);
+    dur = App.timeline.sources[c->source].duration;
+    if (dur > 0 && out > dur)
+        out = dur;
+    return App_TrimClip(clip, c->in, out);
 }
 
 int App_RemoveClip(int clip)

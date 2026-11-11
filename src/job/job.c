@@ -161,8 +161,17 @@ static FBJobError clip_video(Buf *b, const FBTimeline *tl, const FBClip *c,
 {
     FBJobError err;
 
-    buf_printf(b, "[%d:v]trim=start=%.3f:end=%.3f,setpts=PTS-STARTPTS",
-               in, secs(c->in), secs(c->out));
+    /* A still picture is one frame: repeat it at the frame rate, then
+     * take the clip's part like any other. */
+    if (tl->sources[c->source].still)
+        buf_printf(b, "[%d:v]loop=loop=-1:size=1:start=0,"
+                   "setpts=N*%d/(%d*TB),", in,
+                   f->fps_num > 0 ? f->fps_den : 1,
+                   f->fps_num > 0 ? f->fps_num : 25);
+    else
+        buf_printf(b, "[%d:v]", in);
+    buf_printf(b, "trim=start=%.3f:end=%.3f,setpts=PTS-STARTPTS",
+               secs(c->in), secs(c->out));
     /* concat needs one frame size and pixel shape for all clips */
     if (f->fw > 0)
         add_fit(b, tl, c, f->fw, f->fh);

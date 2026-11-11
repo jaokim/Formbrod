@@ -42,6 +42,14 @@ _Export...
 MSG_BTN_CANCEL (16//)
 _Cancel
 ;
+; Trim the selected clip (or the one under the playhead) at the playhead.
+; The I and O keys do the same.
+MSG_BTN_SET_IN (17//)
+Set in
+;
+MSG_BTN_SET_OUT (18//)
+Set out
+;
 ; ---- Clip list columns ----------------------------------------------------
 MSG_COL_NUMBER (20//)
 #
@@ -161,6 +169,10 @@ There is no such track
 MSG_STATUS_LOG_ON (68//)
 Writing a log to %s
 ;
+; Set in / Set out with no clip selected and none under the playhead.
+MSG_STATUS_NO_CLIP_HERE (69//)
+Select a clip, or put the playhead on one
+;
 ; ---- Render job errors ----------------------------------------------------
 MSG_JOB_EMPTY (70//)
 The timeline is empty
@@ -271,6 +283,12 @@ Show frame pictures
 MSG_MENU_WRITE_LOG (117//)
 Write log file
 ;
+MSG_MENU_SET_IN (118//)
+Set in at the playhead
+;
+MSG_MENU_SET_OUT (119//)
+Set out at the playhead
+;
 ; ---- About requester ------------------------------------------------------
 MSG_ABOUT_TITLE (120//)
 About Formbrod
@@ -370,6 +388,14 @@ The project has no file name yet
 ; second MSG_PROJECT_NOT_PROJECT or MSG_PROJECT_TOO_NEW.
 MSG_STATUS_NOT_OPENED (151//)
 %s: %s
+;
+; Set in at a playhead outside the selected clip (Set out: before its start).
+MSG_STATUS_OUTSIDE_CLIP (152//)
+Put the playhead inside the clip first
+;
+; After trimming: file name, then in and out times in the file.
+MSG_STATUS_TRIMMED (153//)
+%s now runs from %s to %s
 ;
 ; ---- Unsaved changes requester ---------------------------------------------
 MSG_UNSAVED_TITLE (160//)

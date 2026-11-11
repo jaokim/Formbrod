@@ -28,6 +28,10 @@
 #define MSG_BTN_EXPORT_STR               "_Export..."
 #define MSG_BTN_CANCEL                   16
 #define MSG_BTN_CANCEL_STR               "_Cancel"
+#define MSG_BTN_SET_IN                   17
+#define MSG_BTN_SET_IN_STR               "Set in"
+#define MSG_BTN_SET_OUT                  18
+#define MSG_BTN_SET_OUT_STR              "Set out"
 #define MSG_COL_NUMBER                   20
 #define MSG_COL_NUMBER_STR               "#"
 #define MSG_COL_FILE                     21
@@ -96,6 +100,8 @@
 #define MSG_STATUS_NO_SUCH_TRACK_STR     "There is no such track"
 #define MSG_STATUS_LOG_ON                68
 #define MSG_STATUS_LOG_ON_STR            "Writing a log to %s"
+#define MSG_STATUS_NO_CLIP_HERE          69
+#define MSG_STATUS_NO_CLIP_HERE_STR      "Select a clip, or put the playhead on one"
 #define MSG_JOB_EMPTY                    70
 #define MSG_JOB_EMPTY_STR                "The timeline is empty"
 #define MSG_JOB_BAD_SOURCE               71
@@ -160,6 +166,10 @@
 #define MSG_MENU_SHOW_PICTURES_STR       "Show frame pictures"
 #define MSG_MENU_WRITE_LOG               117
 #define MSG_MENU_WRITE_LOG_STR           "Write log file"
+#define MSG_MENU_SET_IN                  118
+#define MSG_MENU_SET_IN_STR              "Set in at the playhead"
+#define MSG_MENU_SET_OUT                 119
+#define MSG_MENU_SET_OUT_STR             "Set out at the playhead"
 #define MSG_ABOUT_TITLE                  120
 #define MSG_ABOUT_TITLE_STR              "About Formbrod"
 #define MSG_ABOUT_TEXT                   121
@@ -214,6 +224,10 @@
 #define MSG_STATUS_NO_PROJECT_FILE_STR   "The project has no file name yet"
 #define MSG_STATUS_NOT_OPENED            151
 #define MSG_STATUS_NOT_OPENED_STR        "%s: %s"
+#define MSG_STATUS_OUTSIDE_CLIP          152
+#define MSG_STATUS_OUTSIDE_CLIP_STR      "Put the playhead inside the clip first"
+#define MSG_STATUS_TRIMMED               153
+#define MSG_STATUS_TRIMMED_STR           "%s now runs from %s to %s"
 #define MSG_UNSAVED_TITLE                160
 #define MSG_UNSAVED_TITLE_STR            "Unsaved changes"
 #define MSG_UNSAVED_TEXT                 161
@@ -221,7 +235,7 @@
 #define MSG_UNSAVED_BUTTONS              162
 #define MSG_UNSAVED_BUTTONS_STR          "Save|Discard|Cancel"
 
-#define FB_NUM_STRINGS 104
+#define FB_NUM_STRINGS 111
 
 #ifdef FB_STRINGS_ARRAY
 static const struct FBBuiltinString {
@@ -236,6 +250,8 @@ static const struct FBBuiltinString {
     { MSG_BTN_PREVIEW, MSG_BTN_PREVIEW_STR },
     { MSG_BTN_EXPORT, MSG_BTN_EXPORT_STR },
     { MSG_BTN_CANCEL, MSG_BTN_CANCEL_STR },
+    { MSG_BTN_SET_IN, MSG_BTN_SET_IN_STR },
+    { MSG_BTN_SET_OUT, MSG_BTN_SET_OUT_STR },
     { MSG_COL_NUMBER, MSG_COL_NUMBER_STR },
     { MSG_COL_FILE, MSG_COL_FILE_STR },
     { MSG_COL_IN, MSG_COL_IN_STR },
@@ -270,6 +286,7 @@ static const struct FBBuiltinString {
     { MSG_STATUS_WRONG_TRACK, MSG_STATUS_WRONG_TRACK_STR },
     { MSG_STATUS_NO_SUCH_TRACK, MSG_STATUS_NO_SUCH_TRACK_STR },
     { MSG_STATUS_LOG_ON, MSG_STATUS_LOG_ON_STR },
+    { MSG_STATUS_NO_CLIP_HERE, MSG_STATUS_NO_CLIP_HERE_STR },
     { MSG_JOB_EMPTY, MSG_JOB_EMPTY_STR },
     { MSG_JOB_BAD_SOURCE, MSG_JOB_BAD_SOURCE_STR },
     { MSG_JOB_UNKNOWN_MODULE, MSG_JOB_UNKNOWN_MODULE_STR },
@@ -302,6 +319,8 @@ static const struct FBBuiltinString {
     { MSG_MENU_FIT_STRETCH, MSG_MENU_FIT_STRETCH_STR },
     { MSG_MENU_SHOW_PICTURES, MSG_MENU_SHOW_PICTURES_STR },
     { MSG_MENU_WRITE_LOG, MSG_MENU_WRITE_LOG_STR },
+    { MSG_MENU_SET_IN, MSG_MENU_SET_IN_STR },
+    { MSG_MENU_SET_OUT, MSG_MENU_SET_OUT_STR },
     { MSG_ABOUT_TITLE, MSG_ABOUT_TITLE_STR },
     { MSG_ABOUT_TEXT, MSG_ABOUT_TEXT_STR },
     { MSG_ABOUT_LIBAV, MSG_ABOUT_LIBAV_STR },
@@ -329,6 +348,8 @@ static const struct FBBuiltinString {
     { MSG_PROJECT_TOO_MANY, MSG_PROJECT_TOO_MANY_STR },
     { MSG_STATUS_NO_PROJECT_FILE, MSG_STATUS_NO_PROJECT_FILE_STR },
     { MSG_STATUS_NOT_OPENED, MSG_STATUS_NOT_OPENED_STR },
+    { MSG_STATUS_OUTSIDE_CLIP, MSG_STATUS_OUTSIDE_CLIP_STR },
+    { MSG_STATUS_TRIMMED, MSG_STATUS_TRIMMED_STR },
     { MSG_UNSAVED_TITLE, MSG_UNSAVED_TITLE_STR },
     { MSG_UNSAVED_TEXT, MSG_UNSAVED_TEXT_STR },
     { MSG_UNSAVED_BUTTONS, MSG_UNSAVED_BUTTONS_STR },

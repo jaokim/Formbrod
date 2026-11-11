@@ -1,7 +1,8 @@
 /*
  * mainwindow.c - the ReAction main window.
  *
- *   [Add file...] [Split] [Remove] [Fade] [Preview] [Export...]
+ *   [Add file...] [Split] [Set in] [Set out] [Remove] [Fade] [Preview]
+ *   [Export...]
  *   | 0:00     | 0:05     | 0:10     | 0:15          ruler
  *   [#][#][#][#][#][#][#][#|#][#][#][#][#]          film strip
  *   [<====scroll====>                         ]
@@ -78,7 +79,8 @@
 enum {
     GID_ADD = 1, GID_SPLIT, GID_REMOVE, GID_FADE, GID_PREVIEW, GID_EXPORT,
     GID_CLIPS, GID_POSITION, GID_PROGRESS, GID_STATUS,
-    GID_RULER, GID_FILMSTRIP, GID_SCROLL, GID_ZOOM, GID_LAST
+    GID_RULER, GID_FILMSTRIP, GID_SCROLL, GID_ZOOM,
+    GID_SET_IN, GID_SET_OUT, GID_LAST
 };
 
 /* Menu commands without a button. Menu items for button actions use the
@@ -330,6 +332,8 @@ static BOOL menu_enabled(uint32 id)
     switch (id) {
     case GID_SPLIT:
     case GID_REMOVE:
+    case GID_SET_IN:
+    case GID_SET_OUT:
         return have_clips;
     case GID_PREVIEW:
     case GID_EXPORT:
@@ -458,6 +462,8 @@ static BOOL make_menus(struct Screen *scr)
 
     add_menu(nm, &n, NM_TITLE, FB_Str(MSG_MENU_EDIT),    NULL, 0);
     add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_SPLIT),    NULL, GID_SPLIT);
+    add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_SET_IN),   NULL, GID_SET_IN);
+    add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_SET_OUT),  NULL, GID_SET_OUT);
     add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_REMOVE),   NULL, GID_REMOVE);
 
     /* One item per registered module, so new modules show up here without
@@ -604,6 +610,8 @@ static void handle_menu(uint32 id)
         break;
     case GID_ADD:
     case GID_SPLIT:
+    case GID_SET_IN:
+    case GID_SET_OUT:
     case GID_REMOVE:
     case GID_PREVIEW:
         handle_gadget(id);
@@ -868,6 +876,21 @@ static void handle_gadget(uint32 id)
                      path, sizeof(path)))
             App_AddFile(path);
         break;
+    case GID_SET_IN:
+    case GID_SET_OUT: {
+        fb_ms_t at = FB_MS(TB.playhead);
+
+        /* The selected clip, or the picture under the playhead. */
+        if ((clip = selected_clip()) < 0)
+            clip = FB_TimelineClipAt(&App.timeline, at, NULL);
+        if (id == GID_SET_OUT) {
+            App_SetOut(clip, at);
+        } else if (App_SetIn(clip, at) == 0) {
+            /* The frame that was under the playhead now starts the clip. */
+            Timebase_SetPlayhead(&TB, FB_US(App.timeline.clips[clip].start));
+        }
+        break;
+    }
     case GID_SPLIT:
         /* The selected clip's track, or every track if none is. */
         clip = selected_clip();
@@ -988,6 +1011,8 @@ int MainWindow_Open(void)
         LAYOUT_EvenSize,    TRUE,
         LAYOUT_AddChild, button(GID_ADD,     FB_Str(MSG_BTN_ADD)),
         LAYOUT_AddChild, button(GID_SPLIT,   FB_Str(MSG_BTN_SPLIT)),
+        LAYOUT_AddChild, button(GID_SET_IN,  FB_Str(MSG_BTN_SET_IN)),
+        LAYOUT_AddChild, button(GID_SET_OUT, FB_Str(MSG_BTN_SET_OUT)),
         LAYOUT_AddChild, button(GID_REMOVE,  FB_Str(MSG_BTN_REMOVE)),
         LAYOUT_AddChild, button(GID_FADE,    FB_Str(MSG_BTN_FADE)),
         LAYOUT_AddChild, button(GID_PREVIEW, FB_Str(MSG_BTN_PREVIEW)),
@@ -1109,7 +1134,8 @@ int MainWindow_Open(void)
         WA_InnerHeight,     380,
         WA_IDCMP,           IDCMP_GADGETUP | IDCMP_CLOSEWINDOW |
                             IDCMP_IDCMPUPDATE | IDCMP_NEWSIZE |
-                            IDCMP_GADGETHELP | IDCMP_MENUPICK,
+                            IDCMP_GADGETHELP | IDCMP_MENUPICK |
+                            IDCMP_VANILLAKEY,
         WA_NewLookMenus,    TRUE,
         WINDOW_GadgetHelp,  TRUE,
         WINDOW_HintInfo,    Hints,
@@ -1158,6 +1184,17 @@ void MainWindow_Handle(uint32 sigs)
             break;
         case WMHI_GADGETUP:
             handle_gadget(result & WMHI_GADGETMASK);
+            break;
+        case WMHI_VANILLAKEY:
+            /* I and O: Set in and Set out at the playhead. */
+            switch (result & WMHI_KEYMASK) {
+            case 'i': case 'I':
+                handle_gadget(GID_SET_IN);
+                break;
+            case 'o': case 'O':
+                handle_gadget(GID_SET_OUT);
+                break;
+            }
             break;
         case WMHI_MENUPICK:
             handle_menupick(code);

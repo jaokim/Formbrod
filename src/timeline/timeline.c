@@ -361,8 +361,10 @@ static int even(int v)
     return v < 2 ? 2 : v;
 }
 
-/* The source of the first clip on the lowest picture track. */
-static const FBSource *first_source(const FBTimeline *tl)
+/* The source of the first clip on the lowest picture track, or with
+ * `moving`, the first that isn't a still picture (a picture's "frame rate"
+ * means nothing). */
+static const FBSource *first_picture(const FBTimeline *tl, int moving)
 {
     int i, s;
 
@@ -372,9 +374,16 @@ static const FBSource *first_source(const FBTimeline *tl)
         s = tl->clips[i].source;
         if (s < 0 || s >= tl->num_sources)
             return NULL;
+        if (moving && tl->sources[s].still)
+            continue;
         return &tl->sources[s];
     }
     return NULL;
+}
+
+static const FBSource *first_source(const FBTimeline *tl)
+{
+    return first_picture(tl, 0);
 }
 
 int FB_TimelineFrameSize(const FBTimeline *tl, int *width, int *height)
@@ -406,7 +415,7 @@ int FB_TimelineFrameRate(const FBTimeline *tl, int *num, int *den)
         *den = tl->format.fps_den;
         return 1;
     }
-    src = first_source(tl);
+    src = first_picture(tl, 1);
     if (!src || src->fps_num <= 0 || src->fps_den <= 0)
         return 0;
     *num = src->fps_num;

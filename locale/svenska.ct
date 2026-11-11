@@ -28,6 +28,12 @@ _Exportera...
 MSG_BTN_CANCEL
 _Avbryt
 ;
+MSG_BTN_SET_IN
+In-punkt
+;
+MSG_BTN_SET_OUT
+Ut-punkt
+;
 MSG_COL_NUMBER
 #
 ;
@@ -130,6 +136,9 @@ Det spåret finns inte
 MSG_STATUS_LOG_ON
 Skriver en logg till %s
 ;
+MSG_STATUS_NO_CLIP_HERE
+Välj ett klipp, eller ställ positionen på ett
+;
 MSG_JOB_EMPTY
 Tidslinjen är tom
 ;
@@ -227,6 +236,12 @@ Visa bildrutor
 MSG_MENU_WRITE_LOG
 Skriv loggfil
 ;
+MSG_MENU_SET_IN
+Sätt in-punkt vid positionen
+;
+MSG_MENU_SET_OUT
+Sätt ut-punkt vid positionen
+;
 MSG_ABOUT_TITLE
 Om Formbröd
 ;
@@ -307,6 +322,12 @@ Projektet har inget filnamn än
 ;
 MSG_STATUS_NOT_OPENED
 %s: %s
+;
+MSG_STATUS_OUTSIDE_CLIP
+Ställ positionen inne i klippet först
+;
+MSG_STATUS_TRIMMED
+%s går nu från %s till %s
 ;
 MSG_UNSAVED_TITLE
 Osparade ändringar

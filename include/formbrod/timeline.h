@@ -37,6 +37,9 @@
 #define FB_MAX_SOURCES   32
 #define FB_MAX_TRACKS    16
 #define FB_MAX_CLIPS     256
+
+/* How long a still picture is when it's added. */
+#define FB_STILL_LENGTH  5000
 #define FB_MAX_EFFECTS   8
 #define FB_MAX_PARAMS    8
 #define FB_PATH_LEN      512
@@ -46,9 +49,10 @@ typedef int64_t fb_ms_t; /* time in milliseconds */
 
 typedef struct FBSource {
     char    path[FB_PATH_LEN];
-    fb_ms_t duration;       /* 0 if not probed yet */
+    fb_ms_t duration;       /* 0 if not probed yet, or a still picture */
     int     has_video;
     int     has_audio;
+    int     still;          /* a single picture: clips can be any length */
     /* Video stream info from probing; 0 = unknown. */
     int     width, height;
     int     sar_num, sar_den;   /* pixel aspect, 0/0 or 1/1 = square */
@@ -195,7 +199,8 @@ void    FB_SourceSetVideo(FBSource *src, int width, int height,
                           int sar_num, int sar_den, int fps_num, int fps_den);
 
 /* The frame size the timeline renders at: the format's size, else the source
- * of the first clip on the lowest picture track ("the first clip" below),
+ * of the first clip on the lowest picture track ("the first clip" below;
+ * for the frame rate, the first one that isn't a still picture),
  * shown with square pixels, rounded to even numbers. Returns 0
  * and sets 0x0 if it isn't known (sources not probed). */
 int     FB_TimelineFrameSize(const FBTimeline *tl, int *width, int *height);

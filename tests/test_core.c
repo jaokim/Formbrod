@@ -813,6 +813,49 @@ static void test_log(void)
     CHECK(strcmp(FB_LogLevelName(FB_LOG_DEBUG), "debug") == 0);
 }
 
+static void test_still(void)
+{
+    FBTimeline tl;
+    FBOutput out;
+    FBJob job;
+    int pic, a, num, den;
+
+    memset(&out, 0, sizeof(out));
+    strcpy(out.path, "out.mp4");
+    out.quality = FB_QUALITY_FINAL;
+
+    FB_TimelineInit(&tl);
+    pic = FB_TimelineAddSource(&tl, "pic.png", 0, 1, 0);
+    a = FB_TimelineAddSource(&tl, "a.mp4", 4000, 1, 1);
+    tl.sources[pic].still = 1;
+    FB_SourceSetVideo(&tl.sources[pic], 400, 300, 1, 1, 25, 1);
+    FB_SourceSetVideo(&tl.sources[a], 320, 240, 1, 1, 30, 1);
+    CHECK(FB_TimelineAppendToTrack(&tl, 0, pic, 0, FB_STILL_LENGTH) == 0);
+    CHECK(FB_TimelineAppendToTrack(&tl, 0, a, 0, 4000) == 1);
+
+    /* The size is the first clip's, the rate the first moving one's. */
+    CHECK(FB_TimelineFrameRate(&tl, &num, &den) && num == 30 && den == 1);
+
+    /* A picture has no end: it can be made as long as wanted, and the
+     * video after it moves along. A video can't go past its file. */
+    CHECK(FB_TimelineTrimClip(&tl, 0, 0, 60000) == 0);
+    CHECK(tl.clips[1].start == 60000);
+    CHECK(FB_TimelineTrimClip(&tl, 0, 0, 3000) == 0);
+    CHECK(tl.clips[1].start == 3000);
+    CHECK(FB_TimelineTrimClip(&tl, 1, 0, 4001) == -1);
+
+    CHECK(FB_JobBuild(&job, &tl, &out) == FB_JOB_OK);
+    printf("still: %s\n", job.filtergraph);
+    CHECK(strstr(job.filtergraph, "[0:v]loop=loop=-1:size=1:start=0,"
+                                  "setpts=N*1/(30*TB),trim=start=0.000:"
+                                  "end=3.000,setpts=PTS-STARTPTS") != NULL);
+    CHECK(strstr(job.filtergraph, "[1:v]trim=start=0.000:end=4.000") != NULL);
+    /* The picture has no sound: silence while it's shown. */
+    CHECK(strstr(job.filtergraph, "anullsrc=r=48000:cl=stereo,atrim="
+                                  "duration=3.000") != NULL);
+    CHECK(job.length == 7000);
+}
+
 int main(void)
 {
     FB_RegisterBuiltinModules();
@@ -821,6 +864,7 @@ int main(void)
     test_log();
     test_job_build_and_roundtrip();
     test_job_tracks();
+    test_still();
     test_job_errors();
     test_fit();
     test_timeview();

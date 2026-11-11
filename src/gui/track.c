@@ -515,7 +515,8 @@ static void film_draw(struct FilmData *fd, struct trackDraw *d)
     const FBTimeView *v = &d->trd_Timebase->view;
     long left = d->trd_Box.Left, top = d->trd_Box.Top;
     long bottom = top + d->trd_Box.Height - 1;
-    long film_end = FB_ViewTimeToX(v, v->length);
+    /* The film stops where the edit does; the view goes on a bit. */
+    long film_end = FB_ViewTimeToX(v, FB_US(FB_TimelineDuration(tl)));
     long right = (film_end < d->trd_Box.Width ? film_end : d->trd_Box.Width) - 1;
     int band = FILM_BAND;
     int hole_h = band > 4 ? band - 4 : 1;

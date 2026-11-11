@@ -23,6 +23,15 @@ void Timebase_Attach(FBTimebase *tb, struct Gadget *track)
         tb->tracks[tb->num_tracks++] = track;
 }
 
+fb_ms_t Timebase_ViewLength(fb_ms_t duration)
+{
+    fb_ms_t room = duration / 5;
+
+    if (duration <= 0)
+        return 0;
+    return duration + (room > 5000 ? room : 5000);
+}
+
 void Timebase_SetTimeline(FBTimebase *tb, const FBTimeline *tl)
 {
     int num = 0, den = 0;
@@ -32,7 +41,8 @@ void Timebase_SetTimeline(FBTimebase *tb, const FBTimeline *tl)
     if (FB_TimelineFrameRate(tl, &num, &den) && num > 0)
         tb->frame_us = (fb_us_t)den * FB_US_PER_SEC / num;
     FB_ViewSetFrame(&tb->view, tb->frame_us, tb->cell_w);
-    FB_ViewSetLength(&tb->view, FB_US(FB_TimelineDuration(tl)));
+    FB_ViewSetLength(&tb->view,
+                     FB_US(Timebase_ViewLength(FB_TimelineDuration(tl))));
     if (was_empty && tb->view.length > 0)
         FB_ViewZoomToFit(&tb->view);
     Timebase_SetPlayhead(tb, tb->playhead);

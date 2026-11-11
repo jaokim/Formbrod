@@ -37,9 +37,26 @@ Early skeleton. Working so far:
       Thumbnails are dummies for now
 - [x] Tracks: each added file gets its own track; picture tracks are laid
       on top of each other and all sound is mixed. Cutting closes gaps
+- [x] Set in / Set out at the playhead (buttons, Edit menu, I and O keys),
+      and still pictures (PNG, JPEG...) as clips of any length
 - [ ] Track editor under the film strip: clip boxes, trimming, moving
 - [ ] Real thumbnails, waveforms
 - [ ] Remote rendering on a render server
+
+## Editing
+
+- **Add file** puts a file on a new track of its own: a video, a sound
+  file (music) or a still picture. A picture starts out 5 seconds long.
+- Click or drag in the ruler or film strip to move the playhead.
+- **Set in** (or the I key) cuts away the start of a clip up to the
+  playhead; **Set out** (O) cuts away the end after it. They work on the
+  clip selected in the list, or else on the picture under the playhead.
+  The clips after it on the same track move along, so no gap is left.
+- Put the playhead *after* the end of a clip and choose **Set out** to make
+  it longer, as far as its file goes; a still picture can be any length.
+  The timeline goes on a little past its last clip for this.
+- **Split** cuts the selected clip's track at the playhead, or all tracks
+  if no clip is selected.
 
 ## Building
 
@@ -156,6 +173,7 @@ The port is called `FORMBROD`.
 | `APPEND` | `TRACK/N/A,FILE/A` | |
 | `TRACKS` | | number of tracks |
 | `SPLIT` | `AT/N/A` (ms), `TRACK/N` (default: all tracks) | |
+| `TRIM` | `CLIP/N/A,IN/N,OUT/N` (ms in the clip's file; left out = unchanged) | |
 | `REMOVE` | `CLIP/N/A` | |
 | `EFFECT` | `CLIP/N/A,MODULE/A` | effect index |
 | `SETPARAM` | `CLIP/N/A,EFFECT/N/A,NAME/A,VALUE/A` | |
