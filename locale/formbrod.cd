@@ -428,7 +428,6 @@ MSG_UNSAVED_TEXT (161//)
 ; The buttons, separated by '|'. The last one cancels.
 MSG_UNSAVED_BUTTONS (162//)
 Save|Discard|Cancel
-
 ; ---- Track editor ----
 ; The name column in front of the film strip, which shows the result.
 MSG_TRACK_RESULT (170//)
