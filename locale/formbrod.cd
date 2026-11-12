@@ -428,3 +428,62 @@ MSG_UNSAVED_TEXT (161//)
 ; The buttons, separated by '|'. The last one cancels.
 MSG_UNSAVED_BUTTONS (162//)
 Save|Discard|Cancel
+
+; ---- Track editor ----
+; The name column in front of the film strip, which shows the result.
+MSG_TRACK_RESULT (170//)
+Result
+;
+; Track names in the editor, numbered from the bottom one of each kind.
+MSG_TRACK_PICTURE (171//)
+Picture %ld
+;
+MSG_TRACK_SOUND (172//)
+Sound %ld
+;
+; Shown in the empty space below the tracks.
+MSG_TRACK_DROP (173//)
+Drop files here: each one gets a track of its own
+;
+; The clip fields: where the clip starts in the edit, where in its file it
+; begins, and how long it is.
+MSG_LABEL_FROM_FILE (174//)
+From file
+;
+MSG_HINT_FROM_FILE (175//)
+Where in its file the clip begins. Type a time and press Return
+;
+MSG_HINT_STARTS (176//)
+Where the clip starts in the edit
+;
+MSG_HINT_LANES (177//)
+Click a clip to select it, drag its ends to trim it. Click a track's name to select the track
+;
+MSG_MENU_TRACK (178//)
+Track
+;
+MSG_MENU_APPEND_FILE (179//)
+Append file...
+;
+MSG_MENU_MUTE (180//)
+Mute sound
+;
+MSG_MENU_HIDE (181//)
+Hide picture
+;
+MSG_MENU_REMOVE_TRACK (182//)
+Remove track
+;
+MSG_STATUS_SELECT_TRACK (183//)
+Click a track's name first
+;
+; %s is the track's name.
+MSG_REQ_REMOVE_TRACK (184//)
+Remove %s and the clips on it?
+;
+MSG_REQ_REMOVE_TRACK_BUTTONS (185//)
+Remove|Cancel
+;
+MSG_INSPECTOR_NONE (186//)
+No clip selected
+;

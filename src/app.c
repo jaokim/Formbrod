@@ -399,6 +399,44 @@ int App_Split(int track, fb_ms_t at)
     return 0;
 }
 
+/* ---- Tracks ------------------------------------------------------------ */
+
+static int valid_track(int track)
+{
+    if (track < 0 || track >= App.timeline.num_tracks) {
+        App_SetStatus("%s", FB_Str(MSG_STATUS_NO_SUCH_TRACK));
+        return 0;
+    }
+    return 1;
+}
+
+int App_RemoveTrack(int track)
+{
+    if (!valid_track(track))
+        return -1;
+    FB_TimelineRemoveTrack(&App.timeline, track);
+    App.modified = 1;
+    return 0;
+}
+
+int App_SetTrackMuted(int track, int muted)
+{
+    if (!valid_track(track))
+        return -1;
+    App.timeline.tracks[track].muted = muted != 0;
+    App.modified = 1;
+    return 0;
+}
+
+int App_SetTrackHidden(int track, int hidden)
+{
+    if (!valid_track(track))
+        return -1;
+    App.timeline.tracks[track].hidden = hidden != 0;
+    App.modified = 1;
+    return 0;
+}
+
 /* ---- Trimming --------------------------------------------------------- */
 
 static const char *file_part(const char *path)

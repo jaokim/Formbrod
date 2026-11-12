@@ -12,11 +12,16 @@ the project doc *Filmroll gadget plan*; this file describes what is built.
 | `FBTimebase` | `src/gui/timebase.c` | One view plus the playhead, shared by all tracks so they stay in sync. |
 | `track` | `src/gui/track.c` | Base gadget class: click or drag to move the playhead, draws the playhead, takes the view's width in `GM_LAYOUT`. |
 | `ruler` | `src/gui/track.c` | Subclass: tick marks and timecodes. |
+| `lanes` | `src/gui/lanes.c` | Subclass: the track editor. A row per track (picture tracks from the top one down, each with a lane for its clips' sound, then sound tracks), names in the inset, the drop area below. Click selects a clip or (in the names) a track; dragging a clip's end trims it, reported as `LANES_EditClip/In/Out` when released; elsewhere it moves the playhead. `LANESM_TRACKAT` says which track is under a point, for files dropped on the window. |
 | `filmstrip` | `src/gui/track.c` | Subclass: the edit as a film roll. Each cell shows the picture on the highest picture track at that time; sprocket holes; a mark where a picture clip starts. With `FILMSTRIP_Pictures` off: plain blocks with file names. |
 
 Subclasses only implement `TRACKM_DRAWCONTENT` (and `GM_DOMAIN` for their
 height). A waveform track, or a lane added by a module, is another
 subclass of `TrackClass`.
+
+All track gadgets take `TRACK_Inset`: a column on the left, the same width
+for all, that isn't part of the time axis, so they line up. The film strip
+shows "Result" there and the lanes show the track names.
 
 ## Time and zoom
 

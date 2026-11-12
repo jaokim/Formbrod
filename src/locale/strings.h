@@ -244,8 +244,42 @@
 #define MSG_UNSAVED_TEXT_STR             "%s has changes that aren't saved."
 #define MSG_UNSAVED_BUTTONS              162
 #define MSG_UNSAVED_BUTTONS_STR          "Save|Discard|Cancel"
+#define MSG_TRACK_RESULT                 170
+#define MSG_TRACK_RESULT_STR             "Result"
+#define MSG_TRACK_PICTURE                171
+#define MSG_TRACK_PICTURE_STR            "Picture %ld"
+#define MSG_TRACK_SOUND                  172
+#define MSG_TRACK_SOUND_STR              "Sound %ld"
+#define MSG_TRACK_DROP                   173
+#define MSG_TRACK_DROP_STR               "Drop files here: each one gets a track of its own"
+#define MSG_LABEL_FROM_FILE              174
+#define MSG_LABEL_FROM_FILE_STR          "From file"
+#define MSG_HINT_FROM_FILE               175
+#define MSG_HINT_FROM_FILE_STR           "Where in its file the clip begins. Type a time and press Return"
+#define MSG_HINT_STARTS                  176
+#define MSG_HINT_STARTS_STR              "Where the clip starts in the edit"
+#define MSG_HINT_LANES                   177
+#define MSG_HINT_LANES_STR               "Click a clip to select it, drag its ends to trim it. Click a track's name to select the track"
+#define MSG_MENU_TRACK                   178
+#define MSG_MENU_TRACK_STR               "Track"
+#define MSG_MENU_APPEND_FILE             179
+#define MSG_MENU_APPEND_FILE_STR         "Append file..."
+#define MSG_MENU_MUTE                    180
+#define MSG_MENU_MUTE_STR                "Mute sound"
+#define MSG_MENU_HIDE                    181
+#define MSG_MENU_HIDE_STR                "Hide picture"
+#define MSG_MENU_REMOVE_TRACK            182
+#define MSG_MENU_REMOVE_TRACK_STR        "Remove track"
+#define MSG_STATUS_SELECT_TRACK          183
+#define MSG_STATUS_SELECT_TRACK_STR      "Click a track's name first"
+#define MSG_REQ_REMOVE_TRACK             184
+#define MSG_REQ_REMOVE_TRACK_STR         "Remove %s and the clips on it?"
+#define MSG_REQ_REMOVE_TRACK_BUTTONS     185
+#define MSG_REQ_REMOVE_TRACK_BUTTONS_STR "Remove|Cancel"
+#define MSG_INSPECTOR_NONE               186
+#define MSG_INSPECTOR_NONE_STR           "No clip selected"
 
-#define FB_NUM_STRINGS 116
+#define FB_NUM_STRINGS 133
 
 #ifdef FB_STRINGS_ARRAY
 static const struct FBBuiltinString {
@@ -368,6 +402,23 @@ static const struct FBBuiltinString {
     { MSG_UNSAVED_TITLE, MSG_UNSAVED_TITLE_STR },
     { MSG_UNSAVED_TEXT, MSG_UNSAVED_TEXT_STR },
     { MSG_UNSAVED_BUTTONS, MSG_UNSAVED_BUTTONS_STR },
+    { MSG_TRACK_RESULT, MSG_TRACK_RESULT_STR },
+    { MSG_TRACK_PICTURE, MSG_TRACK_PICTURE_STR },
+    { MSG_TRACK_SOUND, MSG_TRACK_SOUND_STR },
+    { MSG_TRACK_DROP, MSG_TRACK_DROP_STR },
+    { MSG_LABEL_FROM_FILE, MSG_LABEL_FROM_FILE_STR },
+    { MSG_HINT_FROM_FILE, MSG_HINT_FROM_FILE_STR },
+    { MSG_HINT_STARTS, MSG_HINT_STARTS_STR },
+    { MSG_HINT_LANES, MSG_HINT_LANES_STR },
+    { MSG_MENU_TRACK, MSG_MENU_TRACK_STR },
+    { MSG_MENU_APPEND_FILE, MSG_MENU_APPEND_FILE_STR },
+    { MSG_MENU_MUTE, MSG_MENU_MUTE_STR },
+    { MSG_MENU_HIDE, MSG_MENU_HIDE_STR },
+    { MSG_MENU_REMOVE_TRACK, MSG_MENU_REMOVE_TRACK_STR },
+    { MSG_STATUS_SELECT_TRACK, MSG_STATUS_SELECT_TRACK_STR },
+    { MSG_REQ_REMOVE_TRACK, MSG_REQ_REMOVE_TRACK_STR },
+    { MSG_REQ_REMOVE_TRACK_BUTTONS, MSG_REQ_REMOVE_TRACK_BUTTONS_STR },
+    { MSG_INSPECTOR_NONE, MSG_INSPECTOR_NONE_STR },
 };
 #endif
 
