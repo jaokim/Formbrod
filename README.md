@@ -51,14 +51,14 @@ Early skeleton. Working so far:
 - **Add file** puts a file on a new track of its own: a video, a sound
   file (music) or a still picture. A picture starts out 5 seconds long.
 - Under the film strip (which shows the result) is the **track editor**:
-  one row per track, named *Picture 1*, *Sound 1* and so on, with each
-  picture track's sound on a lane under it. Higher picture tracks are
+  one row per track, named *Video 1*, *Audio 1* and so on, with each
+  video track's sound on a lane under it. Higher picture tracks are
   drawn on top of lower ones; all sound is mixed.
 - Click a clip to select it; drag either end of a clip to make it shorter
   or longer. The clips after it on the track move along.
 - Click a track's name to select the track for the **Track** menu:
-  *Append file...* (adds a file after its last clip), *Mute sound*,
-  *Hide picture* and *Remove track*.
+  *Append file...* (adds a file after its last clip), *Mute audio*,
+  *Hide video* and *Remove track*.
 - Drop files from Workbench on a track to append them to it, or on the
   empty space below the tracks to give each its own track.
 - Click or drag in the ruler, the film strip or an empty part of the track
@@ -72,9 +72,11 @@ Early skeleton. Working so far:
   The timeline goes on a little past its last clip for this.
 - Or type the times: under the playhead and zoom controls, the selected
   clip shows where it **Starts** in the edit, where in its file it begins
-  (**From file**) and its **Length**. Change From file or Length by
-  writing `1:05.5` or plain seconds like `12.5`, then press Return. A
-  still picture only has a length.
+  (**From file**) and its **Length**. Change any of them by writing
+  `1:05.5` or plain seconds like `12.5`, then press Return. Changing
+  Starts moves the clip and the ones after it on its track; starting it
+  later than the clip in front of it ends leaves a gap (black, or clear on
+  an upper track, and silence). A still picture has no From file.
 - **Split** cuts the selected clip's track at the playhead, or all tracks
   if no clip is selected.
 
@@ -194,6 +196,7 @@ The port is called `FORMBROD`.
 | `TRACKS` | | number of tracks |
 | `SPLIT` | `AT/N/A` (ms), `TRACK/N` (default: all tracks) | |
 | `TRIM` | `CLIP/N/A,IN/N,OUT/N` (ms in the clip's file; left out = unchanged) | |
+| `MOVE` | `CLIP/N/A,AT/N/A` (ms in the edit; the clips after it move along) | |
 | `REMOVE` | `CLIP/N/A` | |
 | `EFFECT` | `CLIP/N/A,MODULE/A` | effect index |
 | `SETPARAM` | `CLIP/N/A,EFFECT/N/A,NAME/A,VALUE/A` | |

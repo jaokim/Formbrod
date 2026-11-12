@@ -471,6 +471,30 @@ static void trimmed_status(int clip)
                   file_part(App.timeline.sources[c->source].path), in, out);
 }
 
+int App_MoveClip(int clip, fb_ms_t start)
+{
+    const FBTimeline *tl = &App.timeline;
+    char when[24];
+
+    if (clip < 0 || clip >= tl->num_clips) {
+        App_SetStatus("%s", FB_Str(MSG_STATUS_NO_SUCH_CLIP));
+        return -1;
+    }
+    if (FB_TimelineMoveClip(&App.timeline, clip, start) != 0) {
+        FB_FormatTimecode(when, sizeof(when),
+                          FB_US(FB_TimelineEarliestStart(tl, clip)),
+                          FB_US(100), 0, Locale_DecimalPoint());
+        App_SetStatus(FB_Str(MSG_STATUS_TOO_EARLY), when);
+        return -1;
+    }
+    App.modified = 1;
+    FB_FormatTimecode(when, sizeof(when), FB_US(start), FB_US(100), 0,
+                      Locale_DecimalPoint());
+    App_SetStatus(FB_Str(MSG_STATUS_MOVED),
+                  file_part(tl->sources[tl->clips[clip].source].path), when);
+    return 0;
+}
+
 int App_TrimClip(int clip, fb_ms_t in, fb_ms_t out)
 {
     if (clip < 0 || clip >= App.timeline.num_clips) {

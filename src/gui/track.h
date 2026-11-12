@@ -61,8 +61,8 @@ struct FBTimebase;
 #define LANES_EditIn         (TRACK_Dummy + 204) /*    the clip, and its new */
 #define LANES_EditOut        (TRACK_Dummy + 205) /*    in and out, ms        */
 #define LANES_DropText       (TRACK_Dummy + 206) /* CONST_STRPTR      (I)    */
-#define LANES_PictureName    (TRACK_Dummy + 207) /* "Picture %ld"     (I)    */
-#define LANES_SoundName      (TRACK_Dummy + 208) /* "Sound %ld"       (I)    */
+#define LANES_PictureName    (TRACK_Dummy + 207) /* "Video %ld"       (I)    */
+#define LANES_SoundName      (TRACK_Dummy + 208) /* "Audio %ld"       (I)    */
 
 /* Which track is at a point in the window (for files dropped on it):
  * returns the track, -1 for the drop area below the tracks, or -2 if the

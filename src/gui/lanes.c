@@ -1,10 +1,10 @@
 /*
  * lanes.c - the track editor: one row per track under the film strip.
  *
- *   Picture 2  [ logo.png ]
- *   Picture 1  [ holiday.mp4      ][ skate.avi        ]
+ *   Video 2    [ logo.png ]
+ *   Video 1    [ holiday.mp4      ][ skate.avi        ]
  *              [ ~~~~ its sound ~~][ ~~~~~~~~~~~~~~~~ ]   linked sound lane
- *   Sound 1    [ theme.mod                                ]
+ *   Audio 1    [ theme.mod                                ]
  *
  *              Drop files here: each gets a track of its own
  *
@@ -152,7 +152,7 @@ static int row_at(const Row *rows, int n, long y)
     return -1;
 }
 
-/* "Picture 2" / "Sound 1": numbered among the tracks of the same kind,
+/* "Video 2" / "Audio 1": numbered among the tracks of the same kind,
  * from the bottom one. */
 static void track_name(const struct LanesData *ld, int track, char *buf,
                        size_t len)
@@ -166,8 +166,8 @@ static void track_name(const struct LanesData *ld, int track, char *buf,
         if (tl->tracks[t].kind == kind)
             n++;
     snprintf(buf, len, kind == FB_TRACK_VIDEO
-                       ? (ld->picture_name ? ld->picture_name : "Picture %ld")
-                       : (ld->sound_name ? ld->sound_name : "Sound %ld"), n);
+                       ? (ld->picture_name ? ld->picture_name : "Video %ld")
+                       : (ld->sound_name ? ld->sound_name : "Audio %ld"), n);
 }
 
 /* ---- Where a clip is ----------------------------------------------- */
