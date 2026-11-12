@@ -48,6 +48,7 @@
 #include <proto/exec.h>
 #include <proto/dos.h>
 #include <proto/intuition.h>
+#include <proto/graphics.h>
 #include <proto/asl.h>
 #include <proto/wb.h>
 #include <proto/utility.h>
