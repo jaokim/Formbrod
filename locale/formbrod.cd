@@ -435,10 +435,10 @@ Result
 ;
 ; Track names in the editor, numbered from the bottom one of each kind.
 MSG_TRACK_PICTURE (171//)
-Picture %ld
+Video %ld
 ;
 MSG_TRACK_SOUND (172//)
-Sound %ld
+Audio %ld
 ;
 ; Shown in the empty space below the tracks.
 MSG_TRACK_DROP (173//)
@@ -453,7 +453,7 @@ MSG_HINT_FROM_FILE (175//)
 Where in its file the clip begins. Type a time and press Return
 ;
 MSG_HINT_STARTS (176//)
-Where the clip starts in the edit
+Where the clip starts in the edit. Type a time and press Return: the clips after it move along
 ;
 MSG_HINT_LANES (177//)
 Click a clip to select it, drag its ends to trim it. Click a track's name to select the track
@@ -465,10 +465,10 @@ MSG_MENU_APPEND_FILE (179//)
 Append file...
 ;
 MSG_MENU_MUTE (180//)
-Mute sound
+Mute audio
 ;
 MSG_MENU_HIDE (181//)
-Hide picture
+Hide video
 ;
 MSG_MENU_REMOVE_TRACK (182//)
 Remove track
@@ -485,4 +485,12 @@ Remove|Cancel
 ;
 MSG_INSPECTOR_NONE (186//)
 No clip selected
+;
+; Typing Starts earlier than the clip in front of it ends; %s is that time.
+MSG_STATUS_TOO_EARLY (187//)
+It can't start before %s, where the clip in front of it ends
+;
+; After typing Starts: the file name and the new start.
+MSG_STATUS_MOVED (188//)
+%s now starts at %s
 ;

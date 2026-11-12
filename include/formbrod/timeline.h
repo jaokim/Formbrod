@@ -176,6 +176,16 @@ int     FB_TimelineRemoveClip(FBTimeline *tl, int clip);
  * duration is known. */
 int     FB_TimelineTrimClip(FBTimeline *tl, int clip, fb_ms_t in, fb_ms_t out);
 
+/* Moves a clip to start at `start`; the clips after it on its track move
+ * by the same amount, so nothing overlaps and any gaps between them stay.
+ * It can't start before the clip in front of it ends (-1 then). Moving it
+ * later leaves a gap in front of it. */
+int     FB_TimelineMoveClip(FBTimeline *tl, int clip, fb_ms_t start);
+
+/* The earliest a clip can start: where the clip before it on its track
+ * ends, or 0. */
+fb_ms_t FB_TimelineEarliestStart(const FBTimeline *tl, int clip);
+
 /* Where a clip ends on the timeline. */
 fb_ms_t FB_ClipEnd(const FBClip *clip);
 

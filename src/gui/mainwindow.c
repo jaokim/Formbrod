@@ -610,7 +610,7 @@ static int selected_track(void)
     return -1;
 }
 
-/* "Picture 2": the same name the track editor shows. */
+/* "Video 2": the same name the track editor shows. */
 static void track_label(int track, char *buf, size_t len)
 {
     FBTrackKind kind = App.timeline.tracks[track].kind;
@@ -778,10 +778,13 @@ static char NameText[160], StartsText[24], InText[24], LengthText[24];
 
 static void set_field(uint32 id, char *text, BOOL disabled)
 {
-    IIntuition->SetGadgetAttrs(Gad[id], Win, NULL,
-                               STRINGA_TextVal, text,
-                               GA_Disabled,     disabled,
-                               TAG_END);
+    /* Redrawn here: a gadget in a window shows a change of GA_Disabled
+     * only when it's refreshed, and returns non-zero to say so. */
+    if (IIntuition->SetGadgetAttrs(Gad[id], Win, NULL,
+                                   STRINGA_TextVal, text,
+                                   GA_Disabled,     disabled,
+                                   TAG_END) && Win)
+        IIntuition->RefreshGList(Gad[id], Win, NULL, 1);
 }
 
 /* Shows the clip's name (with its fit and effects), where it starts in
@@ -818,21 +821,23 @@ static void update_clip_fields(int clip)
                     sizeof(NameText) - strlen(NameText) - 1);
         }
         FB_FormatTimeMs(StartsText, sizeof(StartsText), c->start, dp);
-        if (!still)
+        if (still)
+            strcpy(InText, "-");       /* a picture has no place in a file */
+        else
             FB_FormatTimeMs(InText, sizeof(InText), c->in, dp);
         FB_FormatTimeMs(LengthText, sizeof(LengthText), c->out - c->in, dp);
     }
     IIntuition->SetGadgetAttrs(Gad[GID_CLIPNAME], Win, NULL,
                                GA_Text, NameText, TAG_END);
-    IIntuition->SetGadgetAttrs(Gad[GID_STARTS], Win, NULL,
-                               GA_Text, StartsText, TAG_END);
+    set_field(GID_STARTS, StartsText, none);
     set_field(GID_IN, InText, none || still);
     set_field(GID_LENGTH, LengthText, none);
 }
 
-/* A field was changed (Return or Tab): trim the selected clip to it.
- * From file moves where in the file the clip begins and keeps its length,
- * as far as the file allows. */
+/* A field was changed (Return or Tab). Starts moves the clip (and the
+ * ones after it on its track); From file moves where in the file it
+ * begins, keeping its length as far as the file allows; Length trims its
+ * end. */
 static void clip_field_changed(uint32 id)
 {
     const FBTimeline *tl = &App.timeline;
@@ -849,7 +854,9 @@ static void clip_field_changed(uint32 id)
         App_SetStatus(FB_Str(MSG_STATUS_BAD_TIME), text ? text : "");
         return;
     }
-    if (id == GID_IN) {
+    if (id == GID_STARTS) {
+        App_MoveClip(clip, t);
+    } else if (id == GID_IN) {
         fb_ms_t len = c->out - c->in;
         fb_ms_t dur = tl->sources[c->source].duration;
 
@@ -1077,6 +1084,7 @@ static void handle_gadget(uint32 id)
         break;
     case GID_LANES:
         return;      /* everything came through idcmp_hook() */
+    case GID_STARTS:
     case GID_IN:
     case GID_LENGTH:
         clip_field_changed(id);
@@ -1165,7 +1173,7 @@ static void handle_appmessages(void)
 }
 
 /* The name column in front of the tracks: wide enough for the longest of
- * "Picture 88", "Sound 88" and "Result" in the screen's font. */
+ * "Video 88", "Audio 88" and "Result" in the screen's font. */
 static int Inset = 80;
 
 static int name_column_width(void)
@@ -1312,12 +1320,7 @@ int MainWindow_Open(void)
         GA_Text,     NameText,
         BUTTON_Justification, BCJ_LEFT,
         TAG_END);
-    Gad[GID_STARTS] = (struct Gadget *)IIntuition->NewObject(CLS(C_BUTTON), NULL,
-        GA_ID,       GID_STARTS,
-        GA_ReadOnly, TRUE,
-        GA_Text,     StartsText,
-        TAG_END);
-    for (i = GID_IN; i <= GID_LENGTH; i++)
+    for (i = GID_STARTS; i <= GID_LENGTH; i++)
         Gad[i] = (struct Gadget *)IIntuition->NewObject(CLS(C_STRING), NULL,
             GA_ID,            i,
             GA_RelVerify,     TRUE,
@@ -1332,7 +1335,6 @@ int MainWindow_Open(void)
         CHILD_WeightedWidth, 200,
         LAYOUT_AddChild,    Gad[GID_STARTS],
         CHILD_Label,        label(FB_Str(MSG_COL_START)),
-        CHILD_MinWidth,     72,
         LAYOUT_AddChild,    Gad[GID_IN],
         CHILD_Label,        label(FB_Str(MSG_LABEL_FROM_FILE)),
         LAYOUT_AddChild,    Gad[GID_LENGTH],

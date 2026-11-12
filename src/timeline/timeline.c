@@ -258,6 +258,31 @@ int FB_TimelineTrimClip(FBTimeline *tl, int clip, fb_ms_t in, fb_ms_t out)
     return 0;
 }
 
+fb_ms_t FB_TimelineEarliestStart(const FBTimeline *tl, int clip)
+{
+    if (clip > 0 && clip < tl->num_clips &&
+        tl->clips[clip - 1].track == tl->clips[clip].track)
+        return FB_ClipEnd(&tl->clips[clip - 1]);
+    return 0;
+}
+
+int FB_TimelineMoveClip(FBTimeline *tl, int clip, fb_ms_t start)
+{
+    fb_ms_t delta;
+    int i;
+
+    if (clip < 0 || clip >= tl->num_clips ||
+        start < FB_TimelineEarliestStart(tl, clip))
+        return -1;
+    /* Sorted by track and start: the clips after it on its track follow
+     * it in the array. */
+    delta = start - tl->clips[clip].start;
+    for (i = clip; i < tl->num_clips &&
+                   tl->clips[i].track == tl->clips[clip].track; i++)
+        tl->clips[i].start += delta;
+    return 0;
+}
+
 int FB_TimelineClipAt(const FBTimeline *tl, fb_ms_t t, fb_ms_t *source_t)
 {
     int i;

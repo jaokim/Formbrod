@@ -356,7 +356,7 @@ MSG_TRACK_RESULT
 Resultat
 ;
 MSG_TRACK_PICTURE
-Bild %ld
+Video %ld
 ;
 MSG_TRACK_SOUND
 Ljud %ld
@@ -371,7 +371,7 @@ MSG_HINT_FROM_FILE
 Var i filen klippet börjar. Skriv en tid och tryck Retur
 ;
 MSG_HINT_STARTS
-Var klippet börjar i redigeringen
+Var klippet börjar i redigeringen. Skriv en tid och tryck Retur: klippen efter följer med
 ;
 MSG_HINT_LANES
 Klicka på ett klipp för att välja det, dra i dess ändar för att korta eller förlänga det. Klicka på ett spårs namn för att välja spåret
@@ -386,7 +386,7 @@ MSG_MENU_MUTE
 Stäng av ljudet
 ;
 MSG_MENU_HIDE
-Dölj bilden
+Dölj videon
 ;
 MSG_MENU_REMOVE_TRACK
 Ta bort spåret
@@ -402,4 +402,10 @@ Ta bort|Avbryt
 ;
 MSG_INSPECTOR_NONE
 Inget klipp valt
+;
+MSG_STATUS_TOO_EARLY
+Det kan inte börja före %s, där klippet framför slutar
+;
+MSG_STATUS_MOVED
+%s börjar nu vid %s
 ;

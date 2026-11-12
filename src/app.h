@@ -55,6 +55,9 @@ int  App_SetTrackHidden(int track, int hidden);
  * after it, or makes the clip longer if `at` is past its end. With clip
  * -1 they work on the picture seen at `at`. */
 int  App_TrimClip(int clip, fb_ms_t in, fb_ms_t out);
+/* Moves a clip to start at `start` in the edit; the clips after it on its
+ * track move along. Moving it later leaves a gap in front of it. */
+int  App_MoveClip(int clip, fb_ms_t start);
 int  App_SetIn(int clip, fb_ms_t at);
 int  App_SetOut(int clip, fb_ms_t at);
 int  App_RemoveClip(int clip);

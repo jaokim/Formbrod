@@ -118,6 +118,21 @@ static void test_tracks(void)
     CHECK(FB_TimelineTrimClip(&tl, 0, 500, 10001) == -1);
     CHECK(FB_TimelineTrimClip(&tl, 0, 3000, 3000) == -1);
 
+    /* Moving a clip takes the ones after it along; not into the one in
+     * front of it. Track 0 is now 0-2.5, 2.5-3.5, 3.5-4.5 s. */
+    CHECK(FB_TimelineEarliestStart(&tl, 1) == 2500);
+    CHECK(FB_TimelineEarliestStart(&tl, 0) == 0);
+    CHECK(FB_TimelineMoveClip(&tl, 1, 2000) == -1);
+    CHECK(FB_TimelineMoveClip(&tl, 1, 3500) == 0);       /* a 1 s gap */
+    CHECK(tl.clips[1].start == 3500 && tl.clips[2].start == 4500);
+    CHECK(tl.clips[3].track == 1 && tl.clips[3].start == 0);  /* untouched */
+    CHECK(FB_TimelineMoveClip(&tl, 1, 2500) == 0);       /* gap closed */
+    CHECK(tl.clips[2].start == 3500);
+    CHECK(FB_TimelineMoveClip(&tl, 0, 1000) == 0);       /* the whole track */
+    CHECK(tl.clips[0].start == 1000 && tl.clips[2].start == 4500);
+    CHECK(FB_TimelineMoveClip(&tl, 0, 0) == 0);
+    CHECK(FB_TimelineMoveClip(&tl, 99, 0) == -1);
+
     /* Removing a track takes its clips; the ones above move down. */
     i = tl.num_clips;
     CHECK(FB_TimelineRemoveTrack(&tl, 1) == 0);
