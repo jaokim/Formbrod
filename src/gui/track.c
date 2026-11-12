@@ -27,7 +27,7 @@
 #include "gui/timebase.h"
 #include "locale/catalog.h"
 
-Class *TrackClass, *RulerClass, *FilmstripClass;
+Class *TrackClass, *RulerClass, *FilmstripClass, *LanesClass;
 
 /* Colours, 0xRRGGBB. */
 #define COL_PLAYHEAD 0xE24B4A
@@ -43,14 +43,14 @@ Class *TrackClass, *RulerClass, *FilmstripClass;
 #define MAX_NAMES    32          /* file names shown at once, plain mode */
 #define FS_MAX_CELLS 160         /* 160 * 48 px is wider than any screen */
 
-static void set_rgb(struct RastPort *rp, uint32 rgb)
+void Track_SetRGB(struct RastPort *rp, uint32 rgb)
 {
     IGraphics->SetRPAttrs(rp, RPTAG_APenColor, 0xFF000000 | rgb, TAG_END);
 }
 
 /* Fills the part of the rectangle (x0,y0)-(x1,y1) that is inside `c`. */
-static void fill_clipped(struct RastPort *rp, const struct Rectangle *c,
-                         long x0, long y0, long x1, long y1)
+void Track_FillClipped(struct RastPort *rp, const struct Rectangle *c,
+                       long x0, long y0, long x1, long y1)
 {
     if (x0 < c->MinX) x0 = c->MinX;
     if (y0 < c->MinY) y0 = c->MinY;
@@ -61,8 +61,8 @@ static void fill_clipped(struct RastPort *rp, const struct Rectangle *c,
 }
 
 /* Draws up to `room` pixels of `text` with its top-left corner at x, y. */
-static void draw_text(struct RastPort *rp, struct TextFont *font,
-                      long x, long y, long room, const char *text)
+void Track_Text(struct RastPort *rp, struct TextFont *font,
+                long x, long y, long room, const char *text)
 {
     struct TextExtent te;
     uint32 n;
@@ -83,6 +83,8 @@ struct TrackData {
     FBTimebase       *tb;
     const FBTimeline *tl;
     CONST_STRPTR      empty_text;
+    CONST_STRPTR      label;
+    int               inset;
 };
 
 static uint32 playhead_ms(const struct TrackData *td)
@@ -114,6 +116,14 @@ static BOOL track_set(struct TrackData *td, struct TagItem *tags)
             break;
         case TRACK_EmptyText:
             td->empty_text = (CONST_STRPTR)ti->ti_Data;
+            redraw = TRUE;
+            break;
+        case TRACK_Inset:
+            td->inset = (int)ti->ti_Data;
+            redraw = TRUE;
+            break;
+        case TRACK_Label:
+            td->label = (CONST_STRPTR)ti->ti_Data;
             redraw = TRUE;
             break;
         case TRACK_Redraw:
@@ -189,6 +199,15 @@ static void track_render(Class *cl, Object *o, struct gpRender *msg)
     if (!td->tb)
         return;
 
+    if (td->label && td->inset > 4) {
+        IGraphics->SetFont(rp, dri->dri_Font);
+        IGraphics->SetAPen(rp, dri->dri_Pens[TEXTPEN]);
+        Track_Text(rp, dri->dri_Font, x0 + 2,
+                  y0 + (g->Height - dri->dri_Font->tf_YSize) / 2,
+                  td->inset - 4, td->label);
+    }
+    x0 += td->inset;      /* from here on: the time axis */
+
     if (timeline_empty(td)) {
         if (td->empty_text) {
             struct TextFont *font = dri->dri_Font;
@@ -198,8 +217,8 @@ static void track_render(Class *cl, Object *o, struct gpRender *msg)
             w = IGraphics->TextLength(rp, td->empty_text,
                                       strlen(td->empty_text));
             IGraphics->SetAPen(rp, dri->dri_Pens[TEXTPEN]);
-            draw_text(rp, font, x0 + (w < g->Width ? (g->Width - w) / 2 : 0),
-                      y0 + (g->Height - font->tf_YSize) / 2, g->Width,
+            Track_Text(rp, font, x0 + (w < x1 - x0 ? (x1 - x0 - w) / 2 : 0),
+                      y0 + (g->Height - font->tf_YSize) / 2, x1 - x0 + 1,
                       td->empty_text);
         }
         return;
@@ -208,19 +227,20 @@ static void track_render(Class *cl, Object *o, struct gpRender *msg)
     draw.MethodID       = TRACKM_DRAWCONTENT;
     draw.trd_RPort      = rp;
     draw.trd_DrInfo     = dri;
-    draw.trd_Box.Left   = g->LeftEdge;
+    draw.trd_Box.Left   = x0;
     draw.trd_Box.Top    = g->TopEdge;
-    draw.trd_Box.Width  = g->Width;
+    draw.trd_Box.Width  = x1 - x0 + 1;
     draw.trd_Box.Height = g->Height;
+    draw.trd_Inset      = td->inset;
     draw.trd_Timebase   = td->tb;
     draw.trd_Timeline   = td->tl;
     IIntuition->IDoMethodA(o, (Msg)&draw);
 
     /* The playhead, two pixels wide, on top of everything. */
     x = FB_ViewTimeToX(&td->tb->view, td->tb->playhead);
-    if (x >= 0 && x < g->Width) {
-        set_rgb(rp, COL_PLAYHEAD);
-        IGraphics->RectFill(rp, x0 + x, y0, x0 + x + (x + 1 < g->Width), y1);
+    if (x >= 0 && x0 + x <= x1) {
+        Track_SetRGB(rp, COL_PLAYHEAD);
+        IGraphics->RectFill(rp, x0 + x, y0, x0 + x + (x0 + x < x1), y1);
     }
 }
 
@@ -249,9 +269,10 @@ static uint32 track_go_active(Class *cl, Object *o, struct gpInput *msg)
 {
     struct TrackData *td = INST_DATA(cl, o);
 
-    if (!msg->gpi_IEvent || timeline_empty(td))
+    if (!msg->gpi_IEvent || timeline_empty(td) ||
+        msg->gpi_Mouse.X < td->inset)
         return GMR_NOREUSE;
-    set_playhead_x(td, msg->gpi_Mouse.X);
+    set_playhead_x(td, msg->gpi_Mouse.X - td->inset);
     redraw(o, msg->gpi_GInfo);
     notify(cl, o, msg->gpi_GInfo, OPUF_INTERIM);
     return GMR_MEACTIVE;
@@ -274,7 +295,7 @@ static uint32 track_handle_input(Class *cl, Object *o, struct gpInput *msg)
         notify(cl, o, msg->gpi_GInfo, 0);
         return GMR_REUSE;
     case IECODE_NOBUTTON:
-        if (set_playhead_x(td, msg->gpi_Mouse.X)) {
+        if (set_playhead_x(td, msg->gpi_Mouse.X - td->inset)) {
             redraw(o, msg->gpi_GInfo);
             notify(cl, o, msg->gpi_GInfo, OPUF_INTERIM);
         }
@@ -321,7 +342,8 @@ static uint32 track_dispatch(Class *cl, Object *o, Msg msg)
         ret = IIntuition->IDoSuperMethodA(cl, o, msg);
         td = INST_DATA(cl, o);
         if (td->tb)
-            FB_ViewSetWidth(&td->tb->view, ((struct Gadget *)o)->Width);
+            FB_ViewSetWidth(&td->tb->view,
+                            ((struct Gadget *)o)->Width - td->inset);
         return ret;
 
     case GM_RENDER:
@@ -394,7 +416,7 @@ static void ruler_draw(struct trackDraw *d)
             FB_FormatTimecode(buf, sizeof(buf), t, major, frame_us,
                               Locale_DecimalPoint());
             IGraphics->SetAPen(rp, dri->dri_Pens[TEXTPEN]);
-            draw_text(rp, font, left + x + 3, top + 1, w - x - 3, buf);
+            Track_Text(rp, font, left + x + 3, top + 1, w - x - 3, buf);
         }
     }
 }
@@ -482,12 +504,12 @@ static void film_dummy_frame(const FBThumbRequest *r)
     long span = r->cell.Width > 8 ? r->cell.Width - 8 : 1;
     long sun = left + 2 + (long)((r->source_t / 200000) % span);
 
-    set_rgb(r->rp, sky[k]);
-    fill_clipped(r->rp, &r->clip, left, top, right, horizon - 1);
-    set_rgb(r->rp, ground[k]);
-    fill_clipped(r->rp, &r->clip, left, horizon, right, bottom);
-    set_rgb(r->rp, COL_SUN);
-    fill_clipped(r->rp, &r->clip, sun, top + 3, sun + 4, top + 6);
+    Track_SetRGB(r->rp, sky[k]);
+    Track_FillClipped(r->rp, &r->clip, left, top, right, horizon - 1);
+    Track_SetRGB(r->rp, ground[k]);
+    Track_FillClipped(r->rp, &r->clip, left, horizon, right, bottom);
+    Track_SetRGB(r->rp, COL_SUN);
+    Track_FillClipped(r->rp, &r->clip, sun, top + 3, sun + 4, top + 6);
 }
 
 /* The file part of `path`, in white, from x on, cut off at the film's
@@ -503,8 +525,8 @@ static void name_at(struct RastPort *rp, struct DrawInfo *dri,
     if (font->tf_YSize > h)
         return;
     IGraphics->SetFont(rp, font);
-    set_rgb(rp, 0xFFFFFF);
-    draw_text(rp, font, x, top + (h - font->tf_YSize) / 2,
+    Track_SetRGB(rp, 0xFFFFFF);
+    Track_Text(rp, font, x, top + (h - font->tf_YSize) / 2,
               film->MaxX - x + 1, name);
 }
 
@@ -533,15 +555,15 @@ static void film_draw(struct FilmData *fd, struct trackDraw *d)
     film.MaxX = left + right;
     film.MaxY = bottom;
 
-    set_rgb(rp, COL_FILM);
+    Track_SetRGB(rp, COL_FILM);
     IGraphics->RectFill(rp, film.MinX, film.MinY, film.MaxX, film.MaxY);
 
     /* Sprocket holes, moving with the film when it scrolls. */
-    set_rgb(rp, COL_HOLE);
+    Track_SetRGB(rp, COL_HOLE);
     for (x = -(FB_ViewStartPx(v) % HOLE_PITCH); x <= right; x += HOLE_PITCH) {
-        fill_clipped(rp, &film, left + x + 3, top + 2,
+        Track_FillClipped(rp, &film, left + x + 3, top + 2,
                      left + x + 2 + HOLE_W, top + 1 + hole_h);
-        fill_clipped(rp, &film, left + x + 3, bottom - 1 - hole_h,
+        Track_FillClipped(rp, &film, left + x + 3, bottom - 1 - hole_h,
                      left + x + 2 + HOLE_W, bottom - 2);
     }
 
@@ -576,8 +598,8 @@ static void film_draw(struct FilmData *fd, struct trackDraw *d)
             continue;
         if (!fd->pictures) {
             /* Plain: the file's colour, and its name where it starts. */
-            set_rgb(rp, sky[req.source % 6]);
-            fill_clipped(rp, &req.clip, req.clip.MinX, req.clip.MinY,
+            Track_SetRGB(rp, sky[req.source % 6]);
+            Track_FillClipped(rp, &req.clip, req.clip.MinX, req.clip.MinY,
                          req.clip.MaxX, req.clip.MaxY);
             if (clip != prev_clip && num_names < MAX_NAMES) {
                 name_x[num_names] = req.clip.MinX + 2;
@@ -586,8 +608,8 @@ static void film_draw(struct FilmData *fd, struct trackDraw *d)
         } else if (!fd->thumb) {
             film_dummy_frame(&req);
         } else if (!fd->thumb(fd->thumb_data, &req)) {
-            set_rgb(rp, COL_LOADING);   /* not made yet */
-            fill_clipped(rp, &req.clip, req.clip.MinX, req.clip.MinY,
+            Track_SetRGB(rp, COL_LOADING);   /* not made yet */
+            Track_FillClipped(rp, &req.clip, req.clip.MinX, req.clip.MinY,
                          req.clip.MaxX, req.clip.MaxY);
         }
         prev_clip = clip;
@@ -599,7 +621,7 @@ static void film_draw(struct FilmData *fd, struct trackDraw *d)
                 fd->cell_h, tl->sources[name_src[i]].path);
 
     /* Where a picture clip starts, other than at the very beginning. */
-    set_rgb(rp, COL_CUT);
+    Track_SetRGB(rp, COL_CUT);
     for (i = 0; i < tl->num_clips; i++) {
         const FBClip *c = &tl->clips[i];
         const FBTrack *tr = &tl->tracks[c->track];
@@ -607,7 +629,7 @@ static void film_draw(struct FilmData *fd, struct trackDraw *d)
         if (c->start <= 0 || tr->kind != FB_TRACK_VIDEO || tr->hidden)
             continue;
         x = FB_ViewTimeToX(v, FB_TimelineClipStart(tl, i));
-        fill_clipped(rp, &film, left + x - 1, top, left + x, bottom);
+        Track_FillClipped(rp, &film, left + x - 1, top, left + x, bottom);
     }
 }
 
@@ -668,6 +690,9 @@ BOOL Track_MakeClasses(void)
     if (!FilmstripClass)
         goto fail;
     FilmstripClass->cl_Dispatcher.h_Entry = (HOOKFUNC)film_dispatch;
+
+    if (!(LanesClass = Lanes_MakeClass(TrackClass)))
+        goto fail;
     return TRUE;
 
 fail:
@@ -677,6 +702,9 @@ fail:
 
 void Track_FreeClasses(void)
 {
+    if (LanesClass)
+        IIntuition->FreeClass(LanesClass);
+    LanesClass = NULL;
     if (FilmstripClass)
         IIntuition->FreeClass(FilmstripClass);
     if (RulerClass)

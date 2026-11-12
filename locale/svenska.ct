@@ -352,3 +352,54 @@ MSG_UNSAVED_TEXT
 ;
 MSG_UNSAVED_BUTTONS
 Spara|Släng|Avbryt
+MSG_TRACK_RESULT
+Resultat
+;
+MSG_TRACK_PICTURE
+Bild %ld
+;
+MSG_TRACK_SOUND
+Ljud %ld
+;
+MSG_TRACK_DROP
+Släpp filer här: var och en får ett eget spår
+;
+MSG_LABEL_FROM_FILE
+Från filen
+;
+MSG_HINT_FROM_FILE
+Var i filen klippet börjar. Skriv en tid och tryck Retur
+;
+MSG_HINT_STARTS
+Var klippet börjar i redigeringen
+;
+MSG_HINT_LANES
+Klicka på ett klipp för att välja det, dra i dess ändar för att korta eller förlänga det. Klicka på ett spårs namn för att välja spåret
+;
+MSG_MENU_TRACK
+Spår
+;
+MSG_MENU_APPEND_FILE
+Lägg till fil sist...
+;
+MSG_MENU_MUTE
+Stäng av ljudet
+;
+MSG_MENU_HIDE
+Dölj bilden
+;
+MSG_MENU_REMOVE_TRACK
+Ta bort spåret
+;
+MSG_STATUS_SELECT_TRACK
+Klicka på ett spårs namn först
+;
+MSG_REQ_REMOVE_TRACK
+Ta bort %s och klippen på det?
+;
+MSG_REQ_REMOVE_TRACK_BUTTONS
+Ta bort|Avbryt
+;
+MSG_INSPECTOR_NONE
+Inget klipp valt
+;

@@ -48,16 +48,15 @@
 #include <proto/exec.h>
 #include <proto/dos.h>
 #include <proto/intuition.h>
+#include <proto/graphics.h>
 #include <proto/asl.h>
 #include <proto/wb.h>
-#include <proto/listbrowser.h>
 #include <proto/utility.h>
 #include <proto/gadtools.h>
 
 #include <classes/window.h>
 #include <gadgets/layout.h>
 #include <gadgets/button.h>
-#include <gadgets/listbrowser.h>
 #include <gadgets/slider.h>
 #include <gadgets/scroller.h>
 #include <gadgets/string.h>
@@ -79,9 +78,10 @@
 
 enum {
     GID_ADD = 1, GID_SPLIT, GID_REMOVE, GID_FADE, GID_PREVIEW, GID_EXPORT,
-    GID_CLIPS, GID_POSITION, GID_PROGRESS, GID_STATUS,
+    GID_POSITION, GID_PROGRESS, GID_STATUS,
     GID_RULER, GID_FILMSTRIP, GID_SCROLL, GID_ZOOM,
-    GID_SET_IN, GID_SET_OUT, GID_IN, GID_OUT, GID_LENGTH, GID_LAST
+    GID_SET_IN, GID_SET_OUT, GID_LANES,
+    GID_CLIPNAME, GID_STARTS, GID_IN, GID_LENGTH, GID_LAST
 };
 
 /* Menu commands without a button. Menu items for button actions use the
@@ -90,7 +90,8 @@ enum {
     MID_CANCEL = 100, MID_ABOUT, MID_QUIT, MID_FIT_MENU,
     MID_NEW, MID_OPEN, MID_SAVE, MID_SAVE_AS,
     MID_FIT_FIT, MID_FIT_FILL, MID_FIT_STRETCH, MID_SHOW_PICTURES,
-    MID_WRITE_LOG,
+    MID_WRITE_LOG, MID_TRACK_APPEND, MID_TRACK_MUTE, MID_TRACK_HIDE,
+    MID_TRACK_REMOVE,
     MID_EFFECT = 200     /* + module index */
 };
 
@@ -102,23 +103,22 @@ static struct {
     { NULL, NULL, "window.class" },
     { NULL, NULL, "gadgets/layout.gadget" },
     { NULL, NULL, "gadgets/button.gadget" },
-    { NULL, NULL, "gadgets/listbrowser.gadget" },
     { NULL, NULL, "gadgets/slider.gadget" },
     { NULL, NULL, "gadgets/fuelgauge.gadget" },
     { NULL, NULL, "images/label.image" },
     { NULL, NULL, "gadgets/scroller.gadget" },
     { NULL, NULL, "gadgets/string.gadget" },
 };
-enum { C_WINDOW, C_LAYOUT, C_BUTTON, C_LISTBROWSER, C_SLIDER, C_FUELGAUGE,
+enum { C_WINDOW, C_LAYOUT, C_BUTTON, C_SLIDER, C_FUELGAUGE,
        C_LABEL, C_SCROLLER, C_STRING, C_COUNT };
 
-static struct ListBrowserIFace *LB;   /* listbrowser.gadget interface */
 static struct MsgPort *AppPort;
 static Object *WinObj;
 static struct Window *Win;
 static struct Gadget *Gad[GID_LAST];
-static struct List ClipList;
-static struct ColumnInfo *Columns;
+/* What's selected in the track editor: a clip, and a track (for the
+ * Track menu). -1 for none. */
+static int Selected = -1, SelectedTrack = -1;
 static FBTimebase TB;
 static struct Hook IdcmpHook;
 static char PositionText[32];
@@ -129,8 +129,9 @@ static struct HintInfo Hints[] = {
     { GID_RULER,     -1, NULL, 0 },
     { GID_FILMSTRIP, -1, NULL, 0 },
     { GID_IN,        -1, NULL, 0 },
-    { GID_OUT,       -1, NULL, 0 },
     { GID_LENGTH,    -1, NULL, 0 },
+    { GID_STARTS,    -1, NULL, 0 },
+    { GID_LANES,     -1, NULL, 0 },
     { -1, -1, NULL, 0 }
 };
 static BOOL TrackClassesMade;
@@ -165,21 +166,6 @@ static Object *button(uint32 id, const char *text)
 static Object *label(const char *text)
 {
     return IIntuition->NewObject(CLS(C_LABEL), NULL, LABEL_Text, text, TAG_END);
-}
-
-static void free_clip_nodes(void)
-{
-    struct Node *n;
-
-    while ((n = IExec->RemHead(&ClipList)))
-        LB->FreeListBrowserNode(n);
-}
-
-static void fmt_time(char *buf, size_t len, fb_ms_t ms)
-{
-    snprintf(buf, len, "%ld:%02ld%c%01ld", (long)(ms / 60000),
-             (long)((ms / 1000) % 60), Locale_DecimalPoint(),
-             (long)((ms / 100) % 10));
 }
 
 /* Text for how a clip is fitted into the frame, or NULL if it isn't
@@ -259,6 +245,32 @@ static void zoom_to(uint32 slider)
         TAG_END);
 }
 
+static void update_clip_fields(int clip);
+static void sync_menus(void);
+static int selected_clip(void);
+
+/* The track editor reports a selection, a dragged edge, or (like the
+ * ruler) a moved playhead. */
+static void lanes_changed(struct TagItem *tags)
+{
+    if (IUtility->FindTagItem(LANES_EditClip, tags)) {
+        App_TrimClip((int32)IUtility->GetTagData(LANES_EditClip, 0, tags),
+                     (int32)IUtility->GetTagData(LANES_EditIn, 0, tags),
+                     (int32)IUtility->GetTagData(LANES_EditOut, 0, tags));
+        MainWindow_Refresh();
+        return;
+    }
+    if (IUtility->FindTagItem(LANES_Selected, tags)) {
+        Selected = (int32)IUtility->GetTagData(LANES_Selected, -1, tags);
+        SelectedTrack = (int32)IUtility->GetTagData(LANES_Track, -1, tags);
+        update_clip_fields(selected_clip());
+        sync_menus();
+        return;
+    }
+    if (IUtility->FindTagItem(TRACK_Playhead, tags))
+        timebase_changed(Gad[GID_LANES]);
+}
+
 /* Live updates while something is dragged: the tracks, the scroller and
  * the zoom slider notify the window (ICA_TARGET ICTARGET_IDCMP), and
  * window.class calls this from WM_HANDLEINPUT. */
@@ -276,6 +288,9 @@ static uint32 idcmp_hook(struct Hook *hook, Object *winobj,
     case GID_FILMSTRIP:
         /* The track has moved TB's playhead and redrawn itself. */
         timebase_changed(Gad[id]);
+        break;
+    case GID_LANES:
+        lanes_changed(tags);
         break;
     case GID_SCROLL:
         if (IUtility->FindTagItem(SCROLLER_Top, tags))
@@ -345,6 +360,13 @@ static BOOL menu_enabled(uint32 id)
         return have_clips && !App.rendering;
     case MID_CANCEL:
         return App.rendering != 0;
+    case MID_TRACK_APPEND:
+    case MID_TRACK_MUTE:
+    case MID_TRACK_REMOVE:
+        return SelectedTrack >= 0 && SelectedTrack < App.timeline.num_tracks;
+    case MID_TRACK_HIDE:
+        return SelectedTrack >= 0 && SelectedTrack < App.timeline.num_tracks &&
+               App.timeline.tracks[SelectedTrack].kind == FB_TRACK_VIDEO;
     default:
         return TRUE;
     }
@@ -386,6 +408,18 @@ static int update_menu_items(BOOL apply)
                 }
                 if (id == MID_WRITE_LOG) {
                     if (App_LogEnabled())
+                        flags |= CHECKED;
+                    else
+                        flags &= ~CHECKED;
+                }
+                if (id == MID_TRACK_MUTE || id == MID_TRACK_HIDE) {
+                    int t = SelectedTrack;
+                    BOOL on = t >= 0 && t < App.timeline.num_tracks &&
+                              (id == MID_TRACK_MUTE
+                                   ? App.timeline.tracks[t].muted
+                                   : App.timeline.tracks[t].hidden);
+
+                    if (on)
                         flags |= CHECKED;
                     else
                         flags &= ~CHECKED;
@@ -445,7 +479,7 @@ static BOOL make_menus(struct Screen *scr)
     struct NewMenu *nm;
     int n = 0, i;
 
-    nm = calloc(32 + nmods, sizeof(*nm));
+    nm = calloc(40 + nmods, sizeof(*nm));
     if (!nm)
         return FALSE;
 
@@ -473,6 +507,17 @@ static BOOL make_menus(struct Screen *scr)
 
     /* One item per registered module, so new modules show up here without
      * GUI changes. Module labels aren't translated yet. */
+    add_menu(nm, &n, NM_TITLE, FB_Str(MSG_MENU_TRACK),   NULL, 0);
+    add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_APPEND_FILE), NULL,
+             MID_TRACK_APPEND);
+    add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_MUTE),     NULL, MID_TRACK_MUTE);
+    nm[n - 1].nm_Flags = CHECKIT | MENUTOGGLE;
+    add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_HIDE),     NULL, MID_TRACK_HIDE);
+    nm[n - 1].nm_Flags = CHECKIT | MENUTOGGLE;
+    add_menu(nm, &n, NM_ITEM, NM_BARLABEL,               NULL, 0);
+    add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_REMOVE_TRACK), NULL,
+             MID_TRACK_REMOVE);
+
     add_menu(nm, &n, NM_TITLE, FB_Str(MSG_MENU_EFFECTS), NULL, 0);
     for (i = 0; i < nmods; i++) {
         const FBModule *mod = FB_GetModule(i);
@@ -545,7 +590,91 @@ static void show_about(void)
 }
 
 static void handle_gadget(uint32 id);
-static int selected_clip(void);
+static int ask_file(int kind, const char *title, int save, const char *file,
+                    char *buf, size_t len);
+
+/* After a file was added on a track of its own: select that track. */
+static void new_track(int track)
+{
+    if (track >= 0) {
+        Selected = -1;
+        SelectedTrack = track;
+    }
+}
+
+static int selected_track(void)
+{
+    if (SelectedTrack >= 0 && SelectedTrack < App.timeline.num_tracks)
+        return SelectedTrack;
+    App_SetStatus("%s", FB_Str(MSG_STATUS_SELECT_TRACK));
+    return -1;
+}
+
+/* "Picture 2": the same name the track editor shows. */
+static void track_label(int track, char *buf, size_t len)
+{
+    FBTrackKind kind = App.timeline.tracks[track].kind;
+    long n = 0;
+    int t;
+
+    for (t = 0; t <= track; t++)
+        if (App.timeline.tracks[t].kind == kind)
+            n++;
+    snprintf(buf, len, FB_Str(kind == FB_TRACK_VIDEO ? MSG_TRACK_PICTURE
+                                                     : MSG_TRACK_SOUND), n);
+}
+
+static int track_clips(int track)
+{
+    int i, n = 0;
+
+    for (i = 0; i < App.timeline.num_clips; i++)
+        if (App.timeline.clips[i].track == track)
+            n++;
+    return n;
+}
+
+static void track_menu(uint32 id)
+{
+    char path[FB_PATH_LEN], name[48];
+    int track = selected_track();
+
+    if (track < 0)
+        return;
+    switch (id) {
+    case MID_TRACK_APPEND:
+        if (ask_file(DRAWER_MEDIA, FB_Str(MSG_REQ_ADD_FILE), FALSE, NULL,
+                     path, sizeof(path)))
+            App_AppendFile(track, path);
+        break;
+    case MID_TRACK_MUTE:
+        App_SetTrackMuted(track, !App.timeline.tracks[track].muted);
+        break;
+    case MID_TRACK_HIDE:
+        App_SetTrackHidden(track, !App.timeline.tracks[track].hidden);
+        break;
+    case MID_TRACK_REMOVE:
+        if (track_clips(track) > 0) {
+            struct EasyStruct es;
+
+            track_label(track, name, sizeof(name));
+            memset(&es, 0, sizeof(es));
+            es.es_StructSize   = sizeof(es);
+            es.es_Title        = (STRPTR)FB_Str(MSG_MENU_REMOVE_TRACK);
+            es.es_TextFormat   = (STRPTR)FB_Str(MSG_REQ_REMOVE_TRACK);
+            es.es_GadgetFormat = (STRPTR)FB_Str(MSG_REQ_REMOVE_TRACK_BUTTONS);
+            if (IIntuition->EasyRequest(Win, &es, NULL, name) != 1)
+                break;
+        }
+        if (App_RemoveTrack(track) == 0) {
+            Selected = -1;
+            SelectedTrack = -1;
+        }
+        break;
+    }
+    MainWindow_Refresh();
+}
+
 static BOOL may_discard(void);
 static void open_project(void);
 static BOOL save_project(BOOL ask);
@@ -572,6 +701,12 @@ static void handle_menu(uint32 id)
         return;
     }
     switch (id) {
+    case MID_TRACK_APPEND:
+    case MID_TRACK_MUTE:
+    case MID_TRACK_HIDE:
+    case MID_TRACK_REMOVE:
+        track_menu(id);
+        break;
     case MID_SHOW_PICTURES:
         /* A toggle: the menu has already flipped its checkmark, and
          * sync_menus() keeps it in step with the setting either way. */
@@ -637,9 +772,9 @@ static void handle_menupick(uint16 code)
     }
 }
 
-/* ---- In, Out and Length of the selected clip ------------------------ */
+/* ---- The selected clip: name, start, where in its file, length --------- */
 
-static char InText[24], OutText[24], LengthText[24];
+static char NameText[160], StartsText[24], InText[24], LengthText[24];
 
 static void set_field(uint32 id, char *text, BOOL disabled)
 {
@@ -649,8 +784,9 @@ static void set_field(uint32 id, char *text, BOOL disabled)
                                TAG_END);
 }
 
-/* Shows the clip's times, or empty fields if no clip is selected. A still
- * picture only has a length. */
+/* Shows the clip's name (with its fit and effects), where it starts in
+ * the edit, where in its file it begins, and how long it is. A still
+ * picture has no place in a file, only a length. */
 static void update_clip_fields(int clip)
 {
     const FBTimeline *tl = &App.timeline;
@@ -658,22 +794,45 @@ static void update_clip_fields(int clip)
     BOOL none = clip < 0 || clip >= tl->num_clips;
     BOOL still = !none && tl->sources[tl->clips[clip].source].still;
 
-    InText[0] = OutText[0] = LengthText[0] = '\0';
-    if (!none) {
+    StartsText[0] = InText[0] = LengthText[0] = '\0';
+    if (none) {
+        strncpy(NameText, FB_Str(MSG_INSPECTOR_NONE), sizeof(NameText) - 1);
+        NameText[sizeof(NameText) - 1] = '\0';
+    } else {
         const FBClip *c = &tl->clips[clip];
+        int fw = 0, fh = 0, e;
+        const char *fit;
 
-        if (!still) {
-            FB_FormatTimeMs(InText, sizeof(InText), c->in, dp);
-            FB_FormatTimeMs(OutText, sizeof(OutText), c->out, dp);
+        FB_TimelineFrameSize(tl, &fw, &fh);
+        fit = fit_text(FB_ClipFitResult(tl, c, fw, fh));
+        snprintf(NameText, sizeof(NameText), "%s",
+                 IDOS->FilePart(tl->sources[c->source].path));
+        if (fit) {
+            strncat(NameText, ": ", sizeof(NameText) - strlen(NameText) - 1);
+            strncat(NameText, fit, sizeof(NameText) - strlen(NameText) - 1);
         }
+        for (e = 0; e < c->num_effects; e++) {
+            strncat(NameText, (fit || e) ? ", " : ": ",
+                    sizeof(NameText) - strlen(NameText) - 1);
+            strncat(NameText, c->effects[e].module,
+                    sizeof(NameText) - strlen(NameText) - 1);
+        }
+        FB_FormatTimeMs(StartsText, sizeof(StartsText), c->start, dp);
+        if (!still)
+            FB_FormatTimeMs(InText, sizeof(InText), c->in, dp);
         FB_FormatTimeMs(LengthText, sizeof(LengthText), c->out - c->in, dp);
     }
+    IIntuition->SetGadgetAttrs(Gad[GID_CLIPNAME], Win, NULL,
+                               GA_Text, NameText, TAG_END);
+    IIntuition->SetGadgetAttrs(Gad[GID_STARTS], Win, NULL,
+                               GA_Text, StartsText, TAG_END);
     set_field(GID_IN, InText, none || still);
-    set_field(GID_OUT, OutText, none || still);
     set_field(GID_LENGTH, LengthText, none);
 }
 
-/* A field was changed (Return or Tab): trim the selected clip to it. */
+/* A field was changed (Return or Tab): trim the selected clip to it.
+ * From file moves where in the file the clip begins and keeps its length,
+ * as far as the file allows. */
 static void clip_field_changed(uint32 id)
 {
     const FBTimeline *tl = &App.timeline;
@@ -690,67 +849,33 @@ static void clip_field_changed(uint32 id)
         App_SetStatus(FB_Str(MSG_STATUS_BAD_TIME), text ? text : "");
         return;
     }
-    if (id == GID_IN)
-        App_TrimClip(clip, t, c->out);
-    else if (id == GID_OUT)
-        App_TrimClip(clip, c->in, t);
-    else
+    if (id == GID_IN) {
+        fb_ms_t len = c->out - c->in;
+        fb_ms_t dur = tl->sources[c->source].duration;
+
+        if (dur > 0 && t + len > dur)
+            len = dur - t;
+        App_TrimClip(clip, t, t + len);
+    } else {
         App_TrimClip(clip, c->in, c->in + t);
+    }
 }
 
 void MainWindow_Refresh(void)
 {
     const FBTimeline *tl = &App.timeline;
     fb_ms_t total = FB_TimelineDuration(tl);
-    int fw = 0, fh = 0;
-    int i, sel;
+    int sel;
 
     if (!WinObj)
         return;
 
-    sel = selected_clip();
-    IIntuition->SetGadgetAttrs(Gad[GID_CLIPS], Win, NULL,
-                               LISTBROWSER_Labels, ~0, TAG_END);
-    free_clip_nodes();
-    FB_TimelineFrameSize(tl, &fw, &fh);
-    for (i = 0; i < tl->num_clips; i++) {
-        const FBClip *c = &tl->clips[i];
-        char num[12], track[12], start[16], in[16], out[16], fx[96] = "";
-        const char *fit = fit_text(FB_ClipFitResult(tl, c, fw, fh));
-        struct Node *n;
-        int e;
-
-        snprintf(num, sizeof(num), "%d", i + 1);
-        snprintf(track, sizeof(track), "%d", c->track + 1);
-        fmt_time(start, sizeof(start), c->start);
-        fmt_time(in, sizeof(in), c->in);
-        fmt_time(out, sizeof(out), c->out);
-        if (fit)
-            strncat(fx, fit, sizeof(fx) - 1);
-        for (e = 0; e < c->num_effects; e++) {
-            strncat(fx, fx[0] ? ", " : "", sizeof(fx) - strlen(fx) - 1);
-            strncat(fx, c->effects[e].module, sizeof(fx) - strlen(fx) - 1);
-        }
-        n = LB->AllocListBrowserNode(7,
-            LBNA_Column, 0, LBNCA_CopyText, TRUE, LBNCA_Text, num,
-            LBNA_Column, 1, LBNCA_CopyText, TRUE, LBNCA_Text, track,
-            LBNA_Column, 2, LBNCA_CopyText, TRUE,
-                            LBNCA_Text, IDOS->FilePart(tl->sources[c->source].path),
-            LBNA_Column, 3, LBNCA_CopyText, TRUE, LBNCA_Text, start,
-            LBNA_Column, 4, LBNCA_CopyText, TRUE, LBNCA_Text, in,
-            LBNA_Column, 5, LBNCA_CopyText, TRUE, LBNCA_Text, out,
-            LBNA_Column, 6, LBNCA_CopyText, TRUE, LBNCA_Text, fx,
-            TAG_END);
-        if (n)
-            IExec->AddTail(&ClipList, n);
-    }
-    /* Keep the same clip selected, so its fields stay. */
-    if (sel >= tl->num_clips)
-        sel = -1;
-    IIntuition->SetGadgetAttrs(Gad[GID_CLIPS], Win, NULL,
-                               LISTBROWSER_Labels,   &ClipList,
-                               LISTBROWSER_Selected, sel,
-                               TAG_END);
+    /* Clips and tracks may have gone; keep the selection valid. */
+    if (Selected >= tl->num_clips)
+        Selected = -1;
+    if (SelectedTrack >= tl->num_tracks)
+        SelectedTrack = -1;
+    sel = Selected;
     update_clip_fields(sel);
 
     Timebase_SetTimeline(&TB, tl);
@@ -758,6 +883,11 @@ void MainWindow_Refresh(void)
                                TRACK_Timeline, tl, TAG_END);
     IIntuition->SetGadgetAttrs(Gad[GID_FILMSTRIP], Win, NULL,
                                TRACK_Timeline, tl, TAG_END);
+    IIntuition->SetGadgetAttrs(Gad[GID_LANES], Win, NULL,
+                               LANES_Selected, Selected,
+                               LANES_Track,    SelectedTrack,
+                               TRACK_Timeline, tl,
+                               TAG_END);
     sync_controls();
 
     IIntuition->SetGadgetAttrs(Gad[GID_SPLIT], Win, NULL, GA_Disabled, total <= 0, TAG_END);
@@ -915,11 +1045,7 @@ static void open_project(void)
 
 static int selected_clip(void)
 {
-    int32 sel = -1;
-
-    IIntuition->GetAttr(LISTBROWSER_Selected, (Object *)Gad[GID_CLIPS],
-                        (uint32 *)&sel);
-    return sel;
+    return Selected >= 0 && Selected < App.timeline.num_clips ? Selected : -1;
 }
 
 static void handle_gadget(uint32 id)
@@ -947,10 +1073,11 @@ static void handle_gadget(uint32 id)
     case GID_ADD:
         if (ask_file(DRAWER_MEDIA, FB_Str(MSG_REQ_ADD_FILE), FALSE, NULL,
                      path, sizeof(path)))
-            App_AddFile(path);
+            new_track(App_AddFile(path));
         break;
+    case GID_LANES:
+        return;      /* everything came through idcmp_hook() */
     case GID_IN:
-    case GID_OUT:
     case GID_LENGTH:
         clip_field_changed(id);
         break;
@@ -976,9 +1103,10 @@ static void handle_gadget(uint32 id)
                   FB_MS(TB.playhead));
         break;
     case GID_REMOVE:
-        if ((clip = selected_clip()) >= 0)
-            App_RemoveClip(clip);
-        else
+        if ((clip = selected_clip()) >= 0) {
+            if (App_RemoveClip(clip) == 0)
+                Selected = -1;
+        } else
             App_SetStatus("%s", FB_Str(MSG_STATUS_SELECT_CLIP));
         break;
     case GID_FADE:
@@ -1015,14 +1143,57 @@ static void handle_appmessages(void)
             if (!IDOS->NameFromLock(arg->wa_Lock, path, sizeof(path)) ||
                 !IDOS->AddPart(path, arg->wa_Name, sizeof(path)))
                 continue;
-            if (!App_IsProjectFile(path))
-                App_AddFile(path);
-            else if (may_discard())
+            if (!App_IsProjectFile(path)) {
+                /* On a track: after its last clip, if the file suits it.
+                 * Anywhere else: on a track of its own. */
+                struct lanesTrackAt at;
+                int32 track;
+
+                at.MethodID = LANESM_TRACKAT;
+                at.lta_X = am->am_MouseX;
+                at.lta_Y = am->am_MouseY;
+                track = (int32)IIntuition->IDoMethodA((Object *)Gad[GID_LANES],
+                                                      (Msg)&at);
+                if (track < 0 || App_AppendFile(track, path) != 0)
+                    new_track(App_AddFile(path));
+            } else if (may_discard())
                 App_OpenProject(path);
         }
         IExec->ReplyMsg((struct Message *)am);
     }
     MainWindow_Refresh();
+}
+
+/* The name column in front of the tracks: wide enough for the longest of
+ * "Picture 88", "Sound 88" and "Result" in the screen's font. */
+static int Inset = 80;
+
+static int name_column_width(void)
+{
+    struct Screen *scr = IIntuition->LockPubScreen(NULL);
+    const char *fmts[2];
+    struct RastPort rp;
+    char buf[64];
+    long w = 0, t;
+    int i;
+
+    if (!scr)
+        return 80;
+    IGraphics->InitRastPort(&rp);
+    IGraphics->SetFont(&rp, scr->RastPort.Font);
+    fmts[0] = FB_Str(MSG_TRACK_PICTURE);
+    fmts[1] = FB_Str(MSG_TRACK_SOUND);
+    for (i = 0; i < 2; i++) {
+        snprintf(buf, sizeof(buf), fmts[i], 88L);
+        if ((t = IGraphics->TextLength(&rp, buf, strlen(buf))) > w)
+            w = t;
+    }
+    t = IGraphics->TextLength(&rp, FB_Str(MSG_TRACK_RESULT),
+                              strlen(FB_Str(MSG_TRACK_RESULT)));
+    if (t > w)
+        w = t;
+    IIntuition->UnlockPubScreen(NULL, scr);
+    return (int)w + 14;
 }
 
 /* A track gadget sharing TB, notifying the window while dragged. */
@@ -1036,7 +1207,12 @@ static Object *track(Class *cls, uint32 id, CONST_STRPTR empty_text)
         TRACK_Timebase,  &TB,
         TRACK_Timeline,  &App.timeline,
         TRACK_EmptyText, empty_text,
+        TRACK_Inset,     Inset,
+        TRACK_Label,     id == GID_FILMSTRIP ? FB_Str(MSG_TRACK_RESULT) : NULL,
         FILMSTRIP_Pictures, show_pictures(),
+        LANES_DropText,  FB_Str(MSG_TRACK_DROP),
+        LANES_PictureName, FB_Str(MSG_TRACK_PICTURE),
+        LANES_SoundName, FB_Str(MSG_TRACK_SOUND),
         TAG_END);
 
     Gad[id] = (struct Gadget *)o;
@@ -1060,31 +1236,19 @@ int MainWindow_Open(void)
         return -1;
     TrackClassesMade = TRUE;
     Timebase_Init(&TB, FB_CELL_W_DEFAULT);
+    Inset = name_column_width();
     IdcmpHook.h_Entry = (HOOKFUNC)idcmp_hook;
     strcpy(PositionText, "0:00");
     Hints[0].hi_Text = FB_Str(MSG_HINT_ZOOM);
     Hints[1].hi_Text = FB_Str(MSG_HINT_PLAYHEAD);
     Hints[2].hi_Text = FB_Str(MSG_HINT_PLAYHEAD);
-    Hints[3].hi_Text = Hints[4].hi_Text = Hints[5].hi_Text =
-        FB_Str(MSG_HINT_TIMES);
+    Hints[3].hi_Text = FB_Str(MSG_HINT_FROM_FILE);
+    Hints[4].hi_Text = FB_Str(MSG_HINT_TIMES);
+    Hints[5].hi_Text = FB_Str(MSG_HINT_STARTS);
+    Hints[6].hi_Text = FB_Str(MSG_HINT_LANES);
 
-    LB = (struct ListBrowserIFace *)IExec->GetInterface(
-             (struct Library *)classes[C_LISTBROWSER].base, "main", 1, NULL);
-    if (!LB)
-        return -1;
 
     AppPort = IExec->AllocSysObjectTags(ASOT_PORT, TAG_END);
-    IExec->NewList(&ClipList);
-
-    Columns = LB->AllocLBColumnInfo(7,
-        LBCIA_Column, 0, LBCIA_Title, FB_Str(MSG_COL_NUMBER),  LBCIA_Weight, 5,
-        LBCIA_Column, 1, LBCIA_Title, FB_Str(MSG_COL_TRACK),   LBCIA_Weight, 7,
-        LBCIA_Column, 2, LBCIA_Title, FB_Str(MSG_COL_FILE),    LBCIA_Weight, 33,
-        LBCIA_Column, 3, LBCIA_Title, FB_Str(MSG_COL_START),   LBCIA_Weight, 12,
-        LBCIA_Column, 4, LBCIA_Title, FB_Str(MSG_COL_IN),      LBCIA_Weight, 12,
-        LBCIA_Column, 5, LBCIA_Title, FB_Str(MSG_COL_OUT),     LBCIA_Weight, 12,
-        LBCIA_Column, 6, LBCIA_Title, FB_Str(MSG_COL_EFFECTS), LBCIA_Weight, 19,
-        TAG_END);
 
     buttons = IIntuition->NewObject(CLS(C_LAYOUT), NULL,
         LAYOUT_Orientation, LAYOUT_ORIENT_HORIZ,
@@ -1099,14 +1263,6 @@ int MainWindow_Open(void)
         LAYOUT_AddChild, button(GID_EXPORT,  FB_Str(MSG_BTN_EXPORT)),
         TAG_END);
 
-    Gad[GID_CLIPS] = (struct Gadget *)IIntuition->NewObject(CLS(C_LISTBROWSER), NULL,
-        GA_ID,                   GID_CLIPS,
-        GA_RelVerify,            TRUE,
-        LISTBROWSER_ColumnInfo,  Columns,
-        LISTBROWSER_ColumnTitles, TRUE,
-        LISTBROWSER_Labels,      &ClipList,
-        LISTBROWSER_ShowSelected, TRUE,
-        TAG_END);
 
     /* Ruler, film strip and scroller, stacked without gaps. */
     timeline = IIntuition->NewObject(CLS(C_LAYOUT), NULL,
@@ -1117,6 +1273,7 @@ int MainWindow_Open(void)
         LAYOUT_AddChild, track(FilmstripClass, GID_FILMSTRIP,
                                FB_Str(MSG_TRACK_EMPTY)),
         CHILD_WeightedHeight, 0,
+        LAYOUT_AddChild, track(LanesClass, GID_LANES, FB_Str(MSG_TRACK_DROP)),
         LAYOUT_AddChild, Gad[GID_SCROLL] = (struct Gadget *)IIntuition->NewObject(
                 CLS(C_SCROLLER), NULL,
             GA_ID,                GID_SCROLL,
@@ -1148,6 +1305,18 @@ int MainWindow_Open(void)
         SLIDER_Orientation, SLIDER_HORIZONTAL,
         TAG_END);
 
+    Gad[GID_CLIPNAME] = (struct Gadget *)IIntuition->NewObject(CLS(C_BUTTON),
+            NULL,
+        GA_ID,       GID_CLIPNAME,
+        GA_ReadOnly, TRUE,
+        GA_Text,     NameText,
+        BUTTON_Justification, BCJ_LEFT,
+        TAG_END);
+    Gad[GID_STARTS] = (struct Gadget *)IIntuition->NewObject(CLS(C_BUTTON), NULL,
+        GA_ID,       GID_STARTS,
+        GA_ReadOnly, TRUE,
+        GA_Text,     StartsText,
+        TAG_END);
     for (i = GID_IN; i <= GID_LENGTH; i++)
         Gad[i] = (struct Gadget *)IIntuition->NewObject(CLS(C_STRING), NULL,
             GA_ID,            i,
@@ -1159,13 +1328,17 @@ int MainWindow_Open(void)
             TAG_END);
     cliprow = IIntuition->NewObject(CLS(C_LAYOUT), NULL,
         LAYOUT_Orientation, LAYOUT_ORIENT_HORIZ,
+        LAYOUT_AddChild,    Gad[GID_CLIPNAME],
+        CHILD_WeightedWidth, 200,
+        LAYOUT_AddChild,    Gad[GID_STARTS],
+        CHILD_Label,        label(FB_Str(MSG_COL_START)),
+        CHILD_MinWidth,     72,
         LAYOUT_AddChild,    Gad[GID_IN],
-        CHILD_Label,        label(FB_Str(MSG_COL_IN)),
-        LAYOUT_AddChild,    Gad[GID_OUT],
-        CHILD_Label,        label(FB_Str(MSG_COL_OUT)),
+        CHILD_Label,        label(FB_Str(MSG_LABEL_FROM_FILE)),
         LAYOUT_AddChild,    Gad[GID_LENGTH],
         CHILD_Label,        label(FB_Str(MSG_LABEL_LENGTH)),
         TAG_END);
+    strcpy(NameText, FB_Str(MSG_INSPECTOR_NONE));
 
     viewrow = IIntuition->NewObject(CLS(C_LAYOUT), NULL,
         LAYOUT_Orientation, LAYOUT_ORIENT_HORIZ,
@@ -1198,10 +1371,8 @@ int MainWindow_Open(void)
         LAYOUT_AddChild,    buttons,
         CHILD_WeightedHeight, 0,
         LAYOUT_AddChild,    timeline,
-        CHILD_WeightedHeight, 0,
         LAYOUT_AddChild,    viewrow,
         CHILD_WeightedHeight, 0,
-        LAYOUT_AddChild,    Gad[GID_CLIPS],
         LAYOUT_AddChild,    cliprow,
         CHILD_WeightedHeight, 0,
         LAYOUT_AddChild,    Gad[GID_PROGRESS],
@@ -1232,7 +1403,7 @@ int MainWindow_Open(void)
         WA_CloseGadget,     TRUE,
         WA_SizeGadget,      TRUE,
         WA_InnerWidth,      640,
-        WA_InnerHeight,     380,
+        WA_InnerHeight,     420,
         WA_IDCMP,           IDCMP_GADGETUP | IDCMP_CLOSEWINDOW |
                             IDCMP_IDCMPUPDATE | IDCMP_NEWSIZE |
                             IDCMP_GADGETHELP | IDCMP_MENUPICK |
@@ -1318,13 +1489,6 @@ void MainWindow_Close(void)
         Win = NULL;
     }
     free_menus();                            /* window.class doesn't */
-    if (LB) {
-        free_clip_nodes();
-        if (Columns)
-            LB->FreeLBColumnInfo(Columns);
-        IExec->DropInterface((struct Interface *)LB);
-        LB = NULL;
-    }
     if (AppPort) {
         struct Message *m;
 

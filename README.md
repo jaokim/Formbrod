@@ -40,7 +40,9 @@ Early skeleton. Working so far:
 - [x] Set in / Set out at the playhead (buttons, Edit menu, I and O keys),
       typed In / Out / Length for the selected clip, and still pictures
       (PNG, JPEG...) as clips of any length
-- [ ] Track editor under the film strip: clip boxes, trimming, moving
+- [x] Track editor under the film strip: clips you select and trim by
+      dragging their ends, track names and a Track menu, drops onto tracks
+- [ ] Moving clips by dragging them, within a track or to another
 - [ ] Real thumbnails, waveforms
 - [ ] Remote rendering on a render server
 
@@ -48,7 +50,19 @@ Early skeleton. Working so far:
 
 - **Add file** puts a file on a new track of its own: a video, a sound
   file (music) or a still picture. A picture starts out 5 seconds long.
-- Click or drag in the ruler or film strip to move the playhead.
+- Under the film strip (which shows the result) is the **track editor**:
+  one row per track, named *Picture 1*, *Sound 1* and so on, with each
+  picture track's sound on a lane under it. Higher picture tracks are
+  drawn on top of lower ones; all sound is mixed.
+- Click a clip to select it; drag either end of a clip to make it shorter
+  or longer. The clips after it on the track move along.
+- Click a track's name to select the track for the **Track** menu:
+  *Append file...* (adds a file after its last clip), *Mute sound*,
+  *Hide picture* and *Remove track*.
+- Drop files from Workbench on a track to append them to it, or on the
+  empty space below the tracks to give each its own track.
+- Click or drag in the ruler, the film strip or an empty part of the track
+  editor to move the playhead.
 - **Set in** (or the I key) cuts away the start of a clip up to the
   playhead; **Set out** (O) cuts away the end after it. They work on the
   clip selected in the list, or else on the picture under the playhead.
@@ -56,9 +70,11 @@ Early skeleton. Working so far:
 - Put the playhead *after* the end of a clip and choose **Set out** to make
   it longer, as far as its file goes; a still picture can be any length.
   The timeline goes on a little past its last clip for this.
-- Or type the times: select a clip in the list and use the **In**, **Out**
-  and **Length** fields under it. Write `1:05.5` or plain seconds like
-  `12.5`, then press Return. A still picture only has a length.
+- Or type the times: under the playhead and zoom controls, the selected
+  clip shows where it **Starts** in the edit, where in its file it begins
+  (**From file**) and its **Length**. Change From file or Length by
+  writing `1:05.5` or plain seconds like `12.5`, then press Return. A
+  still picture only has a length.
 - **Split** cuts the selected clip's track at the playhead, or all tracks
   if no clip is selected.
 

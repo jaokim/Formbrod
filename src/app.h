@@ -43,6 +43,12 @@ int  App_AddFile(const char *path);
 int  App_AppendFile(int track, const char *path);
 /* Splits at `at` on one track, or on all of them when track is -1. */
 int  App_Split(int track, fb_ms_t at);
+/* Tracks: remove one (with its clips; the tracks above move down), or
+ * turn off its sound or picture. */
+int  App_RemoveTrack(int track);
+int  App_SetTrackMuted(int track, int muted);
+int  App_SetTrackHidden(int track, int hidden);
+
 /* Trimming. TrimClip sets a clip's in and out points in its file; the
  * clips after it on its track move along. SetIn / SetOut trim at timeline
  * time `at` (the playhead): SetIn drops what's before it, SetOut what's
