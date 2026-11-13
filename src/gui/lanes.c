@@ -20,9 +20,12 @@
  *   - a clip's edge, dragged, trims it: the clip is drawn at its new
  *     length while dragging, and on release the window is told the new in
  *     and out points (LANES_EditClip/In/Out);
- *   - a clip's middle, dragged, moves it: an outline follows the pointer
- *     on the track it's over (or below the tracks, for a new track) and a
- *     line shows where it will go in between the clips there. On release
+ *   - a clip's middle, dragged, moves it. Its old place closes up on the
+ *     screen straight away, and an outline shows where it will land: where
+ *     it's dropped if there's room (leaving a gap in front of it), else in
+ *     between the clips there, with a line marking the spot. Its ends
+ *     snap to other clips' ends, the start and the playhead when near
+ *     them. Below the tracks means a new track. On release
  *     the window is told the clip, track and start (LANES_MoveClip/Track/
  *     At) and moves it with App_MoveClipTo(). A track it can't go on (a
  *     video clip on an audio track) shows a grey outline and no line.
@@ -70,6 +73,7 @@
 #define COL_GHOST_NO   0x888780      /* ...where it can't go */
 #define COL_INSERT     0xEF9F27      /* where it will go in */
 #define DRAG_PX        3             /* move this far before it's a drag */
+#define SNAP_PX        6             /* ends this near something snap to it */
 
 enum { ROW_PICTURE, ROW_LINKED, ROW_SOUND };
 
@@ -98,8 +102,10 @@ struct LanesData {
     long              press_x, press_y;
     fb_ms_t           grab;
     int               to_track;
-    fb_ms_t           to_start;
+    fb_ms_t           to_start;      /* where it's dropped */
     BOOL              to_ok;
+    fb_ms_t           to_land;       /* where it will go */
+    int               to_insert;     /* in between clips (they move on) */
 };
 
 /* ---- Rows ------------------------------------------------------------ */
@@ -197,15 +203,19 @@ static void clip_span(const struct LanesData *ld, int clip, long *x0, long *x1)
 {
     const FBClip *c = &ld->tl->clips[clip];
     const FBTimeView *v = &ld->tb->view;
-    fb_ms_t in = c->in, out = c->out;
+    fb_ms_t in = c->in, out = c->out, start = c->start;
 
     if ((ld->mode == MODE_TRIM_IN || ld->mode == MODE_TRIM_OUT) &&
         clip == ld->drag_clip) {
         in = ld->drag_in;
         out = ld->drag_out;
     }
-    *x0 = FB_ViewTimeToX(v, FB_US(c->start + (in - c->in)));
-    *x1 = FB_ViewTimeToX(v, FB_US(c->start + (out - c->in))) - 1;
+    /* While one is being moved, the clips after it on its track are
+     * already shown moved up into its place. */
+    if (ld->mode == MODE_MOVE)
+        start = FB_TimelineStartWithout(ld->tl, clip, ld->drag_clip);
+    *x0 = FB_ViewTimeToX(v, FB_US(start + (in - c->in)));
+    *x1 = FB_ViewTimeToX(v, FB_US(start + (out - c->in))) - 1;
 }
 
 enum { HIT_NONE, HIT_BODY, HIT_IN, HIT_OUT };
@@ -346,21 +356,18 @@ static void draw_move(const struct LanesData *ld, struct trackDraw *d,
             break;
         }
 
-    x0 = left + FB_ViewTimeToX(v, FB_US(ld->to_start));
-    x1 = left + FB_ViewTimeToX(v, FB_US(ld->to_start + (c->out - c->in))) - 1;
+    x0 = left + FB_ViewTimeToX(v, FB_US(ld->to_land));
+    x1 = left + FB_ViewTimeToX(v, FB_US(ld->to_land + (c->out - c->in))) - 1;
     Track_SetRGB(rp, ld->to_ok ? COL_GHOST : COL_GHOST_NO);
     Track_FillClipped(rp, &box, x0, y0, x1, y0 + 1);
     Track_FillClipped(rp, &box, x0, y1 - 1, x1, y1);
     Track_FillClipped(rp, &box, x0, y0, x0 + 1, y1);
     Track_FillClipped(rp, &box, x1 - 1, y0, x1, y1);
 
-    if (ld->to_ok && ld->to_track >= 0) {
-        long x = left + FB_ViewTimeToX(v, FB_US(FB_TimelineInsertPoint(
-                     tl, ld->to_track, ld->to_start, c->out - c->in,
-                     ld->drag_clip)));
-
+    if (ld->to_ok && ld->to_insert) {
+        /* Going in between clips: a line where. */
         Track_SetRGB(rp, COL_INSERT);
-        Track_FillClipped(rp, &box, x - 1, y0 - 2, x + 1, y1 + 2);
+        Track_FillClipped(rp, &box, x0 - 1, y0 - 2, x0 + 1, y1 + 2);
     }
 }
 
@@ -415,7 +422,8 @@ static void lanes_draw(struct LanesData *ld, struct trackDraw *d)
         }
 
         for (i = 0; i < tl->num_clips; i++)
-            if (tl->clips[i].track == row->track)
+            if (tl->clips[i].track == row->track &&
+                !(ld->mode == MODE_MOVE && i == ld->drag_clip))
                 draw_clip(ld, d, row, i);
     }
 
@@ -558,6 +566,53 @@ static uint32 lanes_go_active(Class *cl, Object *o, struct gpInput *msg)
     return GMR_MEACTIVE;
 }
 
+/* Moves t to `to` if it is within SNAP_PX of it; *best keeps the
+ * nearest so far. */
+static void snap_near(fb_ms_t t, fb_ms_t to, fb_ms_t range, fb_ms_t *best,
+                      fb_ms_t *dist)
+{
+    fb_ms_t d = t > to ? t - to : to - t;
+
+    if (d <= range && d < *dist) {
+        *dist = d;
+        *best = to;
+    }
+}
+
+/* Lets a dragged clip's start or end snap to the start of the edit, the
+ * playhead, and the ends of the clips on the track it's over (as they
+ * will be once it's out of its place). */
+static void snap(struct LanesData *ld, fb_ms_t len)
+{
+    const FBTimeline *tl = ld->tl;
+    fb_ms_t range = FB_MS((fb_us_t)SNAP_PX * ld->tb->view.per_px);
+    fb_ms_t start = ld->to_start, end = start + len;
+    fb_ms_t best_s = start, dist_s = range + 1;
+    fb_ms_t best_e = end, dist_e = range + 1;
+    fb_ms_t playhead = FB_MS(ld->tb->playhead);
+    int i;
+
+    snap_near(start, 0, range, &best_s, &dist_s);
+    snap_near(start, playhead, range, &best_s, &dist_s);
+    snap_near(end, playhead, range, &best_e, &dist_e);
+    for (i = 0; ld->to_track >= 0 && i < tl->num_clips; i++) {
+        const FBClip *c = &tl->clips[i];
+        fb_ms_t s;
+
+        if (i == ld->drag_clip || c->track != ld->to_track)
+            continue;
+        s = FB_TimelineStartWithout(tl, i, ld->drag_clip);
+        snap_near(start, s + (c->out - c->in), range, &best_s, &dist_s);
+        snap_near(start, s, range, &best_s, &dist_s);
+        snap_near(end, s, range, &best_e, &dist_e);
+        snap_near(end, s + (c->out - c->in), range, &best_e, &dist_e);
+    }
+    if (dist_s <= range && dist_s <= dist_e)
+        ld->to_start = best_s;
+    else if (dist_e <= range && best_e - len >= 0)
+        ld->to_start = best_e - len;
+}
+
 /* Where a dragged clip is now, for the pointer at x (on the time axis)
  * and y (from the gadget's top). */
 static void move_to(struct LanesData *ld, long x, long y)
@@ -586,6 +641,14 @@ static void move_to(struct LanesData *ld, long x, long y)
     } else {
         ld->to_ok = FALSE;              /* above the top track */
     }
+    snap(ld, c->out - c->in);
+
+    ld->to_insert = 0;
+    ld->to_land = ld->to_start;
+    if (ld->to_ok && ld->to_track >= 0)
+        ld->to_land = FB_TimelineDropPoint(tl, ld->to_track, ld->to_start,
+                                           c->out - c->in, ld->drag_clip,
+                                           &ld->to_insert);
 }
 
 static uint32 lanes_handle_input(Class *cl, Object *o, struct gpInput *msg)
@@ -630,23 +693,28 @@ static uint32 lanes_handle_input(Class *cl, Object *o, struct gpInput *msg)
             ld->mode = MODE_NONE;
             lanes_redraw(o, msg->gpi_GInfo);
             return GMR_REUSE;
-        case IECODE_NOBUTTON:
+        case IECODE_NOBUTTON: {
+            BOOL started = FALSE;
+
             if (ld->mode == MODE_PRESS &&
                 (msg->gpi_Mouse.X - ld->press_x > DRAG_PX ||
                  ld->press_x - msg->gpi_Mouse.X > DRAG_PX ||
-                 y - ld->press_y > DRAG_PX || ld->press_y - y > DRAG_PX))
+                 y - ld->press_y > DRAG_PX || ld->press_y - y > DRAG_PX)) {
                 ld->mode = MODE_MOVE;
+                started = TRUE;         /* its old place closes up now */
+            }
             if (ld->mode == MODE_MOVE) {
                 int track = ld->to_track;
-                fb_ms_t start = ld->to_start;
+                fb_ms_t land = ld->to_land;
                 BOOL ok = ld->to_ok;
 
                 move_to(ld, x, y);
-                if (track != ld->to_track || start != ld->to_start ||
-                    ok != ld->to_ok)
+                if (started || track != ld->to_track ||
+                    land != ld->to_land || ok != ld->to_ok)
                     lanes_redraw(o, msg->gpi_GInfo);
             }
             break;
+        }
         }
         return GMR_MEACTIVE;
     }

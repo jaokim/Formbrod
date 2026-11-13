@@ -920,18 +920,45 @@ static void test_move_clips(void)
     tl.clips[0].volume = 0.5;
     FB_ClipAddEffect(&tl.clips[0], "fade");
 
-    /* Where a 1 s clip would go: in front of the clip whose middle is
-     * after the dragged clip's middle. */
-    CHECK(FB_TimelineInsertPoint(&tl, 0, 0, 1000, -1) == 0);
-    CHECK(FB_TimelineInsertPoint(&tl, 0, 1000, 1000, -1) == 2000);
-    CHECK(FB_TimelineInsertPoint(&tl, 0, 3500, 1000, -1) == 5000);
-    CHECK(FB_TimelineInsertPoint(&tl, 0, 9000, 1000, -1) == 6000);
-    CHECK(FB_TimelineInsertPoint(&tl, 0, 9000, 1000, 2) == 5000);
-    CHECK(FB_TimelineInsertPoint(&tl, 5, 7000, 1000, -1) == 7000);
+    /* Where a 1 s clip dropped at a time goes: there, if nothing is in
+     * the way; else in front of the first clip whose middle is after its
+     * middle, or after the last clip. */
+    {
+        int ins;
+
+        CHECK(FB_TimelineDropPoint(&tl, 0, 0, 1000, -1, &ins) == 0 && ins);
+        CHECK(FB_TimelineDropPoint(&tl, 0, 1000, 1000, -1, &ins) == 2000 &&
+              ins);
+        CHECK(FB_TimelineDropPoint(&tl, 0, 3500, 1000, -1, &ins) == 5000 &&
+              ins);
+        CHECK(FB_TimelineDropPoint(&tl, 0, 5800, 1000, -1, &ins) == 6000 &&
+              !ins);                                /* after the last */
+        CHECK(FB_TimelineDropPoint(&tl, 0, 9000, 1000, -1, &ins) == 9000 &&
+              !ins);                                /* free: a gap */
+        CHECK(FB_TimelineDropPoint(&tl, 0, 6000, 1000, -1, &ins) == 6000 &&
+              !ins);
+        CHECK(FB_TimelineDropPoint(&tl, 5, 7000, 1000, -1, &ins) == 7000 &&
+              !ins);                                /* no clips */
+        /* With B (2-5) taken out, the last A moves up to 2-3: 3-4 is
+         * free, and where it was (5-6) is free too. */
+        CHECK(FB_TimelineStartWithout(&tl, 2, 1) == 2000);
+        CHECK(FB_TimelineStartWithout(&tl, 0, 1) == 0);
+        CHECK(FB_TimelineStartWithout(&tl, 3, 1) == 0);   /* other track */
+        CHECK(FB_TimelineDropPoint(&tl, 0, 3000, 1000, 1, &ins) == 3000 &&
+              !ins);
+        CHECK(FB_TimelineDropPoint(&tl, 0, 2200, 1000, 1, &ins) == 3000 &&
+              !ins);                                /* in the way: after */
+    }
+
+    /* The last clip, dragged further out, keeps a gap in front of it. */
+    i = FB_TimelineMoveClipTo(&tl, 2, 0, 8000);
+    CHECK(i == 2 && tl.clips[2].start == 8000);
+    CHECK(FB_TimelineMoveClipTo(&tl, 2, 0, 5000) == 2);   /* and back */
+    CHECK(tl.clips[2].start == 5000);
 
     /* The first clip (A 0-2, with a fade) to the end of its track:
      * B 0-3, A 3-4, A 4-6. */
-    i = FB_TimelineMoveClipTo(&tl, 0, 0, 9000);
+    i = FB_TimelineMoveClipTo(&tl, 0, 0, 4000);
     CHECK(i == 2);
     CHECK(tl.clips[0].source == b && tl.clips[0].start == 0);
     CHECK(tl.clips[1].start == 3000 && tl.clips[1].in == 4000);

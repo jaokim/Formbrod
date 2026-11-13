@@ -266,30 +266,61 @@ int FB_TrackFits(const FBTimeline *tl, int track, const FBSource *src)
                                                     : src->has_audio;
 }
 
-fb_ms_t FB_TimelineInsertPoint(const FBTimeline *tl, int track, fb_ms_t at,
-                               fb_ms_t len, int skip)
+fb_ms_t FB_TimelineStartWithout(const FBTimeline *tl, int i, int skip)
 {
-    fb_ms_t middle = (at > 0 ? at : 0) + len / 2;
-    fb_ms_t end = -1;
-    int i;
+    const FBClip *c = &tl->clips[i];
 
+    if (skip >= 0 && skip < tl->num_clips && i > skip &&
+        c->track == tl->clips[skip].track)
+        return c->start - (tl->clips[skip].out - tl->clips[skip].in);
+    return c->start;
+}
+
+fb_ms_t FB_TimelineDropPoint(const FBTimeline *tl, int track, fb_ms_t at,
+                             fb_ms_t len, int skip, int *inserted)
+{
+    fb_ms_t middle, end = -1;
+    int i, free = 1;
+
+    if (at < 0)
+        at = 0;
+    *inserted = 0;
     for (i = 0; i < tl->num_clips; i++) {
         const FBClip *c = &tl->clips[i];
+        fb_ms_t s;
 
         if (i == skip || c->track != track)
             continue;
-        if (c->start + (c->out - c->in) / 2 > middle)
-            return c->start;
-        end = FB_ClipEnd(c);
+        s = FB_TimelineStartWithout(tl, i, skip);
+        if (s < at + len && s + (c->out - c->in) > at)
+            free = 0;
     }
-    return end >= 0 ? end : (at > 0 ? at : 0);
+    if (free)
+        return at;
+
+    /* In the way: in between clips instead. */
+    *inserted = 1;
+    middle = at + len / 2;
+    for (i = 0; i < tl->num_clips; i++) {
+        const FBClip *c = &tl->clips[i];
+        fb_ms_t s;
+
+        if (i == skip || c->track != track)
+            continue;
+        s = FB_TimelineStartWithout(tl, i, skip);
+        if (s + (c->out - c->in) / 2 > middle)
+            return s;
+        end = s + (c->out - c->in);
+    }
+    *inserted = 0;          /* after the last clip: nothing moves */
+    return end;
 }
 
 int FB_TimelineMoveClipTo(FBTimeline *tl, int clip, int track, fb_ms_t at)
 {
     FBClip moved;
     fb_ms_t len, start;
-    int i, idx, insert_before = 0;
+    int idx, inserted;
 
     if (clip < 0 || clip >= tl->num_clips || track < 0 ||
         track > tl->num_tracks)
@@ -304,13 +335,10 @@ int FB_TimelineMoveClipTo(FBTimeline *tl, int clip, int track, fb_ms_t at)
         return -1;
     }
 
-    /* Out of its old place, which closes up; then where it goes in. */
+    /* Out of its old place, which closes up; then where it goes. */
     FB_TimelineRemoveClip(tl, clip);
-    start = FB_TimelineInsertPoint(tl, track, at, len, -1);
-    for (i = 0; i < tl->num_clips; i++)
-        if (tl->clips[i].track == track && tl->clips[i].start >= start)
-            insert_before = 1;
-    if (insert_before)
+    start = FB_TimelineDropPoint(tl, track, at, len, -1, &inserted);
+    if (inserted)
         shift_track(tl, track, start, len, -1);
 
     idx = FB_TimelineAddClip(tl, track, moved.source, moved.in, moved.out,
