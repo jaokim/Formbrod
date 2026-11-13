@@ -182,6 +182,27 @@ int     FB_TimelineTrimClip(FBTimeline *tl, int clip, fb_ms_t in, fb_ms_t out);
  * later leaves a gap in front of it. */
 int     FB_TimelineMoveClip(FBTimeline *tl, int clip, fb_ms_t start);
 
+/* Whether a source can go on a track: a video track needs a picture, an
+ * audio track sound. */
+int     FB_TrackFits(const FBTimeline *tl, int track, const FBSource *src);
+
+/* Moves a clip to another place, on its own track or another one (or a
+ * new track, if `track` is tl->num_tracks). It leaves its old place the
+ * way removing it would (the gap closes), and goes in between the clips
+ * of the target track where a clip starting at `at` would have its middle
+ * (the clips from there on move along to make room). On an empty or new
+ * track it starts at `at`; after a track's last clip, right after it.
+ * Keeps its effects, fit and volume. Returns its new index, or -1 if it
+ * doesn't fit the track. */
+int     FB_TimelineMoveClipTo(FBTimeline *tl, int clip, int track, fb_ms_t at);
+
+/* Where FB_TimelineMoveClipTo() would put a clip `len` long on `track`:
+ * the start of the clip it would go in front of, or the end of the last
+ * clip, or `at` on an empty track. `skip` is a clip to leave out (the one
+ * being moved), or -1. For drawing where a dragged clip will go. */
+fb_ms_t FB_TimelineInsertPoint(const FBTimeline *tl, int track, fb_ms_t at,
+                               fb_ms_t len, int skip);
+
 /* The earliest a clip can start: where the clip before it on its track
  * ends, or 0. */
 fb_ms_t FB_TimelineEarliestStart(const FBTimeline *tl, int clip);

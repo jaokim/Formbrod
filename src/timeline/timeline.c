@@ -258,6 +258,71 @@ int FB_TimelineTrimClip(FBTimeline *tl, int clip, fb_ms_t in, fb_ms_t out)
     return 0;
 }
 
+int FB_TrackFits(const FBTimeline *tl, int track, const FBSource *src)
+{
+    if (track < 0 || track >= tl->num_tracks)
+        return 0;
+    return tl->tracks[track].kind == FB_TRACK_VIDEO ? src->has_video
+                                                    : src->has_audio;
+}
+
+fb_ms_t FB_TimelineInsertPoint(const FBTimeline *tl, int track, fb_ms_t at,
+                               fb_ms_t len, int skip)
+{
+    fb_ms_t middle = (at > 0 ? at : 0) + len / 2;
+    fb_ms_t end = -1;
+    int i;
+
+    for (i = 0; i < tl->num_clips; i++) {
+        const FBClip *c = &tl->clips[i];
+
+        if (i == skip || c->track != track)
+            continue;
+        if (c->start + (c->out - c->in) / 2 > middle)
+            return c->start;
+        end = FB_ClipEnd(c);
+    }
+    return end >= 0 ? end : (at > 0 ? at : 0);
+}
+
+int FB_TimelineMoveClipTo(FBTimeline *tl, int clip, int track, fb_ms_t at)
+{
+    FBClip moved;
+    fb_ms_t len, start;
+    int i, idx, insert_before = 0;
+
+    if (clip < 0 || clip >= tl->num_clips || track < 0 ||
+        track > tl->num_tracks)
+        return -1;
+    moved = tl->clips[clip];
+    len = moved.out - moved.in;
+    if (track == tl->num_tracks) {
+        if (FB_TimelineAddTrack(tl,
+                FB_SourceTrackKind(&tl->sources[moved.source])) < 0)
+            return -1;
+    } else if (!FB_TrackFits(tl, track, &tl->sources[moved.source])) {
+        return -1;
+    }
+
+    /* Out of its old place, which closes up; then where it goes in. */
+    FB_TimelineRemoveClip(tl, clip);
+    start = FB_TimelineInsertPoint(tl, track, at, len, -1);
+    for (i = 0; i < tl->num_clips; i++)
+        if (tl->clips[i].track == track && tl->clips[i].start >= start)
+            insert_before = 1;
+    if (insert_before)
+        shift_track(tl, track, start, len, -1);
+
+    idx = FB_TimelineAddClip(tl, track, moved.source, moved.in, moved.out,
+                             start);
+    if (idx < 0)
+        return -1;
+    moved.track = track;
+    moved.start = start;
+    tl->clips[idx] = moved;      /* with its effects, fit and volume */
+    return idx;
+}
+
 fb_ms_t FB_TimelineEarliestStart(const FBTimeline *tl, int clip)
 {
     if (clip > 0 && clip < tl->num_clips &&
