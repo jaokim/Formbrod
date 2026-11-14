@@ -43,6 +43,8 @@
 
 /* How long a still picture is when it's added. */
 #define FB_STILL_LENGTH  5000
+/* The loudest a clip's sound can be set: four times as recorded. */
+#define FB_MAX_VOLUME 4.0
 /* How long a crossfade is when it's added. */
 #define FB_CROSSFADE_LENGTH 1000
 #define FB_MAX_EFFECTS   8
@@ -265,6 +267,10 @@ int     FB_TimelineClipAt(const FBTimeline *tl, fb_ms_t t, fb_ms_t *source_t);
 
 /* Adds an effect to a clip. Returns pointer to it so params can be set. */
 FBEffect *FB_ClipAddEffect(FBClip *clip, const char *module);
+/* Takes effect `index` off a clip; the ones after it move down. */
+int     FB_ClipRemoveEffect(FBClip *clip, int index);
+/* The first effect of a module on a clip, or -1. */
+int     FB_ClipFindEffect(const FBClip *clip, const char *module);
 int     FB_EffectSetParam(FBEffect *fx, const char *name, double value);
 double  FB_EffectGetParam(const FBEffect *fx, const char *name, double def);
 

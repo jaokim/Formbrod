@@ -81,6 +81,14 @@ int  App_SetOut(int clip, fb_ms_t at);
 int  App_RemoveClip(int clip);
 int  App_AddEffect(int clip, const char *module);
 int  App_SetEffectParam(int clip, int effect, const char *name, double value);
+int  App_RemoveEffect(int clip, int effect);
+/* A clip's fade in and out (the "fade" effect), in ms; -1 keeps one as it
+ * is. Both 0 takes the effect away. Each is kept within the clip. */
+int  App_SetFades(int clip, fb_ms_t in, fb_ms_t out);
+/* A clip's fade in and out in ms, 0 when it has none. */
+void App_GetFades(int clip, fb_ms_t *in, fb_ms_t *out);
+/* A clip's sound level: 1.0 = as recorded, up to FB_MAX_VOLUME. */
+int  App_SetVolume(int clip, double volume);
 
 /* How clips of another size or shape are fitted (see FBFormat). */
 int  App_SetClipFit(int clip, int fit);          /* FB_FIT_DEFAULT = global */

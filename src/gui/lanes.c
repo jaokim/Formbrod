@@ -16,7 +16,8 @@
  *
  * Mouse:
  *   - a track's name selects the track (for the Track menu);
- *   - a clip selects it. Where two clips overlap in a crossfade, the
+ *   - a clip selects it; double-clicking it reports LANES_Open (the
+ *     window opens the clip's settings). Where two clips overlap in a crossfade, the
  *     overlap goes over from the one clip's colour to the other's, with a
  *     line rising across it, and belongs to the clip fading in (except
  *     the very end, which is the earlier clip's end);
@@ -119,6 +120,9 @@ struct LanesData {
     BOOL              to_ok;
     fb_ms_t           to_land;       /* where it will go */
     int               to_insert;     /* in between clips (they move on) */
+    /* The last click on a clip, to see a double-click. */
+    int               click_clip;
+    uint32            click_secs, click_micros;
 };
 
 /* ---- Rows ------------------------------------------------------------ */
@@ -710,6 +714,34 @@ static uint32 lanes_go_active(Class *cl, Object *o, struct gpInput *msg)
 
     ld->selected = clip;
     ld->track = rows[r].track;
+    if (hit == HIT_BODY) {
+        const struct InputEvent *ie = msg->gpi_IEvent;
+        uint32 secs = ie->ie_TimeStamp.Seconds;
+        uint32 micros = ie->ie_TimeStamp.Microseconds;
+        BOOL twice = clip == ld->click_clip &&
+                     IIntuition->DoubleClick(ld->click_secs, ld->click_micros,
+                                             secs, micros);
+
+        ld->click_clip = twice ? -1 : clip;   /* a third click starts over */
+        ld->click_secs = secs;
+        ld->click_micros = micros;
+        if (twice) {
+            struct TagItem tags[5];       /* 3, GA_ID and TAG_END */
+
+            ld->mode = MODE_NONE;
+            lanes_redraw(o, msg->gpi_GInfo);
+            tags[0].ti_Tag  = LANES_Selected;
+            tags[0].ti_Data = (uint32)ld->selected;
+            tags[1].ti_Tag  = LANES_Track;
+            tags[1].ti_Data = (uint32)ld->track;
+            tags[2].ti_Tag  = LANES_Open;
+            tags[2].ti_Data = (uint32)clip;
+            lanes_notify(cl, o, msg->gpi_GInfo, tags, 3);
+            return GMR_NOREUSE;
+        }
+    } else {
+        ld->click_clip = -1;
+    }
     notify_selection(cl, o, msg->gpi_GInfo, ld);
     if (hit == HIT_IN || hit == HIT_OUT) {
         ld->mode = hit == HIT_IN ? MODE_TRIM_IN : MODE_TRIM_OUT;
@@ -1068,6 +1100,7 @@ static uint32 lanes_dispatch(Class *cl, Object *o, Msg msg)
             memset(ld, 0, sizeof(*ld));
             ld->selected = -1;
             ld->track = -1;
+            ld->click_clip = -1;
             lanes_set(ld, ((struct opSet *)msg)->ops_AttrList);
         }
         return (uint32)o;

@@ -259,7 +259,7 @@
 #define MSG_HINT_STARTS                  176
 #define MSG_HINT_STARTS_STR              "Where the clip starts in the edit. Type a time and press Return: the clips after it move along"
 #define MSG_HINT_LANES                   177
-#define MSG_HINT_LANES_STR               "Click a clip to select it, drag its ends to trim it. Click a track's name to select the track"
+#define MSG_HINT_LANES_STR               "Click a clip to select it, drag its ends to trim it, double-click it for all its settings. Click a track's name to select the track"
 #define MSG_MENU_TRACK                   178
 #define MSG_MENU_TRACK_STR               "Track"
 #define MSG_MENU_APPEND_FILE             179
@@ -324,8 +324,62 @@
 #define MSG_XFADE_CIRCLEOPEN_STR         "Circle"
 #define MSG_XFADE_PIXELIZE               209
 #define MSG_XFADE_PIXELIZE_STR           "Pixelate"
+#define MSG_CLIPWIN_TITLE                210
+#define MSG_CLIPWIN_TITLE_STR            "Clip"
+#define MSG_CLIPWIN_NONE                 211
+#define MSG_CLIPWIN_NONE_STR             "No clip selected"
+#define MSG_GROUP_TIMING                 212
+#define MSG_GROUP_TIMING_STR             "Timing"
+#define MSG_GROUP_FADES                  213
+#define MSG_GROUP_FADES_STR              "Fades"
+#define MSG_GROUP_PICTURE                214
+#define MSG_GROUP_PICTURE_STR            "Picture"
+#define MSG_GROUP_SOUND                  215
+#define MSG_GROUP_SOUND_STR              "Sound"
+#define MSG_GROUP_EFFECTS                216
+#define MSG_GROUP_EFFECTS_STR            "Effects"
+#define MSG_LABEL_KIND                   217
+#define MSG_LABEL_KIND_STR               "Kind"
+#define MSG_LABEL_FADE_IN                218
+#define MSG_LABEL_FADE_IN_STR            "Fade in"
+#define MSG_LABEL_FADE_OUT               219
+#define MSG_LABEL_FADE_OUT_STR           "Fade out"
+#define MSG_LABEL_FIT                    220
+#define MSG_LABEL_FIT_STR                "Fit"
+#define MSG_FIT_AS_PROJECT               221
+#define MSG_FIT_AS_PROJECT_STR           "As the project"
+#define MSG_LABEL_SOURCE                 222
+#define MSG_LABEL_SOURCE_STR             "In the file"
+#define MSG_SOURCE_PICTURE               223
+#define MSG_SOURCE_PICTURE_STR           "%ld x %ld, %s frames/s"
+#define MSG_SOURCE_STILL                 224
+#define MSG_SOURCE_STILL_STR             "%ld x %ld, still picture"
+#define MSG_SOURCE_NO_PICTURE            225
+#define MSG_SOURCE_NO_PICTURE_STR        "No picture"
+#define MSG_LABEL_SHOWN                  226
+#define MSG_LABEL_SHOWN_STR              "In the film"
+#define MSG_FITS_AS_IS                   227
+#define MSG_FITS_AS_IS_STR               "As it is"
+#define MSG_LABEL_VOLUME                 228
+#define MSG_LABEL_VOLUME_STR             "Volume (%)"
+#define MSG_EFFECTS_NONE                 229
+#define MSG_EFFECTS_NONE_STR             "No other effects. Add them from the Effects menu."
+#define MSG_BTN_PREV_EFFECT              230
+#define MSG_BTN_PREV_EFFECT_STR          "_Previous"
+#define MSG_BTN_NEXT_EFFECT              231
+#define MSG_BTN_NEXT_EFFECT_STR          "_Next"
+#define MSG_BTN_REMOVE_EFFECT            232
+#define MSG_BTN_REMOVE_EFFECT_STR        "_Remove effect"
+#define MSG_EFFECT_OF                    233
+#define MSG_EFFECT_OF_STR                "%s (%ld of %ld)"
+#define MSG_MENU_CLIP_SETTINGS           234
+#define MSG_MENU_CLIP_SETTINGS_STR       "Clip settings..."
+#define MSG_STATUS_BAD_NUMBER            235
+#define MSG_STATUS_BAD_NUMBER_STR        "%s isn't a number"
+#define MSG_LABEL_FILE                   236
+#define MSG_LABEL_FILE_STR               "File"
 
-#define FB_NUM_STRINGS 156
+#define FB_NUM_STRINGS 183
 
 #ifdef FB_STRINGS_ARRAY
 static const struct FBBuiltinString {
@@ -488,6 +542,33 @@ static const struct FBBuiltinString {
     { MSG_XFADE_SLIDELEFT, MSG_XFADE_SLIDELEFT_STR },
     { MSG_XFADE_CIRCLEOPEN, MSG_XFADE_CIRCLEOPEN_STR },
     { MSG_XFADE_PIXELIZE, MSG_XFADE_PIXELIZE_STR },
+    { MSG_CLIPWIN_TITLE, MSG_CLIPWIN_TITLE_STR },
+    { MSG_CLIPWIN_NONE, MSG_CLIPWIN_NONE_STR },
+    { MSG_GROUP_TIMING, MSG_GROUP_TIMING_STR },
+    { MSG_GROUP_FADES, MSG_GROUP_FADES_STR },
+    { MSG_GROUP_PICTURE, MSG_GROUP_PICTURE_STR },
+    { MSG_GROUP_SOUND, MSG_GROUP_SOUND_STR },
+    { MSG_GROUP_EFFECTS, MSG_GROUP_EFFECTS_STR },
+    { MSG_LABEL_KIND, MSG_LABEL_KIND_STR },
+    { MSG_LABEL_FADE_IN, MSG_LABEL_FADE_IN_STR },
+    { MSG_LABEL_FADE_OUT, MSG_LABEL_FADE_OUT_STR },
+    { MSG_LABEL_FIT, MSG_LABEL_FIT_STR },
+    { MSG_FIT_AS_PROJECT, MSG_FIT_AS_PROJECT_STR },
+    { MSG_LABEL_SOURCE, MSG_LABEL_SOURCE_STR },
+    { MSG_SOURCE_PICTURE, MSG_SOURCE_PICTURE_STR },
+    { MSG_SOURCE_STILL, MSG_SOURCE_STILL_STR },
+    { MSG_SOURCE_NO_PICTURE, MSG_SOURCE_NO_PICTURE_STR },
+    { MSG_LABEL_SHOWN, MSG_LABEL_SHOWN_STR },
+    { MSG_FITS_AS_IS, MSG_FITS_AS_IS_STR },
+    { MSG_LABEL_VOLUME, MSG_LABEL_VOLUME_STR },
+    { MSG_EFFECTS_NONE, MSG_EFFECTS_NONE_STR },
+    { MSG_BTN_PREV_EFFECT, MSG_BTN_PREV_EFFECT_STR },
+    { MSG_BTN_NEXT_EFFECT, MSG_BTN_NEXT_EFFECT_STR },
+    { MSG_BTN_REMOVE_EFFECT, MSG_BTN_REMOVE_EFFECT_STR },
+    { MSG_EFFECT_OF, MSG_EFFECT_OF_STR },
+    { MSG_MENU_CLIP_SETTINGS, MSG_MENU_CLIP_SETTINGS_STR },
+    { MSG_STATUS_BAD_NUMBER, MSG_STATUS_BAD_NUMBER_STR },
+    { MSG_LABEL_FILE, MSG_LABEL_FILE_STR },
 };
 #endif
 

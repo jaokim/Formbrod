@@ -619,6 +619,26 @@ FBEffect *FB_ClipAddEffect(FBClip *clip, const char *module)
     return fx;
 }
 
+int FB_ClipRemoveEffect(FBClip *clip, int index)
+{
+    if (index < 0 || index >= clip->num_effects)
+        return -1;
+    memmove(&clip->effects[index], &clip->effects[index + 1],
+            (size_t)(clip->num_effects - index - 1) * sizeof(FBEffect));
+    clip->num_effects--;
+    return 0;
+}
+
+int FB_ClipFindEffect(const FBClip *clip, const char *module)
+{
+    int i;
+
+    for (i = 0; i < clip->num_effects; i++)
+        if (strcmp(clip->effects[i].module, module) == 0)
+            return i;
+    return -1;
+}
+
 int FB_EffectSetParam(FBEffect *fx, const char *name, double value)
 {
     int i;

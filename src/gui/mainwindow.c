@@ -73,6 +73,8 @@
 #include "locale/catalog.h"
 #include "gui/timebase.h"
 #include "gui/track.h"
+#include "gui/xfadekinds.h"
+#include "gui/clipwindow.h"
 #include "prefs/prefs.h"
 #include "version.h"
 
@@ -94,37 +96,17 @@ enum {
     MID_WRITE_LOG, MID_TRACK_APPEND, MID_TRACK_MUTE, MID_TRACK_HIDE,
     MID_TRACK_REMOVE, MID_PROXIES, MID_PROXY_SIZE_MENU,
     MID_PROXY_AUTO, MID_PROXY_320, MID_PROXY_480, MID_PROXY_640,
-    MID_XFADE_MENU,
+    MID_XFADE_MENU, MID_CLIP_WINDOW,
     MID_XFADE_KIND = 150,    /* + index in XfadeKinds */
     MID_EFFECT = 200         /* + module index */
 };
 
-/* The crossfade kinds offered in the Edit menu: ffmpeg xfade names. ARexx
- * and project files can use any other of ffmpeg's. */
-static const struct {
-    const char *name;
-    long        msg;
-} XfadeKinds[] = {
-    { "fade",       MSG_XFADE_FADE },
-    { "fadeblack",  MSG_XFADE_FADEBLACK },
-    { "dissolve",   MSG_XFADE_DISSOLVE },
-    { "wipeleft",   MSG_XFADE_WIPELEFT },
-    { "wiperight",  MSG_XFADE_WIPERIGHT },
-    { "slideleft",  MSG_XFADE_SLIDELEFT },
-    { "circleopen", MSG_XFADE_CIRCLEOPEN },
-    { "pixelize",   MSG_XFADE_PIXELIZE },
-};
-#define NUM_XFADE_KINDS ((int)(sizeof(XfadeKinds) / sizeof(XfadeKinds[0])))
-
 /* A crossfade kind as shown: its menu label, or its own name. */
 static const char *xfade_label(const char *name)
 {
-    int i;
+    int i = xfade_kind_index(name);
 
-    for (i = 0; i < NUM_XFADE_KINDS; i++)
-        if (strcmp(XfadeKinds[i].name, name) == 0)
-            return FB_Str(XfadeKinds[i].msg);
-    return name;
+    return i >= 0 ? FB_Str(XfadeKinds[i].msg) : name;
 }
 
 static struct {
@@ -308,6 +290,15 @@ static void lanes_changed(struct TagItem *tags)
         MainWindow_Refresh();
         return;
     }
+    if (IUtility->FindTagItem(LANES_Open, tags)) {
+        /* A double-click: that clip's settings. */
+        Selected = (int32)IUtility->GetTagData(LANES_Selected, -1, tags);
+        SelectedTrack = (int32)IUtility->GetTagData(LANES_Track, -1, tags);
+        update_clip_fields(selected_clip());
+        sync_menus();
+        ClipWindow_Open();
+        return;
+    }
     if (IUtility->FindTagItem(LANES_EditClip, tags)) {
         App_TrimClip((int32)IUtility->GetTagData(LANES_EditClip, 0, tags),
                      (int32)IUtility->GetTagData(LANES_EditIn, 0, tags),
@@ -319,6 +310,7 @@ static void lanes_changed(struct TagItem *tags)
         Selected = (int32)IUtility->GetTagData(LANES_Selected, -1, tags);
         SelectedTrack = (int32)IUtility->GetTagData(LANES_Track, -1, tags);
         update_clip_fields(selected_clip());
+        ClipWindow_Refresh();       /* it follows the selection */
         sync_menus();
         return;
     }
@@ -433,6 +425,7 @@ static BOOL menu_enabled(uint32 id)
     switch (id) {
     case GID_CROSSFADE:
     case MID_XFADE_MENU:
+    case MID_CLIP_WINDOW:
     case GID_SPLIT:
     case GID_REMOVE:
     case GID_SET_IN:
@@ -600,6 +593,8 @@ static BOOL make_menus(struct Screen *scr)
     add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_SET_OUT),  NULL, GID_SET_OUT);
     add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_REMOVE),   NULL, GID_REMOVE);
     add_menu(nm, &n, NM_ITEM, NM_BARLABEL,               NULL, 0);
+    add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_CLIP_SETTINGS), NULL,
+             MID_CLIP_WINDOW);
     add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_CROSSFADE), NULL, GID_CROSSFADE);
     add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_CROSSFADE_KIND), NULL,
              MID_XFADE_MENU);
@@ -850,6 +845,9 @@ static void handle_menu(uint32 id)
     case MID_TRACK_REMOVE:
         track_menu(id);
         break;
+    case MID_CLIP_WINDOW:
+        ClipWindow_Open();
+        break;
     case MID_PROXIES:
         /* A toggle, like Show frame pictures below. */
         App_SetProxies(!App_ProxiesEnabled());
@@ -1074,6 +1072,7 @@ void MainWindow_Refresh(void)
     IIntuition->SetGadgetAttrs(Gad[GID_STATUS], Win, NULL, GA_Text, App.status, TAG_END);
     update_title();
     sync_menus();
+    ClipWindow_Refresh();
 }
 
 void MainWindow_SetProgress(const FBProgress *p)
@@ -1220,6 +1219,11 @@ static int selected_clip(void)
     return Selected >= 0 && Selected < App.timeline.num_clips ? Selected : -1;
 }
 
+int MainWindow_SelectedClip(void)
+{
+    return selected_clip();
+}
+
 static void handle_gadget(uint32 id)
 {
     char path[FB_PATH_LEN];
@@ -1284,8 +1288,10 @@ static void handle_gadget(uint32 id)
             App_SetStatus("%s", FB_Str(MSG_STATUS_SELECT_CLIP));
         break;
     case GID_FADE:
+        /* A 1 s fade in, kept with any fade out; the clip window has
+         * both. */
         if ((clip = selected_clip()) >= 0)
-            App_AddEffect(clip, "fade");
+            App_SetFades(clip, 1000, -1);
         else
             App_SetStatus("%s", FB_Str(MSG_STATUS_SELECT_CLIP));
         break;
@@ -1616,7 +1622,7 @@ uint32 MainWindow_SigMask(void)
         IIntuition->GetAttr(WINDOW_SigMask, WinObj, &mask);
     if (AppPort)
         mask |= 1UL << AppPort->mp_SigBit;
-    return mask;
+    return mask | ClipWindow_SigMask();
 }
 
 void MainWindow_Handle(uint32 sigs)
@@ -1626,6 +1632,7 @@ void MainWindow_Handle(uint32 sigs)
 
     if (AppPort && (sigs & (1UL << AppPort->mp_SigBit)))
         handle_appmessages();
+    ClipWindow_Handle(sigs);
 
     while ((result = IIntuition->IDoMethod(WinObj, WM_HANDLEINPUT, &code))
            != WMHI_LASTMSG) {
@@ -1662,6 +1669,8 @@ void MainWindow_Handle(uint32 sigs)
 void MainWindow_Close(void)
 {
     int i;
+
+    ClipWindow_Close();
 
     if (WinObj) {
         IIntuition->DisposeObject(WinObj);   /* disposes all children */

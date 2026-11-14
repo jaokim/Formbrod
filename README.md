@@ -49,6 +49,10 @@ Early skeleton. Working so far:
 - [x] Crossfades between clips on a track: the clips overlap, drawn with
       a see-through blend of the two clips; picture with ffmpeg's `xfade` (fade, wipes, slides, circle...),
       sound with `acrossfade`. Not yet tried on AmigaOS
+- [x] Clip window: double-click a clip (or Edit > Clip settings) for
+      all its settings: timing, crossfade, fades, fit, volume, the file's
+      picture, and its effects with a field per module parameter. It
+      follows the selection. Not yet tried on AmigaOS
 - [ ] Real thumbnails, waveforms
 - [ ] Remote rendering on a render server
 
@@ -217,6 +221,9 @@ The port is called `FORMBROD`.
 | `REMOVE` | `CLIP/N/A` | |
 | `EFFECT` | `CLIP/N/A,MODULE/A` | effect index |
 | `SETPARAM` | `CLIP/N/A,EFFECT/N/A,NAME/A,VALUE/A` | |
+| `REMOVEEFFECT` | `CLIP/N/A,EFFECT/N/A` | |
+| `FADES` | `CLIP/N/A,IN/N,OUT/N`: fade in and out in ms (0 = none, left out = unchanged); kept within the clip | `<in> <out>` |
+| `VOLUME` | `CLIP/N/A,PERCENT/N/A`: 100 = as recorded, up to 400 | |
 | `EXPORT` | `FILE/A,PREVIEW/S` | |
 | `CANCEL` | | |
 | `RENDERSTATUS` | | `IDLE`, `RUNNING <pos> <total>`, `DONE`, `FAILED`, `CANCELLED` |

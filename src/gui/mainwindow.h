@@ -5,6 +5,7 @@
 #include "formbrod/backend.h"
 
 int    MainWindow_Open(void);
+/* Its own and the clip window's signals. */
 uint32 MainWindow_SigMask(void);
 void   MainWindow_Handle(uint32 sigs);
 void   MainWindow_Refresh(void);

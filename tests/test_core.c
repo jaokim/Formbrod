@@ -1478,6 +1478,24 @@ static void test_project_crossfade(void)
           == FB_PROJECT_BAD_LINE);
 }
 
+static void test_clip_effects(void)
+{
+    static FBTimeline tl;
+    FBClip *c;
+
+    three_clips(&tl);
+    c = &tl.clips[0];
+    CHECK(FB_ClipFindEffect(c, "fade") == -1);
+    FB_ClipAddEffect(c, "a");
+    FB_ClipAddEffect(c, "fade");
+    FB_ClipAddEffect(c, "b");
+    CHECK(FB_ClipFindEffect(c, "fade") == 1);
+    CHECK(FB_ClipRemoveEffect(c, 1) == 0);
+    CHECK(c->num_effects == 2 && strcmp(c->effects[1].module, "b") == 0);
+    CHECK(FB_ClipRemoveEffect(c, 2) == -1);
+    CHECK(FB_ClipFindEffect(c, "fade") == -1);
+}
+
 int main(void)
 {
     FB_RegisterBuiltinModules();
@@ -1487,6 +1505,7 @@ int main(void)
     test_crossfades();
     test_job_crossfade();
     test_project_crossfade();
+    test_clip_effects();
     test_log();
     test_job_build_and_roundtrip();
     test_job_tracks();

@@ -69,6 +69,9 @@ struct FBTimebase;
                                                  /*    where it starts, ms   */
 #define LANES_Scrolled       (TRACK_Dummy + 212) /* N: a drag scrolled the   */
                                                  /*    view or made it longer */
+#define LANES_Open           (TRACK_Dummy + 213) /* N: int32 clip that was   */
+                                                 /*    double-clicked, sent  */
+                                                 /*    with LANES_Selected   */
 
 /* Which track is at a point in the window (for files dropped on it):
  * returns the track, -1 for the drop area below the tracks, or -2 if the

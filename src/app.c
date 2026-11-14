@@ -680,6 +680,86 @@ int App_SetEffectParam(int clip, int effect, const char *name, double value)
     return 0;
 }
 
+int App_RemoveEffect(int clip, int effect)
+{
+    if (clip < 0 || clip >= App.timeline.num_clips ||
+        FB_ClipRemoveEffect(&App.timeline.clips[clip], effect) != 0)
+        return -1;
+    App.modified = 1;
+    return 0;
+}
+
+void App_GetFades(int clip, fb_ms_t *in, fb_ms_t *out)
+{
+    const FBClip *c;
+    int fx;
+
+    *in = *out = 0;
+    if (clip < 0 || clip >= App.timeline.num_clips)
+        return;
+    c = &App.timeline.clips[clip];
+    if ((fx = FB_ClipFindEffect(c, "fade")) < 0)
+        return;
+    /* The module's defaults when a parameter isn't set. */
+    *in  = (fb_ms_t)(FB_EffectGetParam(&c->effects[fx], "in", 1.0) * 1000.0
+                     + 0.5);
+    *out = (fb_ms_t)(FB_EffectGetParam(&c->effects[fx], "out", 0.0) * 1000.0
+                     + 0.5);
+}
+
+int App_SetFades(int clip, fb_ms_t in, fb_ms_t out)
+{
+    FBClip *c;
+    fb_ms_t old_in, old_out, len;
+    int fx;
+
+    if (clip < 0 || clip >= App.timeline.num_clips) {
+        App_SetStatus("%s", FB_Str(MSG_STATUS_NO_SUCH_CLIP));
+        return -1;
+    }
+    c = &App.timeline.clips[clip];
+    App_GetFades(clip, &old_in, &old_out);
+    if (in < 0)
+        in = old_in;
+    if (out < 0)
+        out = old_out;
+    len = c->out - c->in;
+    if (in > len)
+        in = len;
+    if (out > len - in)
+        out = len - in;
+    fx = FB_ClipFindEffect(c, "fade");
+    if (in == 0 && out == 0) {
+        if (fx >= 0)
+            FB_ClipRemoveEffect(c, fx);
+    } else {
+        if (fx < 0) {
+            if (!FB_ClipAddEffect(c, "fade"))
+                return -1;
+            fx = c->num_effects - 1;
+        }
+        FB_EffectSetParam(&c->effects[fx], "in", in / 1000.0);
+        FB_EffectSetParam(&c->effects[fx], "out", out / 1000.0);
+    }
+    App.modified = 1;
+    return 0;
+}
+
+int App_SetVolume(int clip, double volume)
+{
+    if (clip < 0 || clip >= App.timeline.num_clips) {
+        App_SetStatus("%s", FB_Str(MSG_STATUS_NO_SUCH_CLIP));
+        return -1;
+    }
+    if (volume < 0.0)
+        volume = 0.0;
+    if (volume > FB_MAX_VOLUME)
+        volume = FB_MAX_VOLUME;
+    App.timeline.clips[clip].volume = volume;
+    App.modified = 1;
+    return 0;
+}
+
 int App_SetClipFit(int clip, int fit)
 {
     if (clip < 0 || clip >= App.timeline.num_clips) {
