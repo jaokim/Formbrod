@@ -89,6 +89,11 @@ def read_lines(path):
     # The Amiga build converts these files to ISO-8859-1 with iconv, which
     # stops at the first character Latin-1 doesn't have (comments too).
     for n, text in enumerate(raw, 1):
+        # FlexCat stops at an empty line ("missing identifier"); the very
+        # end of the file is fine.
+        if not text.strip() and any(r.strip() for r in raw[n:]):
+            raise CatError("%s:%d: empty line (FlexCat doesn't allow them; "
+                           "use a ';' comment line)" % (path, n))
         for ch in text:
             if ord(ch) > 0xFF:
                 raise CatError("%s:%d: %r isn't in ISO-8859-1 (Latin-1)"

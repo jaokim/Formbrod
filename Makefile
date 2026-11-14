@@ -57,6 +57,7 @@ SRC = src/main.c \
       src/gui/mainwindow.c \
       src/gui/timebase.c \
       src/gui/track.c \
+      src/gui/lanes.c \
       src/locale/catalog.c \
       src/arexx/arexx.c \
       src/prefs/prefs.c \

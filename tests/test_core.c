@@ -32,16 +32,133 @@ static void test_timeline(void)
     CHECK(FB_TimelineAppendClip(&tl, 5, 0, 1000) == -1);   /* bad source */
     CHECK(FB_TimelineAppendClip(&tl, s, 500, 500) == -1);  /* empty clip */
 
-    right = FB_TimelineSplit(&tl, 4000);
+    right = FB_TimelineSplit(&tl, -1, 4000);
     CHECK(right == 1);
     CHECK(tl.num_clips == 2);
     CHECK(tl.clips[0].out == 4000);
     CHECK(tl.clips[1].in == 4000 && tl.clips[1].out == 10000);
     CHECK(FB_TimelineDuration(&tl) == 10000);
 
-    CHECK(FB_TimelineSplit(&tl, 4000) == -1);   /* on a boundary */
+    CHECK(FB_TimelineSplit(&tl, -1, 4000) == -1);   /* on a boundary */
     CHECK(FB_TimelineRemoveClip(&tl, 0) == 0);
     CHECK(tl.num_clips == 1 && FB_TimelineDuration(&tl) == 6000);
+}
+
+static void test_tracks(void)
+{
+    FBTimeline tl;
+    fb_ms_t st;
+    int a, b, m, i;
+
+    FB_TimelineInit(&tl);
+    a = FB_TimelineAddSource(&tl, "a.mp4", 10000, 1, 1);
+    b = FB_TimelineAddSource(&tl, "b.mp4", 8000, 1, 0);
+    m = FB_TimelineAddSource(&tl, "music.mp3", 30000, 0, 1);
+    CHECK(FB_SourceTrackKind(&tl.sources[a]) == FB_TRACK_VIDEO);
+    CHECK(FB_SourceTrackKind(&tl.sources[m]) == FB_TRACK_AUDIO);
+
+    /* Appending to track num_tracks adds a track of the right kind. */
+    CHECK(FB_TimelineAppendToTrack(&tl, 0, a, 0, 4000) == 0);
+    CHECK(tl.num_tracks == 1 && tl.tracks[0].kind == FB_TRACK_VIDEO);
+    CHECK(FB_TimelineAppendToTrack(&tl, 2, b, 0, 1000) == -1);  /* no gap */
+    CHECK(FB_TimelineAppendToTrack(&tl, 1, m, 0, 30000) == 1);
+    CHECK(tl.num_tracks == 2 && tl.tracks[1].kind == FB_TRACK_AUDIO);
+    CHECK(tl.clips[1].start == 0 && tl.clips[1].volume == 1.0);
+    /* Appending to track 0 puts the clip after its last one, and before
+     * the track-1 clip in the array (sorted by track). */
+    CHECK(FB_TimelineAppendToTrack(&tl, 0, b, 1000, 3000) == 1);
+    CHECK(tl.clips[1].track == 0 && tl.clips[1].start == 4000);
+    CHECK(tl.clips[2].track == 1);
+    CHECK(FB_TimelineTrackEnd(&tl, 0) == 6000);
+    CHECK(FB_TimelineDuration(&tl) == 30000);
+
+    /* An overlay track with a clip at 2 s; overlaps are refused. */
+    CHECK(FB_TimelineAddTrack(&tl, FB_TRACK_VIDEO) == 2);
+    CHECK(FB_TimelineAddClip(&tl, 2, b, 0, 1000, 2000) == 3);
+    CHECK(FB_TimelineAddClip(&tl, 2, b, 0, 1000, 2500) == -1);
+    CHECK(FB_TimelineAddClip(&tl, 2, b, 0, 1000, 1500) == -1);
+    CHECK(FB_TimelineAddClip(&tl, 2, b, 0, 500, 1500) == 3);    /* fits */
+    CHECK(tl.clips[3].start == 1500 && tl.clips[4].start == 2000);
+    CHECK(FB_TimelineAddClip(&tl, 7, b, 0, 500, 0) == -1);      /* no track */
+
+    /* What's seen: the highest picture track that has something. */
+    CHECK(FB_TimelineClipAt(&tl, 2500, &st) == 4 && st == 500);
+    CHECK(FB_TimelineClipAt(&tl, 3500, &st) == 0 && st == 3500);
+    CHECK(FB_TimelineClipAt(&tl, 5000, &st) == 1 && st == 2000);
+    CHECK(FB_TimelineClipAt(&tl, 6000, NULL) == -1);   /* only music */
+    tl.tracks[2].hidden = 1;
+    CHECK(FB_TimelineClipAt(&tl, 2500, NULL) == 0);
+    tl.tracks[2].hidden = 0;
+
+    /* Splitting one track, then all tracks. */
+    CHECK(FB_TimelineSplit(&tl, 0, 2000) == 1);
+    CHECK(tl.clips[0].out == 2000 && tl.clips[1].start == 2000 &&
+          tl.clips[1].in == 2000 && tl.clips[1].out == 4000);
+    CHECK(tl.num_clips == 6);
+    i = FB_TimelineSplit(&tl, -1, 5000);     /* track 0 and the music */
+    CHECK(i >= 0 && tl.num_clips == 8);
+    for (i = 1; i < tl.num_clips; i++)       /* still sorted */
+        CHECK(tl.clips[i - 1].track < tl.clips[i].track ||
+              (tl.clips[i - 1].track == tl.clips[i].track &&
+               FB_ClipEnd(&tl.clips[i - 1]) <= tl.clips[i].start));
+    CHECK(FB_TimelineSplit(&tl, 2, 9000) == -1);
+
+    /* Removing closes the gap on that track only. Track 0 is now
+     * 0-2 a, 2-4 a, 4-5 b, 5-6 b. */
+    CHECK(FB_TimelineRemoveClip(&tl, 1) == 0);
+    CHECK(tl.clips[1].start == 2000 && tl.clips[2].start == 3000);
+    CHECK(FB_TimelineTrackEnd(&tl, 0) == 4000);
+    CHECK(tl.clips[3].track == 1 && tl.clips[3].start == 0);
+
+    /* Trimming moves what follows; out can't pass the source's end. */
+    CHECK(FB_TimelineTrimClip(&tl, 0, 500, 2000) == 0);
+    CHECK(tl.clips[1].start == 1500 && tl.clips[2].start == 2500);
+    CHECK(FB_TimelineTrimClip(&tl, 0, 500, 3000) == 0);
+    CHECK(tl.clips[1].start == 2500);
+    CHECK(FB_TimelineTrimClip(&tl, 0, 500, 10001) == -1);
+    CHECK(FB_TimelineTrimClip(&tl, 0, 3000, 3000) == -1);
+
+    /* Moving a clip takes the ones after it along; not into the one in
+     * front of it. Track 0 is now 0-2.5, 2.5-3.5, 3.5-4.5 s. */
+    CHECK(FB_TimelineEarliestStart(&tl, 1) == 2500);
+    CHECK(FB_TimelineEarliestStart(&tl, 0) == 0);
+    CHECK(FB_TimelineMoveClip(&tl, 1, 2000) == -1);
+    CHECK(FB_TimelineMoveClip(&tl, 1, 3500) == 0);       /* a 1 s gap */
+    CHECK(tl.clips[1].start == 3500 && tl.clips[2].start == 4500);
+    CHECK(tl.clips[3].track == 1 && tl.clips[3].start == 0);  /* untouched */
+    CHECK(FB_TimelineMoveClip(&tl, 1, 2500) == 0);       /* gap closed */
+    CHECK(tl.clips[2].start == 3500);
+    CHECK(FB_TimelineMoveClip(&tl, 0, 1000) == 0);       /* the whole track */
+    CHECK(tl.clips[0].start == 1000 && tl.clips[2].start == 4500);
+    CHECK(FB_TimelineMoveClip(&tl, 0, 0) == 0);
+    CHECK(FB_TimelineMoveClip(&tl, 99, 0) == -1);
+
+    /* Removing a track takes its clips; the ones above move down. */
+    i = tl.num_clips;
+    CHECK(FB_TimelineRemoveTrack(&tl, 1) == 0);
+    CHECK(tl.num_tracks == 2 && tl.num_clips == i - 2);
+    CHECK(tl.clips[tl.num_clips - 1].track == 1);
+    CHECK(tl.tracks[1].kind == FB_TRACK_VIDEO);
+    CHECK(FB_TimelineRemoveTrack(&tl, 5) == -1);
+
+    CHECK(FB_TrackKindFromName("Audio") == FB_TRACK_AUDIO);
+    CHECK(FB_TrackKindFromName("VIDEO") == FB_TRACK_VIDEO);
+    CHECK(FB_TrackKindFromName("vid") == -1);
+    CHECK(strcmp(FB_TrackKindName(FB_TRACK_AUDIO), "audio") == 0);
+
+    /* Frame size and rate come from the lowest picture track. */
+    FB_TimelineInit(&tl);
+    m = FB_TimelineAddSource(&tl, "music.mp3", 30000, 0, 1);
+    a = FB_TimelineAddSource(&tl, "a.mp4", 10000, 1, 1);
+    FB_SourceSetVideo(&tl.sources[a], 640, 480, 1, 1, 25, 1);
+    FB_TimelineAppendToTrack(&tl, 0, m, 0, 30000);
+    FB_TimelineAppendToTrack(&tl, 1, a, 0, 10000);
+    {
+        int w, h, num, den;
+
+        CHECK(FB_TimelineFrameSize(&tl, &w, &h) && w == 640 && h == 480);
+        CHECK(FB_TimelineFrameRate(&tl, &num, &den) && num == 25);
+    }
 }
 
 static void test_job_build_and_roundtrip(void)
@@ -111,6 +228,9 @@ static void test_job_errors(void)
     /* preview quality scales down by default */
     CHECK(strstr(job.filtergraph, "scale=320:-2") != NULL);
 
+    CHECK(job.length == 1000 && FB_JobEstimateLength(&job) == 1000);
+    /* Without a length (an older job), it's worked out from the trims. */
+    job.length = 0;
     CHECK(FB_JobEstimateLength(&job) == 1000);
     strcpy(job.filtergraph, "[0:v]trim=start=2[outv]");   /* no end */
     CHECK(FB_JobEstimateLength(&job) == 0);
@@ -200,7 +320,7 @@ static void test_fit(void)
     CHECK(FB_ClipFitResult(&tl, &tl.clips[0], w, h) == FB_FITS_CROP);
     CHECK(FB_ClipFitResult(&tl, &tl.clips[1], w, h) == FB_FITS_NONE);
     CHECK(FB_ClipFitResult(&tl, &tl.clips[2], w, h) == FB_FITS_PILLARBOX);
-    CHECK(FB_TimelineSplit(&tl, 1000) == 1);
+    CHECK(FB_TimelineSplit(&tl, -1, 1000) == 1);
     CHECK(tl.clips[1].fit == FB_FIT_FILL);
     CHECK(FB_JobBuild(&job, &tl, &out) == FB_JOB_OK);
     CHECK(strstr(job.filtergraph, "color=0x102030"));
@@ -479,6 +599,157 @@ static void test_project_hand_edited(void)
           == FB_PROJECT_BAD_LINE);
 }
 
+static void test_job_tracks(void)
+{
+    FBTimeline tl;
+    FBOutput out;
+    FBJob job, parsed;
+    char text[FB_FILTERGRAPH_LEN + 4096];
+    int a, b, m;
+
+    memset(&out, 0, sizeof(out));
+    strcpy(out.path, "out.mp4");
+    out.quality = FB_QUALITY_FINAL;
+
+    FB_TimelineInit(&tl);
+    a = FB_TimelineAddSource(&tl, "a.mp4", 10000, 1, 1);
+    b = FB_TimelineAddSource(&tl, "logo.mp4", 10000, 1, 0);
+    m = FB_TimelineAddSource(&tl, "music.mp3", 60000, 0, 1);
+    FB_SourceSetVideo(&tl.sources[a], 320, 240, 1, 1, 25, 1);
+    FB_SourceSetVideo(&tl.sources[b], 320, 240, 1, 1, 25, 1);
+
+    /* 0: a 0-4 s.  1: music from 1 s to 7 s.  2: logo at 2-3 s. */
+    FB_TimelineAppendToTrack(&tl, 0, a, 0, 4000);
+    FB_TimelineAddTrack(&tl, FB_TRACK_AUDIO);
+    FB_TimelineAddClip(&tl, 1, m, 0, 6000, 1000);
+    tl.clips[1].volume = 0.5;
+    FB_TimelineAddTrack(&tl, FB_TRACK_VIDEO);
+    FB_TimelineAddClip(&tl, 2, b, 0, 1000, 2000);
+
+    CHECK(FB_JobBuild(&job, &tl, &out) == FB_JOB_OK);
+    printf("tracks: %s\n", job.filtergraph);
+    CHECK(job.num_inputs == 3 && job.length == 7000);
+    /* Track 0 runs to 7 s with black after the clip. */
+    CHECK(strstr(job.filtergraph, "color=c=0x000000:s=320x240:r=25/1:d=3.000,"
+                                  "setsar=1[v1]") != NULL);
+    CHECK(strstr(job.filtergraph, "[v0][a0][v1][a1]concat=n=2:v=1:a=1"
+                                  "[t0v][t0a]") != NULL);
+    /* Music: silence first, at half volume, sound only. */
+    CHECK(strstr(job.filtergraph, "anullsrc=r=48000:cl=stereo,atrim=duration="
+                                  "1.000,") != NULL);
+    CHECK(strstr(job.filtergraph, "channel_layouts=stereo,volume=0.500[a3]"));
+    CHECK(strstr(job.filtergraph, "[a2][a3]concat=n=2:v=0:a=1[t1a]"));
+    /* The logo track is clear around the clip, and has no sound. */
+    CHECK(strstr(job.filtergraph, "color=c=black@0:s=320x240:r=25/1:d=2.000,"
+                                  "format=yuva420p,setsar=1[v4]") != NULL);
+    CHECK(strstr(job.filtergraph, "fps=25/1,format=yuva420p[v5]") != NULL);
+    CHECK(strstr(job.filtergraph, "[v4][v5][v6]concat=n=3:v=1:a=0[t2v]"));
+    CHECK(strstr(job.filtergraph, "[t0v][t2v]overlay=format=auto:"
+                                  "eof_action=pass[outv]") != NULL);
+    CHECK(strstr(job.filtergraph, "[t0a][t1a]amix=inputs=2:duration=longest:"
+                                  "dropout_transition=0,volume=2[outa]"));
+    CHECK(job.filtergraph[strlen(job.filtergraph) - 1] != ';');
+    CHECK(strcmp(job.audio_out, "outa") == 0);
+
+    /* LENGTH survives the text format. */
+    CHECK(FB_JobWrite(&job, text, sizeof(text)) > 0);
+    CHECK(strstr(text, "LENGTH 7000\n") != NULL);
+    CHECK(FB_JobParse(&parsed, text) == 0 && parsed.length == 7000);
+    CHECK(FB_JobEstimateLength(&parsed) == 7000);
+
+    /* Muting the music leaves only track 0's sound: no amix. */
+    tl.tracks[1].muted = 1;
+    CHECK(FB_JobBuild(&job, &tl, &out) == FB_JOB_OK);
+    CHECK(strstr(job.filtergraph, "amix") == NULL);
+    CHECK(strstr(job.filtergraph, "concat=n=1:v=1:a=1[t0v][outa]") != NULL);
+    CHECK(job.length == 4000 && job.num_inputs == 2);
+
+    /* Hiding the logo leaves one picture track: no overlay. */
+    tl.tracks[2].hidden = 1;
+    CHECK(FB_JobBuild(&job, &tl, &out) == FB_JOB_OK);
+    CHECK(strstr(job.filtergraph, "overlay") == NULL);
+    CHECK(strstr(job.filtergraph, "concat=n=1:v=1:a=1[outv][outa]") != NULL);
+
+    /* Only sound left: nothing to see. */
+    tl.tracks[0].hidden = 1;
+    tl.tracks[1].muted = 0;
+    CHECK(FB_JobBuild(&job, &tl, &out) == FB_JOB_EMPTY);
+    tl.tracks[0].hidden = 0;
+    tl.tracks[2].hidden = 0;
+
+    /* Gaps need the frame size; unprobed sources don't have it. */
+    tl.sources[a].width = tl.sources[a].height = 0;
+    CHECK(FB_JobBuild(&job, &tl, &out) == FB_JOB_NEED_SIZE);
+    /* ...unless the output gives it. */
+    out.width = 160;
+    out.height = 120;
+    CHECK(FB_JobBuild(&job, &tl, &out) == FB_JOB_OK);
+    CHECK(strstr(job.filtergraph, "s=160x120") != NULL);
+}
+
+static void test_project_tracks(void)
+{
+    static FBTimeline tl, back;
+    static char text[16384];
+    int line;
+
+    FB_TimelineInit(&tl);
+    FB_TimelineAddSource(&tl, "a.mp4", 10000, 1, 1);
+    FB_TimelineAddSource(&tl, "music.mp3", 60000, 0, 1);
+    FB_TimelineAppendToTrack(&tl, 0, 0, 0, 4000);
+    FB_TimelineAppendToTrack(&tl, 0, 0, 6000, 8000);
+    FB_TimelineAppendToTrack(&tl, 1, 1, 0, 30000);
+    tl.clips[2].start = 1500;                     /* a gap before it */
+    tl.clips[2].volume = 0.25;
+    tl.tracks[1].muted = 1;
+    FB_TimelineAddTrack(&tl, FB_TRACK_VIDEO);
+    tl.tracks[2].hidden = 1;
+    FB_TimelineAddClip(&tl, 2, 0, 0, 1000, 2000);
+
+    CHECK(FB_ProjectWrite(&tl, "", text, sizeof(text)) > 0);
+    CHECK(strncmp(text, "FORMBROD-PROJECT 2\n", 19) == 0);
+    CHECK(strstr(text, "TRACK video\nCLIP 1 0 4000\nCLIP 1 6000 8000\n"));
+    CHECK(strstr(text, "TRACK audio\n    MUTED\nCLIP 2 0 30000\n"
+                       "    AT 1500\n    VOLUME 0.25\n") != NULL);
+    CHECK(strstr(text, "TRACK video\n    HIDDEN\nCLIP 1 0 1000\n    AT 2000\n"));
+
+    CHECK(FB_ProjectParse(&back, text, "", &line) == FB_PROJECT_OK);
+    CHECK(back.num_tracks == 3 && back.num_clips == 4);
+    CHECK(back.tracks[1].kind == FB_TRACK_AUDIO && back.tracks[1].muted);
+    CHECK(back.tracks[2].hidden && !back.tracks[0].muted);
+    CHECK(back.clips[1].start == 4000 && back.clips[1].track == 0);
+    CHECK(back.clips[2].track == 1 && back.clips[2].start == 1500 &&
+          back.clips[2].volume == 0.25);
+    CHECK(back.clips[3].track == 2 && back.clips[3].start == 2000);
+    CHECK(back.clips[0].volume == 1.0);
+
+    /* A length changed by hand moves the clips after it along. */
+    CHECK(FB_ProjectParse(&back,
+        "FORMBROD-PROJECT 2\nSOURCE 1 a.mp4\nTRACK video\n"
+        "CLIP 1 0 2500\nCLIP 1 6000 8000\n", "", &line) == FB_PROJECT_OK);
+    CHECK(back.clips[1].start == 2500);
+
+    /* Version 1: one picture track. */
+    CHECK(FB_ProjectParse(&back,
+        "FORMBROD-PROJECT 1\nSOURCE 1 a.mp4\nCLIP 1 0 100\nCLIP 1 0 50\n",
+        "", &line) == FB_PROJECT_OK);
+    CHECK(back.num_tracks == 1 && back.tracks[0].kind == FB_TRACK_VIDEO);
+    CHECK(back.num_clips == 2 && back.clips[1].start == 100);
+
+    /* Mistakes are reported with their line. */
+    CHECK(FB_ProjectParse(&back, "FORMBROD-PROJECT 2\nTRACK sideways\n", "",
+                          &line) == FB_PROJECT_BAD_LINE && line == 2);
+    CHECK(FB_ProjectParse(&back, "FORMBROD-PROJECT 2\nMUTED\n", "", &line)
+          == FB_PROJECT_BAD_LINE);
+    CHECK(FB_ProjectParse(&back,
+        "FORMBROD-PROJECT 2\nSOURCE 1 a\nTRACK video\nCLIP 1 0 100\n"
+        "CLIP 1 0 100\nAT 50\n", "", &line) == FB_PROJECT_BAD_LINE &&
+        line == 6);                               /* would overlap */
+    CHECK(FB_ProjectParse(&back,
+        "FORMBROD-PROJECT 2\nSOURCE 1 a\nTRACK video\nCLIP 1 0 100\n"
+        "VOLUME -1\n", "", &line) == FB_PROJECT_BAD_LINE);
+}
+
 /* Reads the log back without the time stamps (the first 9 characters). */
 static void read_log(const char *path, char *buf, size_t len)
 {
@@ -557,18 +828,98 @@ static void test_log(void)
     CHECK(strcmp(FB_LogLevelName(FB_LOG_DEBUG), "debug") == 0);
 }
 
+static void test_still(void)
+{
+    FBTimeline tl;
+    FBOutput out;
+    FBJob job;
+    int pic, a, num, den;
+
+    memset(&out, 0, sizeof(out));
+    strcpy(out.path, "out.mp4");
+    out.quality = FB_QUALITY_FINAL;
+
+    FB_TimelineInit(&tl);
+    pic = FB_TimelineAddSource(&tl, "pic.png", 0, 1, 0);
+    a = FB_TimelineAddSource(&tl, "a.mp4", 4000, 1, 1);
+    tl.sources[pic].still = 1;
+    FB_SourceSetVideo(&tl.sources[pic], 400, 300, 1, 1, 25, 1);
+    FB_SourceSetVideo(&tl.sources[a], 320, 240, 1, 1, 30, 1);
+    CHECK(FB_TimelineAppendToTrack(&tl, 0, pic, 0, FB_STILL_LENGTH) == 0);
+    CHECK(FB_TimelineAppendToTrack(&tl, 0, a, 0, 4000) == 1);
+
+    /* The size is the first clip's, the rate the first moving one's. */
+    CHECK(FB_TimelineFrameRate(&tl, &num, &den) && num == 30 && den == 1);
+
+    /* A picture has no end: it can be made as long as wanted, and the
+     * video after it moves along. A video can't go past its file. */
+    CHECK(FB_TimelineTrimClip(&tl, 0, 0, 60000) == 0);
+    CHECK(tl.clips[1].start == 60000);
+    CHECK(FB_TimelineTrimClip(&tl, 0, 0, 3000) == 0);
+    CHECK(tl.clips[1].start == 3000);
+    CHECK(FB_TimelineTrimClip(&tl, 1, 0, 4001) == -1);
+
+    CHECK(FB_JobBuild(&job, &tl, &out) == FB_JOB_OK);
+    printf("still: %s\n", job.filtergraph);
+    CHECK(strstr(job.filtergraph, "[0:v]loop=loop=-1:size=1:start=0,"
+                                  "setpts=N*1/(30*TB),trim=start=0.000:"
+                                  "end=3.000,setpts=PTS-STARTPTS") != NULL);
+    CHECK(strstr(job.filtergraph, "[1:v]trim=start=0.000:end=4.000") != NULL);
+    /* The picture has no sound: silence while it's shown. */
+    CHECK(strstr(job.filtergraph, "anullsrc=r=48000:cl=stereo,atrim="
+                                  "duration=3.000") != NULL);
+    CHECK(job.length == 7000);
+}
+
+static void test_time_text(void)
+{
+    char buf[32];
+    fb_ms_t ms;
+
+    CHECK(strcmp(FB_FormatTimeMs(buf, sizeof(buf), 65000, '.'), "1:05") == 0);
+    CHECK(strcmp(FB_FormatTimeMs(buf, sizeof(buf), 65500, ','), "1:05,5") == 0);
+    CHECK(strcmp(FB_FormatTimeMs(buf, sizeof(buf), 65250, '.'), "1:05.25") == 0);
+    CHECK(strcmp(FB_FormatTimeMs(buf, sizeof(buf), 65004, '.'), "1:05.004") == 0);
+    CHECK(strcmp(FB_FormatTimeMs(buf, sizeof(buf), 3725125, '.'),
+                 "1:02:05.125") == 0);
+    CHECK(strcmp(FB_FormatTimeMs(buf, sizeof(buf), 0, '.'), "0:00") == 0);
+
+    CHECK(FB_ParseTime("1:05.5", ',', &ms) == 0 && ms == 65500);
+    CHECK(FB_ParseTime(" 1:05,25 ", ',', &ms) == 0 && ms == 65250);
+    CHECK(FB_ParseTime("65.5", '.', &ms) == 0 && ms == 65500);
+    CHECK(FB_ParseTime("12s", '.', &ms) == 0 && ms == 12000);
+    CHECK(FB_ParseTime(".5", '.', &ms) == 0 && ms == 500);
+    CHECK(FB_ParseTime("1:02:05", '.', &ms) == 0 && ms == 3725000);
+    CHECK(FB_ParseTime("0:00.0019", '.', &ms) == 0 && ms == 1);
+    CHECK(FB_ParseTime("1:75", '.', &ms) == -1);
+    CHECK(FB_ParseTime("", '.', &ms) == -1);
+    CHECK(FB_ParseTime("abc", '.', &ms) == -1);
+    CHECK(FB_ParseTime("1:", '.', &ms) == -1);
+    CHECK(FB_ParseTime(":30", '.', &ms) == -1);
+    CHECK(FB_ParseTime("1:2:3:4", '.', &ms) == -1);
+    CHECK(FB_ParseTime("1:05s", '.', &ms) == -1);
+    /* What's written reads back the same. */
+    FB_FormatTimeMs(buf, sizeof(buf), 3725125, ',');
+    CHECK(FB_ParseTime(buf, ',', &ms) == 0 && ms == 3725125);
+}
+
 int main(void)
 {
     FB_RegisterBuiltinModules();
     test_timeline();
+    test_tracks();
     test_log();
     test_job_build_and_roundtrip();
+    test_job_tracks();
+    test_still();
     test_job_errors();
     test_fit();
     test_timeview();
+    test_time_text();
     test_paths();
     test_project_roundtrip();
     test_project_hand_edited();
+    test_project_tracks();
     if (failures) {
         printf("%d check(s) failed\n", failures);
         return 1;

@@ -4,7 +4,7 @@
  * A project file is plain text meant to be read and fixed by hand, mostly so
  * source paths can be changed when files have moved:
  *
- *   FORMBROD-PROJECT 1
+ *   FORMBROD-PROJECT 2
  *   ; comments start with ';' (or '#')
  *   OUTPUT-SIZE 0 0
  *   OUTPUT-RATE 0 0
@@ -13,17 +13,34 @@
  *
  *   SOURCE 1 Work:Video/holiday.mp4
  *   SOURCE 2 clips/intro.mp4
+ *   SOURCE 3 music/theme.mp3
  *
+ *   TRACK video
  *   CLIP 1 0 12000
  *       FIT fill
  *       EFFECT fade
  *           PARAM in 0.5
+ *   CLIP 2 2000 5000
+ *
+ *   TRACK audio
+ *       MUTED
+ *   CLIP 3 0 60000
+ *       AT 1000
+ *       VOLUME 0.5
  *
  * One setting per line: a key, a space, the value. Indentation and blank
  * lines are ignored. Sources are numbered from 1, and CLIP refers to them by
  * number: CLIP <source> <in ms> <out ms>. FIT, EFFECT and PARAM belong to
  * the CLIP (and EFFECT) above them. A source path is the rest of the line,
  * so it may contain spaces.
+ *
+ * TRACK starts a track (video or audio, bottom one first); MUTED and HIDDEN
+ * under it switch off its sound or picture. Each CLIP goes on the track
+ * above it, right after the clip before it, so a length changed by hand
+ * moves the clips after it along. AT <ms> starts a clip later, leaving a
+ * gap. VOLUME scales its sound (1 = as recorded).
+ *
+ * Version 1 had no tracks: its clips are read as one picture track.
  *
  * A path without a volume or assign (no ':') is relative to the drawer the
  * project file is in. Sources inside that drawer are saved that way, so a
@@ -39,7 +56,7 @@
 #include <stddef.h>
 #include "timeline.h"
 
-#define FB_PROJECT_VERSION  1
+#define FB_PROJECT_VERSION  2
 
 typedef enum {
     FB_PROJECT_OK = 0,

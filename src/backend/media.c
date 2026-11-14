@@ -34,6 +34,9 @@ static void set_why(char *why, size_t len, int averr)
     }
 }
 
+/* A picture-only file at most this long is a still picture. */
+#define STILL_MAX_MS 120
+
 static FBProbeResult probe(const char *path, FBSource *info,
                            char *why, size_t why_len)
 {
@@ -88,11 +91,29 @@ static FBProbeResult probe(const char *path, FBSource *info,
         FB_SourceSetVideo(info, st->codecpar->width, st->codecpar->height,
                           sar.num, sar.den, fr.num, fr.den);
     }
+
+    /* A still picture (PNG, JPEG, IFF...) is a clip of any length. ffmpeg
+     * reads them with the image2 or a *_pipe demuxer, but the names differ
+     * between versions, so anything with only a picture that lasts at
+     * most a few frames counts too. (Before closing: that frees fmt.) */
+    if (*has_video && !*has_audio) {
+        const char *name = fmt->iformat && fmt->iformat->name
+                           ? fmt->iformat->name : "";
+        size_t n = strlen(name);
+
+        if (strcmp(name, "image2") == 0 ||
+            (n > 5 && strcmp(name + n - 5, "_pipe") == 0) ||
+            *duration <= STILL_MAX_MS) {
+            info->still = 1;
+            *duration = 0;
+        }
+    }
     avformat_close_input(&fmt);
 
-    if (!*has_video)
+    /* A sound-only file (music) is fine: it goes on a sound track. */
+    if (!*has_video && !*has_audio)
         return FB_PROBE_NO_VIDEO;
-    if (*duration <= 0)
+    if (*duration <= 0 && !info->still)
         return FB_PROBE_NO_DURATION;
     return FB_PROBE_OK;
 }
@@ -115,7 +136,7 @@ FBProbeResult FB_ProbeMedia(const char *path, FBSource *info,
                             char *why, size_t why_len)
 {
     static const char *const names[] = {
-        "ok", "built without libav", "can't open", "no video",
+        "ok", "built without libav", "can't open", "no picture or sound",
         "no length"
     };
     FBProbeResult r = probe(path, info, why, why_len);
@@ -124,6 +145,7 @@ FBProbeResult FB_ProbeMedia(const char *path, FBSource *info,
         FB_Log(FB_LOG_INFO, "probe",
                "%s: %lld ms, %s %dx%d (pixel shape %d:%d) at %d/%d fps, %s",
                path, (long long)info->duration,
+               info->still ? "still picture" :
                info->has_video ? "picture" : "no picture",
                info->width, info->height, info->sar_num, info->sar_den,
                info->fps_num, info->fps_den,

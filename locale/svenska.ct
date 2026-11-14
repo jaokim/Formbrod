@@ -28,6 +28,12 @@ _Exportera...
 MSG_BTN_CANCEL
 _Avbryt
 ;
+MSG_BTN_SET_IN
+In-punkt
+;
+MSG_BTN_SET_OUT
+Ut-punkt
+;
 MSG_COL_NUMBER
 #
 ;
@@ -42,6 +48,12 @@ Ut
 ;
 MSG_COL_EFFECTS
 Effekter
+;
+MSG_COL_TRACK
+Spår
+;
+MSG_COL_START
+Börjar
 ;
 MSG_LABEL_PLAYHEAD
 Position
@@ -60,6 +72,12 @@ Dra åt höger för att zooma in kring positionen, åt vänster för att se mer 
 ;
 MSG_HINT_PLAYHEAD
 Klicka eller dra för att flytta positionen
+;
+MSG_LABEL_LENGTH
+Längd
+;
+MSG_HINT_TIMES
+Skriv en tid som 1:05,5, eller sekunder som 12,5, och tryck Retur
 ;
 MSG_REQ_ADD_FILE
 Lägg till videofil
@@ -110,13 +128,22 @@ MSG_STATUS_CANT_OPEN
 Kan inte öppna %s: %s
 ;
 MSG_STATUS_NO_VIDEO
-%s innehåller ingen video
+%s innehåller varken bild eller ljud
 ;
 MSG_STATUS_NO_DURATION
 Kan inte avgöra hur lång %s är
 ;
+MSG_STATUS_WRONG_TRACK
+%s kan inte läggas på den sortens spår
+;
+MSG_STATUS_NO_SUCH_TRACK
+Det spåret finns inte
+;
 MSG_STATUS_LOG_ON
 Skriver en logg till %s
+;
+MSG_STATUS_NO_CLIP_HERE
+Välj ett klipp, eller ställ positionen på ett
 ;
 MSG_JOB_EMPTY
 Tidslinjen är tom
@@ -135,6 +162,9 @@ Redigeringen är för komplex (filtergrafen blev för lång)
 ;
 MSG_JOB_UNKNOWN
 Okänt fel
+;
+MSG_JOB_NEED_SIZE
+Bildstorleken är okänd (filerna har inte lästs)
 ;
 MSG_ERR_NO_WINDOW
 Formbröd: kan inte öppna fönstret (är ReAction-klasserna installerade?)\n
@@ -206,8 +236,17 @@ Fyll bilden, beskär kanterna
 MSG_MENU_FIT_STRETCH
 Sträck ut till bilden
 ;
+MSG_MENU_SHOW_PICTURES
+Visa bildrutor
+;
 MSG_MENU_WRITE_LOG
 Skriv loggfil
+;
+MSG_MENU_SET_IN
+Sätt in-punkt vid positionen
+;
+MSG_MENU_SET_OUT
+Sätt ut-punkt vid positionen
 ;
 MSG_ABOUT_TITLE
 Om Formbröd
@@ -290,6 +329,21 @@ Projektet har inget filnamn än
 MSG_STATUS_NOT_OPENED
 %s: %s
 ;
+MSG_STATUS_OUTSIDE_CLIP
+Ställ positionen inne i klippet först
+;
+MSG_STATUS_TRIMMED
+%s går nu från %s till %s
+;
+MSG_STATUS_STILL_LENGTH
+%s är nu %s lång
+;
+MSG_STATUS_BAD_TIME
+%s är ingen tid; skriv den som 1:05,5
+;
+MSG_STATUS_BAD_TRIM
+Klippet måste sluta efter att det börjar, och inom sin fil
+;
 MSG_UNSAVED_TITLE
 Osparade ändringar
 ;
@@ -298,3 +352,60 @@ MSG_UNSAVED_TEXT
 ;
 MSG_UNSAVED_BUTTONS
 Spara|Släng|Avbryt
+MSG_TRACK_RESULT
+Resultat
+;
+MSG_TRACK_PICTURE
+Video %ld
+;
+MSG_TRACK_SOUND
+Ljud %ld
+;
+MSG_TRACK_DROP
+Släpp filer här: var och en får ett eget spår
+;
+MSG_LABEL_FROM_FILE
+Från filen
+;
+MSG_HINT_FROM_FILE
+Var i filen klippet börjar. Skriv en tid och tryck Retur
+;
+MSG_HINT_STARTS
+Var klippet börjar i redigeringen. Skriv en tid och tryck Retur: klippen efter följer med
+;
+MSG_HINT_LANES
+Klicka på ett klipp för att välja det, dra i dess ändar för att korta eller förlänga det. Klicka på ett spårs namn för att välja spåret
+;
+MSG_MENU_TRACK
+Spår
+;
+MSG_MENU_APPEND_FILE
+Lägg till fil sist...
+;
+MSG_MENU_MUTE
+Stäng av ljudet
+;
+MSG_MENU_HIDE
+Dölj videon
+;
+MSG_MENU_REMOVE_TRACK
+Ta bort spåret
+;
+MSG_STATUS_SELECT_TRACK
+Klicka på ett spårs namn först
+;
+MSG_REQ_REMOVE_TRACK
+Ta bort %s och klippen på det?
+;
+MSG_REQ_REMOVE_TRACK_BUTTONS
+Ta bort|Avbryt
+;
+MSG_INSPECTOR_NONE
+Inget klipp valt
+;
+MSG_STATUS_TOO_EARLY
+Det kan inte börja före %s, där klippet framför slutar
+;
+MSG_STATUS_MOVED
+%s börjar nu vid %s
+;

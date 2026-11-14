@@ -28,6 +28,10 @@
 #define MSG_BTN_EXPORT_STR               "_Export..."
 #define MSG_BTN_CANCEL                   16
 #define MSG_BTN_CANCEL_STR               "_Cancel"
+#define MSG_BTN_SET_IN                   17
+#define MSG_BTN_SET_IN_STR               "Set in"
+#define MSG_BTN_SET_OUT                  18
+#define MSG_BTN_SET_OUT_STR              "Set out"
 #define MSG_COL_NUMBER                   20
 #define MSG_COL_NUMBER_STR               "#"
 #define MSG_COL_FILE                     21
@@ -38,6 +42,10 @@
 #define MSG_COL_OUT_STR                  "Out"
 #define MSG_COL_EFFECTS                  24
 #define MSG_COL_EFFECTS_STR              "Effects"
+#define MSG_COL_TRACK                    25
+#define MSG_COL_TRACK_STR                "Track"
+#define MSG_COL_START                    26
+#define MSG_COL_START_STR                "Starts"
 #define MSG_LABEL_PLAYHEAD               30
 #define MSG_LABEL_PLAYHEAD_STR           "Playhead"
 #define MSG_LABEL_RENDER                 31
@@ -50,6 +58,10 @@
 #define MSG_HINT_ZOOM_STR                "Drag right to zoom in around the playhead, left to see more of the edit"
 #define MSG_HINT_PLAYHEAD                35
 #define MSG_HINT_PLAYHEAD_STR            "Click or drag to move the playhead"
+#define MSG_LABEL_LENGTH                 36
+#define MSG_LABEL_LENGTH_STR             "Length"
+#define MSG_HINT_TIMES                   37
+#define MSG_HINT_TIMES_STR               "Type a time like 1:05.5, or seconds like 12.5, and press Return"
 #define MSG_REQ_ADD_FILE                 40
 #define MSG_REQ_ADD_FILE_STR             "Add video file"
 #define MSG_REQ_EXPORT                   41
@@ -83,11 +95,17 @@
 #define MSG_STATUS_CANT_OPEN             63
 #define MSG_STATUS_CANT_OPEN_STR         "Can't open %s: %s"
 #define MSG_STATUS_NO_VIDEO              64
-#define MSG_STATUS_NO_VIDEO_STR          "%s has no video in it"
+#define MSG_STATUS_NO_VIDEO_STR          "%s has no picture or sound in it"
 #define MSG_STATUS_NO_DURATION           65
 #define MSG_STATUS_NO_DURATION_STR       "Can't tell how long %s is"
+#define MSG_STATUS_WRONG_TRACK           66
+#define MSG_STATUS_WRONG_TRACK_STR       "%s can't go on that kind of track"
+#define MSG_STATUS_NO_SUCH_TRACK         67
+#define MSG_STATUS_NO_SUCH_TRACK_STR     "There is no such track"
 #define MSG_STATUS_LOG_ON                68
 #define MSG_STATUS_LOG_ON_STR            "Writing a log to %s"
+#define MSG_STATUS_NO_CLIP_HERE          69
+#define MSG_STATUS_NO_CLIP_HERE_STR      "Select a clip, or put the playhead on one"
 #define MSG_JOB_EMPTY                    70
 #define MSG_JOB_EMPTY_STR                "The timeline is empty"
 #define MSG_JOB_BAD_SOURCE               71
@@ -100,6 +118,8 @@
 #define MSG_JOB_OVERFLOW_STR             "The edit is too complex (filtergraph too long)"
 #define MSG_JOB_UNKNOWN                  75
 #define MSG_JOB_UNKNOWN_STR              "Unknown error"
+#define MSG_JOB_NEED_SIZE                76
+#define MSG_JOB_NEED_SIZE_STR            "The frame size isn't known (the files haven't been read)"
 #define MSG_ERR_NO_WINDOW                80
 #define MSG_ERR_NO_WINDOW_STR            "Formbrod: can't open window (are the ReAction classes installed?)\012"
 #define MSG_ERR_NO_AREXX                 81
@@ -146,8 +166,14 @@
 #define MSG_MENU_FIT_FILL_STR            "Fill frame, crop edges"
 #define MSG_MENU_FIT_STRETCH             115
 #define MSG_MENU_FIT_STRETCH_STR         "Stretch to frame"
+#define MSG_MENU_SHOW_PICTURES           116
+#define MSG_MENU_SHOW_PICTURES_STR       "Show frame pictures"
 #define MSG_MENU_WRITE_LOG               117
 #define MSG_MENU_WRITE_LOG_STR           "Write log file"
+#define MSG_MENU_SET_IN                  118
+#define MSG_MENU_SET_IN_STR              "Set in at the playhead"
+#define MSG_MENU_SET_OUT                 119
+#define MSG_MENU_SET_OUT_STR             "Set out at the playhead"
 #define MSG_ABOUT_TITLE                  120
 #define MSG_ABOUT_TITLE_STR              "About Formbrod"
 #define MSG_ABOUT_TEXT                   121
@@ -202,14 +228,62 @@
 #define MSG_STATUS_NO_PROJECT_FILE_STR   "The project has no file name yet"
 #define MSG_STATUS_NOT_OPENED            151
 #define MSG_STATUS_NOT_OPENED_STR        "%s: %s"
+#define MSG_STATUS_OUTSIDE_CLIP          152
+#define MSG_STATUS_OUTSIDE_CLIP_STR      "Put the playhead inside the clip first"
+#define MSG_STATUS_TRIMMED               153
+#define MSG_STATUS_TRIMMED_STR           "%s now runs from %s to %s"
+#define MSG_STATUS_STILL_LENGTH          154
+#define MSG_STATUS_STILL_LENGTH_STR      "%s is now %s long"
+#define MSG_STATUS_BAD_TIME              155
+#define MSG_STATUS_BAD_TIME_STR          "%s isn't a time; write it like 1:05.5"
+#define MSG_STATUS_BAD_TRIM              156
+#define MSG_STATUS_BAD_TRIM_STR          "The clip has to end after it starts, and within its file"
 #define MSG_UNSAVED_TITLE                160
 #define MSG_UNSAVED_TITLE_STR            "Unsaved changes"
 #define MSG_UNSAVED_TEXT                 161
 #define MSG_UNSAVED_TEXT_STR             "%s has changes that aren't saved."
 #define MSG_UNSAVED_BUTTONS              162
 #define MSG_UNSAVED_BUTTONS_STR          "Save|Discard|Cancel"
+#define MSG_TRACK_RESULT                 170
+#define MSG_TRACK_RESULT_STR             "Result"
+#define MSG_TRACK_PICTURE                171
+#define MSG_TRACK_PICTURE_STR            "Video %ld"
+#define MSG_TRACK_SOUND                  172
+#define MSG_TRACK_SOUND_STR              "Audio %ld"
+#define MSG_TRACK_DROP                   173
+#define MSG_TRACK_DROP_STR               "Drop files here: each one gets a track of its own"
+#define MSG_LABEL_FROM_FILE              174
+#define MSG_LABEL_FROM_FILE_STR          "From file"
+#define MSG_HINT_FROM_FILE               175
+#define MSG_HINT_FROM_FILE_STR           "Where in its file the clip begins. Type a time and press Return"
+#define MSG_HINT_STARTS                  176
+#define MSG_HINT_STARTS_STR              "Where the clip starts in the edit. Type a time and press Return: the clips after it move along"
+#define MSG_HINT_LANES                   177
+#define MSG_HINT_LANES_STR               "Click a clip to select it, drag its ends to trim it. Click a track's name to select the track"
+#define MSG_MENU_TRACK                   178
+#define MSG_MENU_TRACK_STR               "Track"
+#define MSG_MENU_APPEND_FILE             179
+#define MSG_MENU_APPEND_FILE_STR         "Append file..."
+#define MSG_MENU_MUTE                    180
+#define MSG_MENU_MUTE_STR                "Mute audio"
+#define MSG_MENU_HIDE                    181
+#define MSG_MENU_HIDE_STR                "Hide video"
+#define MSG_MENU_REMOVE_TRACK            182
+#define MSG_MENU_REMOVE_TRACK_STR        "Remove track"
+#define MSG_STATUS_SELECT_TRACK          183
+#define MSG_STATUS_SELECT_TRACK_STR      "Click a track's name first"
+#define MSG_REQ_REMOVE_TRACK             184
+#define MSG_REQ_REMOVE_TRACK_STR         "Remove %s and the clips on it?"
+#define MSG_REQ_REMOVE_TRACK_BUTTONS     185
+#define MSG_REQ_REMOVE_TRACK_BUTTONS_STR "Remove|Cancel"
+#define MSG_INSPECTOR_NONE               186
+#define MSG_INSPECTOR_NONE_STR           "No clip selected"
+#define MSG_STATUS_TOO_EARLY             187
+#define MSG_STATUS_TOO_EARLY_STR         "It can't start before %s, where the clip in front of it ends"
+#define MSG_STATUS_MOVED                 188
+#define MSG_STATUS_MOVED_STR             "%s now starts at %s"
 
-#define FB_NUM_STRINGS 98
+#define FB_NUM_STRINGS 135
 
 #ifdef FB_STRINGS_ARRAY
 static const struct FBBuiltinString {
@@ -224,17 +298,23 @@ static const struct FBBuiltinString {
     { MSG_BTN_PREVIEW, MSG_BTN_PREVIEW_STR },
     { MSG_BTN_EXPORT, MSG_BTN_EXPORT_STR },
     { MSG_BTN_CANCEL, MSG_BTN_CANCEL_STR },
+    { MSG_BTN_SET_IN, MSG_BTN_SET_IN_STR },
+    { MSG_BTN_SET_OUT, MSG_BTN_SET_OUT_STR },
     { MSG_COL_NUMBER, MSG_COL_NUMBER_STR },
     { MSG_COL_FILE, MSG_COL_FILE_STR },
     { MSG_COL_IN, MSG_COL_IN_STR },
     { MSG_COL_OUT, MSG_COL_OUT_STR },
     { MSG_COL_EFFECTS, MSG_COL_EFFECTS_STR },
+    { MSG_COL_TRACK, MSG_COL_TRACK_STR },
+    { MSG_COL_START, MSG_COL_START_STR },
     { MSG_LABEL_PLAYHEAD, MSG_LABEL_PLAYHEAD_STR },
     { MSG_LABEL_RENDER, MSG_LABEL_RENDER_STR },
     { MSG_LABEL_ZOOM, MSG_LABEL_ZOOM_STR },
     { MSG_TRACK_EMPTY, MSG_TRACK_EMPTY_STR },
     { MSG_HINT_ZOOM, MSG_HINT_ZOOM_STR },
     { MSG_HINT_PLAYHEAD, MSG_HINT_PLAYHEAD_STR },
+    { MSG_LABEL_LENGTH, MSG_LABEL_LENGTH_STR },
+    { MSG_HINT_TIMES, MSG_HINT_TIMES_STR },
     { MSG_REQ_ADD_FILE, MSG_REQ_ADD_FILE_STR },
     { MSG_REQ_EXPORT, MSG_REQ_EXPORT_STR },
     { MSG_STATUS_WELCOME, MSG_STATUS_WELCOME_STR },
@@ -253,13 +333,17 @@ static const struct FBBuiltinString {
     { MSG_STATUS_CANT_OPEN, MSG_STATUS_CANT_OPEN_STR },
     { MSG_STATUS_NO_VIDEO, MSG_STATUS_NO_VIDEO_STR },
     { MSG_STATUS_NO_DURATION, MSG_STATUS_NO_DURATION_STR },
+    { MSG_STATUS_WRONG_TRACK, MSG_STATUS_WRONG_TRACK_STR },
+    { MSG_STATUS_NO_SUCH_TRACK, MSG_STATUS_NO_SUCH_TRACK_STR },
     { MSG_STATUS_LOG_ON, MSG_STATUS_LOG_ON_STR },
+    { MSG_STATUS_NO_CLIP_HERE, MSG_STATUS_NO_CLIP_HERE_STR },
     { MSG_JOB_EMPTY, MSG_JOB_EMPTY_STR },
     { MSG_JOB_BAD_SOURCE, MSG_JOB_BAD_SOURCE_STR },
     { MSG_JOB_UNKNOWN_MODULE, MSG_JOB_UNKNOWN_MODULE_STR },
     { MSG_JOB_NOT_EXPRESSIBLE, MSG_JOB_NOT_EXPRESSIBLE_STR },
     { MSG_JOB_OVERFLOW, MSG_JOB_OVERFLOW_STR },
     { MSG_JOB_UNKNOWN, MSG_JOB_UNKNOWN_STR },
+    { MSG_JOB_NEED_SIZE, MSG_JOB_NEED_SIZE_STR },
     { MSG_ERR_NO_WINDOW, MSG_ERR_NO_WINDOW_STR },
     { MSG_ERR_NO_AREXX, MSG_ERR_NO_AREXX_STR },
     { MSG_FITS_SCALE, MSG_FITS_SCALE_STR },
@@ -283,7 +367,10 @@ static const struct FBBuiltinString {
     { MSG_MENU_FIT_FIT, MSG_MENU_FIT_FIT_STR },
     { MSG_MENU_FIT_FILL, MSG_MENU_FIT_FILL_STR },
     { MSG_MENU_FIT_STRETCH, MSG_MENU_FIT_STRETCH_STR },
+    { MSG_MENU_SHOW_PICTURES, MSG_MENU_SHOW_PICTURES_STR },
     { MSG_MENU_WRITE_LOG, MSG_MENU_WRITE_LOG_STR },
+    { MSG_MENU_SET_IN, MSG_MENU_SET_IN_STR },
+    { MSG_MENU_SET_OUT, MSG_MENU_SET_OUT_STR },
     { MSG_ABOUT_TITLE, MSG_ABOUT_TITLE_STR },
     { MSG_ABOUT_TEXT, MSG_ABOUT_TEXT_STR },
     { MSG_ABOUT_LIBAV, MSG_ABOUT_LIBAV_STR },
@@ -311,9 +398,33 @@ static const struct FBBuiltinString {
     { MSG_PROJECT_TOO_MANY, MSG_PROJECT_TOO_MANY_STR },
     { MSG_STATUS_NO_PROJECT_FILE, MSG_STATUS_NO_PROJECT_FILE_STR },
     { MSG_STATUS_NOT_OPENED, MSG_STATUS_NOT_OPENED_STR },
+    { MSG_STATUS_OUTSIDE_CLIP, MSG_STATUS_OUTSIDE_CLIP_STR },
+    { MSG_STATUS_TRIMMED, MSG_STATUS_TRIMMED_STR },
+    { MSG_STATUS_STILL_LENGTH, MSG_STATUS_STILL_LENGTH_STR },
+    { MSG_STATUS_BAD_TIME, MSG_STATUS_BAD_TIME_STR },
+    { MSG_STATUS_BAD_TRIM, MSG_STATUS_BAD_TRIM_STR },
     { MSG_UNSAVED_TITLE, MSG_UNSAVED_TITLE_STR },
     { MSG_UNSAVED_TEXT, MSG_UNSAVED_TEXT_STR },
     { MSG_UNSAVED_BUTTONS, MSG_UNSAVED_BUTTONS_STR },
+    { MSG_TRACK_RESULT, MSG_TRACK_RESULT_STR },
+    { MSG_TRACK_PICTURE, MSG_TRACK_PICTURE_STR },
+    { MSG_TRACK_SOUND, MSG_TRACK_SOUND_STR },
+    { MSG_TRACK_DROP, MSG_TRACK_DROP_STR },
+    { MSG_LABEL_FROM_FILE, MSG_LABEL_FROM_FILE_STR },
+    { MSG_HINT_FROM_FILE, MSG_HINT_FROM_FILE_STR },
+    { MSG_HINT_STARTS, MSG_HINT_STARTS_STR },
+    { MSG_HINT_LANES, MSG_HINT_LANES_STR },
+    { MSG_MENU_TRACK, MSG_MENU_TRACK_STR },
+    { MSG_MENU_APPEND_FILE, MSG_MENU_APPEND_FILE_STR },
+    { MSG_MENU_MUTE, MSG_MENU_MUTE_STR },
+    { MSG_MENU_HIDE, MSG_MENU_HIDE_STR },
+    { MSG_MENU_REMOVE_TRACK, MSG_MENU_REMOVE_TRACK_STR },
+    { MSG_STATUS_SELECT_TRACK, MSG_STATUS_SELECT_TRACK_STR },
+    { MSG_REQ_REMOVE_TRACK, MSG_REQ_REMOVE_TRACK_STR },
+    { MSG_REQ_REMOVE_TRACK_BUTTONS, MSG_REQ_REMOVE_TRACK_BUTTONS_STR },
+    { MSG_INSPECTOR_NONE, MSG_INSPECTOR_NONE_STR },
+    { MSG_STATUS_TOO_EARLY, MSG_STATUS_TOO_EARLY_STR },
+    { MSG_STATUS_MOVED, MSG_STATUS_MOVED_STR },
 };
 #endif
 

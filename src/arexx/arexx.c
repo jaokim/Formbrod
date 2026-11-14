@@ -4,8 +4,16 @@
  * Commands map one-to-one onto App_* actions (see app.h). To add one:
  * write a handler, add a row to `commands`, and document it in README.md.
  *
- *   OPEN FILE/A                         add a file as a clip
- *   SPLIT AT/N/A                        split at AT milliseconds
+ *   OPEN FILE/A                         add a file on a new track; returns
+ *                                       the track (counted from 0)
+ *   APPEND TRACK/N/A,FILE/A             add a file after the last clip on
+ *                                       an existing track
+ *   SPLIT AT/N/A,TRACK/N                split at AT ms, on TRACK or on all
+ *   TRIM CLIP/N/A,IN/N,OUT/N            set a clip's in/out points (ms in
+ *                                       its file); left out = unchanged
+ *   MOVE CLIP/N/A,AT/N/A                start a clip at AT ms in the edit;
+ *                                       the clips after it move along
+ *   TRACKS                              number of tracks
  *   REMOVE CLIP/N/A
  *   EFFECT CLIP/N/A,MODULE/A            add an effect, returns its index
  *   SETPARAM CLIP/N/A,EFFECT/N/A,NAME/A,VALUE/A
@@ -51,7 +59,55 @@ static void cmd_open(struct ARexxCmd *cmd, struct RexxMsg *rm)
 {
     (void)rm;
     result[0] = '\0';
-    set_result(cmd, App_AddFile((STRPTR)cmd->ac_ArgList[0]) ? RC_ERROR : 0);
+    {
+        int track = App_AddFile((STRPTR)cmd->ac_ArgList[0]);
+
+        if (track >= 0)
+            snprintf(result, sizeof(result), "%d", track);
+        set_result(cmd, track < 0 ? RC_ERROR : 0);
+    }
+}
+
+static void cmd_append(struct ARexxCmd *cmd, struct RexxMsg *rm)
+{
+    (void)rm;
+    result[0] = '\0';
+    set_result(cmd, App_AppendFile(*(int32 *)cmd->ac_ArgList[0],
+                                   (const char *)cmd->ac_ArgList[1])
+                    ? RC_ERROR : 0);
+}
+
+static void cmd_trim(struct ARexxCmd *cmd, struct RexxMsg *rm)
+{
+    int clip = *(int32 *)cmd->ac_ArgList[0];
+    const FBClip *c;
+
+    (void)rm;
+    result[0] = '\0';
+    if (clip < 0 || clip >= App.timeline.num_clips) {
+        set_result(cmd, RC_ERROR);
+        return;
+    }
+    c = &App.timeline.clips[clip];
+    set_result(cmd, App_TrimClip(clip,
+        cmd->ac_ArgList[1] ? *(int32 *)cmd->ac_ArgList[1] : c->in,
+        cmd->ac_ArgList[2] ? *(int32 *)cmd->ac_ArgList[2] : c->out)
+        ? RC_ERROR : 0);
+}
+
+static void cmd_move(struct ARexxCmd *cmd, struct RexxMsg *rm)
+{
+    (void)rm;
+    result[0] = '\0';
+    set_result(cmd, App_MoveClip(*(int32 *)cmd->ac_ArgList[0],
+                                 *(int32 *)cmd->ac_ArgList[1]) ? RC_ERROR : 0);
+}
+
+static void cmd_tracks(struct ARexxCmd *cmd, struct RexxMsg *rm)
+{
+    (void)rm;
+    snprintf(result, sizeof(result), "%d", App.timeline.num_tracks);
+    set_result(cmd, 0);
 }
 
 static void cmd_newproject(struct ARexxCmd *cmd, struct RexxMsg *rm)
@@ -85,7 +141,10 @@ static void cmd_split(struct ARexxCmd *cmd, struct RexxMsg *rm)
 {
     (void)rm;
     result[0] = '\0';
-    set_result(cmd, App_Split(*(int32 *)cmd->ac_ArgList[0]) < 0 ? RC_ERROR : 0);
+    set_result(cmd, App_Split(cmd->ac_ArgList[1] ? *(int32 *)cmd->ac_ArgList[1]
+                                                 : -1,
+                              *(int32 *)cmd->ac_ArgList[0]) < 0
+                    ? RC_ERROR : 0);
 }
 
 static void cmd_remove(struct ARexxCmd *cmd, struct RexxMsg *rm)
@@ -241,7 +300,7 @@ static void cmd_quit(struct ARexxCmd *cmd, struct RexxMsg *rm)
 
 static struct ARexxCmd commands[] = {
     { "OPEN",         1,  cmd_open,         "FILE/A",            0, NULL, 0, 0, NULL },
-    { "SPLIT",        2,  cmd_split,        "AT/N/A",            0, NULL, 0, 0, NULL },
+    { "SPLIT",        2,  cmd_split,        "AT/N/A,TRACK/N",    0, NULL, 0, 0, NULL },
     { "REMOVE",       3,  cmd_remove,       "CLIP/N/A",          0, NULL, 0, 0, NULL },
     { "EFFECT",       4,  cmd_effect,       "CLIP/N/A,MODULE/A", 0, NULL, 0, 0, NULL },
     { "SETPARAM",     5,  cmd_setparam,
@@ -258,6 +317,10 @@ static struct ARexxCmd commands[] = {
     { "NEWPROJECT",   14, cmd_newproject,   NULL,                0, NULL, 0, 0, NULL },
     { "OPENPROJECT",  15, cmd_openproject,  "FILE/A",            0, NULL, 0, 0, NULL },
     { "SAVEPROJECT",  16, cmd_saveproject,  "FILE",              0, NULL, 0, 0, NULL },
+    { "APPEND",       17, cmd_append,       "TRACK/N/A,FILE/A",  0, NULL, 0, 0, NULL },
+    { "TRACKS",       18, cmd_tracks,       NULL,                0, NULL, 0, 0, NULL },
+    { "TRIM",         19, cmd_trim,         "CLIP/N/A,IN/N,OUT/N", 0, NULL, 0, 0, NULL },
+    { "MOVE",         20, cmd_move,         "CLIP/N/A,AT/N/A",   0, NULL, 0, 0, NULL },
     { NULL,           0,  NULL,             NULL,                0, NULL, 0, 0, NULL }
 };
 

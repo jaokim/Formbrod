@@ -35,8 +35,50 @@ Early skeleton. Working so far:
 - [x] Timeline gadgets, first step (`gadgets/timeline/`): ruler and film
       strip on a shared time axis, zoom, scrolling and a draggable playhead.
       Thumbnails are dummies for now
-- [ ] Real thumbnails, waveforms, trimming in the timeline
+- [x] Tracks: each added file gets its own track; picture tracks are laid
+      on top of each other and all sound is mixed. Cutting closes gaps
+- [x] Set in / Set out at the playhead (buttons, Edit menu, I and O keys),
+      typed In / Out / Length for the selected clip, and still pictures
+      (PNG, JPEG...) as clips of any length
+- [x] Track editor under the film strip: clips you select and trim by
+      dragging their ends, track names and a Track menu, drops onto tracks
+- [ ] Moving clips by dragging them, within a track or to another
+- [ ] Real thumbnails, waveforms
 - [ ] Remote rendering on a render server
+
+## Editing
+
+- **Add file** puts a file on a new track of its own: a video, a sound
+  file (music) or a still picture. A picture starts out 5 seconds long.
+- Under the film strip (which shows the result) is the **track editor**:
+  one row per track, named *Video 1*, *Audio 1* and so on, with each
+  video track's sound on a lane under it. Higher picture tracks are
+  drawn on top of lower ones; all sound is mixed.
+- Click a clip to select it; drag either end of a clip to make it shorter
+  or longer. The clips after it on the track move along.
+- Click a track's name to select the track for the **Track** menu:
+  *Append file...* (adds a file after its last clip), *Mute audio*,
+  *Hide video* and *Remove track*.
+- Drop files from Workbench on a track to append them to it, or on the
+  empty space below the tracks to give each its own track.
+- Click or drag in the ruler, the film strip or an empty part of the track
+  editor to move the playhead.
+- **Set in** (or the I key) cuts away the start of a clip up to the
+  playhead; **Set out** (O) cuts away the end after it. They work on the
+  clip selected in the list, or else on the picture under the playhead.
+  The clips after it on the same track move along, so no gap is left.
+- Put the playhead *after* the end of a clip and choose **Set out** to make
+  it longer, as far as its file goes; a still picture can be any length.
+  The timeline goes on a little past its last clip for this.
+- Or type the times: under the playhead and zoom controls, the selected
+  clip shows where it **Starts** in the edit, where in its file it begins
+  (**From file**) and its **Length**. Change any of them by writing
+  `1:05.5` or plain seconds like `12.5`, then press Return. Changing
+  Starts moves the clip and the ones after it on its track; starting it
+  later than the clip in front of it ends leaves a gap (black, or clear on
+  an upper track, and silence). A still picture has no From file.
+- **Split** cuts the selected clip's track at the playhead, or all tracks
+  if no clip is selected.
 
 ## Building
 
@@ -136,7 +178,8 @@ The port is called `FORMBROD`.
     /* Join two files, fade in the first, and export */
     ADDRESS FORMBROD
     'OPEN "Work:Video/intro.mp4"'
-    'OPEN "Work:Video/main.mp4"'
+    track = RESULT
+    'APPEND' track '"Work:Video/main.mp4"'
     'EFFECT 0 fade'
     fx = RESULT
     'SETPARAM 0' fx 'in 2.0'
@@ -148,8 +191,12 @@ The port is called `FORMBROD`.
 
 | Command | Arguments | Result |
 |---|---|---|
-| `OPEN` | `FILE/A` | |
-| `SPLIT` | `AT/N/A` (ms) | |
+| `OPEN` | `FILE/A` | the new track |
+| `APPEND` | `TRACK/N/A,FILE/A` | |
+| `TRACKS` | | number of tracks |
+| `SPLIT` | `AT/N/A` (ms), `TRACK/N` (default: all tracks) | |
+| `TRIM` | `CLIP/N/A,IN/N,OUT/N` (ms in the clip's file; left out = unchanged) | |
+| `MOVE` | `CLIP/N/A,AT/N/A` (ms in the edit; the clips after it move along) | |
 | `REMOVE` | `CLIP/N/A` | |
 | `EFFECT` | `CLIP/N/A,MODULE/A` | effect index |
 | `SETPARAM` | `CLIP/N/A,EFFECT/N/A,NAME/A,VALUE/A` | |
@@ -165,7 +212,12 @@ The port is called `FORMBROD`.
 | `SAVEPROJECT` | `FILE` (default: the current file) | path saved to |
 | `QUIT` | | |
 
-Clip and effect numbers start at 0. `NEWPROJECT`, `OPENPROJECT` and `QUIT`
+`OPEN` puts each file on a new track of its own, so two files opened
+that way play at the same time (the later one on top). `APPEND` joins a
+file onto the end of a track. A file with only sound, like music, gets a
+sound track.
+
+Clip, track and effect numbers start at 0. `NEWPROJECT`, `OPENPROJECT` and `QUIT`
 don't ask about unsaved changes; a script can `SAVEPROJECT` first.
 
 ### Output format and fitting
@@ -192,7 +244,7 @@ opened again with *Open project*, given on the command line, or dropped on
 the window. It is plain text so it can be fixed by hand, for example when
 the video files have moved:
 
-    FORMBROD-PROJECT 1
+    FORMBROD-PROJECT 2
     ; Formbrod project. One setting per line; ';' starts a comment.
     OUTPUT-SIZE 0 0
     OUTPUT-RATE 0 0
@@ -201,21 +253,34 @@ the video files have moved:
 
     SOURCE 1 clips/intro.mp4
     SOURCE 2 Video:Holiday 2026/beach.mov
+    SOURCE 3 music/theme.mp3
 
-    ; CLIP <source> <in> <out>
+    TRACK video
     CLIP 1 1000 5000
     CLIP 2 0 20000
         FIT fill
         EFFECT fade
             PARAM in 0.5
 
+    TRACK audio
+    CLIP 3 0 60000
+        AT 2000
+        VOLUME 0.5
+
 - `SOURCE <n> <path>` lists the files, numbered from 1. The path is the rest
   of the line, spaces and all. A path without a volume name (no `:`) is
   relative to the drawer the project file is in; files inside that drawer
   are saved that way, so a project drawer can be moved as a whole.
-- `CLIP <source> <in> <out>` takes a part of a source (times in ms). `FIT`,
+- `TRACK video` or `TRACK audio` starts a track, the bottom one first;
+  higher picture tracks are drawn on top. `MUTED` or `HIDDEN` under it
+  turns off its sound or picture.
+- `CLIP <source> <in> <out>` takes a part of a source (times in ms) and
+  puts it on the track above, right after the clip before it, so changing
+  a length by hand moves the rest along. `AT <ms>` starts it later instead,
+  leaving a gap; `VOLUME` scales its sound (1 = as recorded). `FIT`,
   `EFFECT` and `PARAM` lines belong to the clip above them. Indentation is
   only for reading.
+- Version 1 files have no `TRACK` lines; they open as one picture track.
 - `OUTPUT-SIZE`, `OUTPUT-RATE` (`0` = the first clip's), `OUTPUT-FIT` and
   `PAD-COLOR` are the output format.
 
@@ -230,8 +295,10 @@ Program settings (not project settings) are kept with application.library's
 PrefsObjects, in `ENV:Formbrod.jaokim.github.io.xml` (and `ENVARC:`), and
 can be viewed with PrefsObjectsEditor. So far they are the drawers the file
 requesters last used: `MediaDrawer`, `ProjectDrawer` and `ExportDrawer`, so
-each requester opens where it was last used, also after a restart. The log
-file has `Log`, `LogFile` and `LogLevel` (see below). Without
+each requester opens where it was last used, also after a restart;
+`ShowPictures` (*Settings → Show frame pictures*): `0` makes the film strip
+show plain blocks with file names and decode nothing, for slower Amigas;
+and for the log file `Log`, `LogFile` and `LogLevel` (see below). Without
 application.library 53 the drawers are only remembered until Formbrod quits.
 
 ## Log file

@@ -124,6 +124,11 @@ class CatgenTest(unittest.TestCase):
         self.assertTrue(any("not in the .cd" in e for e in errors))
         self.assertTrue(any("version" in e for e in errors))
 
+    def test_empty_line(self):
+        path = self.write("gap.cd", "A (1//)\na\n;\n\nB (2//)\nb\n;\n")
+        with self.assertRaises(catgen.CatError):
+            catgen.parse_cd(path)
+
     def test_not_latin1(self):
         errors, _, _, _ = self.check("MSG_HELLO\nПривет\n")
         self.assertTrue(any("iso-8859-1" in e for e in errors))

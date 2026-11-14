@@ -100,6 +100,18 @@ void    FB_ViewRulerSteps(const FBTimeView *v, int min_label_px,
 char   *FB_FormatTimecode(char *buf, size_t len, fb_us_t t, fb_us_t step,
                           fb_us_t frame_us, char decimal_point);
 
+/* ---- Times people type ---- */
+
+/* Writes ms as "m:ss" with as many decimals as needed for it to read back
+ * exactly ("1:05", "1:05.5", "1:05.25", "1:02:05.125" from an hour on).
+ * Returns buf. */
+char   *FB_FormatTimeMs(char *buf, size_t len, fb_ms_t ms, char decimal_point);
+
+/* Reads a time: "1:05.5", "1:02:05", or plain seconds "65.5" (an "s" after
+ * it is allowed). The decimal point may be '.' or `decimal_point`.
+ * Returns 0, or -1 if it isn't a time. */
+int     FB_ParseTime(const char *text, char decimal_point, fb_ms_t *ms);
+
 /* ---- Film-strip cells ---- */
 
 /* A film-strip cell: one thumbnail cell_w pixels wide. Cells sit on a grid

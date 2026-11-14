@@ -35,6 +35,7 @@ typedef struct FBJob {
     char     video_out[FB_NAME_LEN];   /* filtergraph label, e.g. "outv" */
     char     audio_out[FB_NAME_LEN];   /* "" if no audio */
     FBOutput output;
+    fb_ms_t  length;                   /* result's length, 0 if unknown */
 } FBJob;
 
 typedef enum {
@@ -43,7 +44,8 @@ typedef enum {
     FB_JOB_BAD_SOURCE,       /* clip refers to a missing source */
     FB_JOB_UNKNOWN_MODULE,   /* effect module not registered */
     FB_JOB_NOT_EXPRESSIBLE,  /* module can't be expressed as ffmpeg filters */
-    FB_JOB_OVERFLOW          /* filtergraph too long */
+    FB_JOB_OVERFLOW,         /* filtergraph too long */
+    FB_JOB_NEED_SIZE         /* gaps or tracks, but frame size unknown */
 } FBJobError;
 
 /* Builds a job from the timeline. Effects are turned into filters by their
@@ -62,10 +64,10 @@ int FB_JobParse(FBJob *job, const char *text);
  * servers that shell out to the stock ffmpeg CLI. */
 int FB_JobToCommandLine(const FBJob *job, char *buf, size_t len);
 
-/* Estimates the output length from the filtergraph, for progress bars: the
- * sum of every video "trim" (start/end or duration), which is what the
- * concat built by FB_JobBuild() plays. Returns 0 if there are no video
- * trims or one of them has no end. */
+/* The output length, for progress bars: the job's length if it has one
+ * (FB_JobBuild() sets it), else the sum of every video "trim" in the
+ * filtergraph, which is what a single concat plays. Returns 0 if there are
+ * no video trims or one of them has no end. */
 fb_ms_t FB_JobEstimateLength(const FBJob *job);
 
 #endif

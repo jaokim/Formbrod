@@ -3,6 +3,7 @@
  * timeline gadgets. See include/formbrod/timeview.h.
  */
 #include <stdio.h>
+#include <string.h>
 #include "formbrod/timeview.h"
 
 /* Division rounding towards minus infinity, for times left of the view. */
@@ -261,6 +262,93 @@ char *FB_FormatTimecode(char *buf, size_t len, fb_us_t t, fb_us_t step,
     return buf;
 }
 
+/* ---- Times people type --------------------------------------------- */
+
+char *FB_FormatTimeMs(char *buf, size_t len, fb_ms_t ms, char decimal_point)
+{
+    long secs, h, m, s, frac;
+    size_t used;
+
+    if (ms < 0)
+        ms = 0;
+    secs = (long)(ms / 1000);
+    frac = (long)(ms % 1000);
+    h = secs / 3600;
+    m = (secs / 60) % 60;
+    s = secs % 60;
+    if (h > 0)
+        snprintf(buf, len, "%ld:%02ld:%02ld", h, m, s);
+    else
+        snprintf(buf, len, "%ld:%02ld", m, s);
+    if (frac) {
+        used = strlen(buf);
+        if (frac % 100 == 0)
+            snprintf(buf + used, len - used, "%c%ld", decimal_point,
+                     frac / 100);
+        else if (frac % 10 == 0)
+            snprintf(buf + used, len - used, "%c%02ld", decimal_point,
+                     frac / 10);
+        else
+            snprintf(buf + used, len - used, "%c%03ld", decimal_point, frac);
+    }
+    return buf;
+}
+
+int FB_ParseTime(const char *text, char decimal_point, fb_ms_t *ms)
+{
+    fb_ms_t parts[3] = { 0, 0, 0 }, frac = 0, scale = 100;
+    int nparts = 0, digits = 0, i;
+    const char *p = text;
+
+    while (*p == ' ' || *p == '\t')
+        p++;
+    for (;;) {
+        fb_ms_t v = 0;
+
+        digits = 0;
+        while (*p >= '0' && *p <= '9') {
+            v = v * 10 + (*p++ - '0');
+            if (v > 100000000)
+                return -1;
+            digits++;
+        }
+        if (nparts == 3)
+            return -1;
+        parts[nparts++] = v;
+        if (*p != ':')
+            break;
+        if (!digits)
+            return -1;
+        p++;
+    }
+    if (*p == '.' || (*p == decimal_point && decimal_point)) {
+        p++;
+        while (*p >= '0' && *p <= '9') {
+            frac += (*p++ - '0') * scale;   /* past ms is ignored */
+            scale /= 10;
+            digits++;
+        }
+    }
+    if (!digits)
+        return -1;
+    if (*p == 's' && nparts == 1)
+        p++;
+    while (*p == ' ' || *p == '\t')
+        p++;
+    if (*p)
+        return -1;
+    /* Minutes and seconds after a ':' are below 60. */
+    for (i = 1; i < nparts; i++)
+        if (parts[i] >= 60)
+            return -1;
+
+    *ms = 0;
+    for (i = 0; i < nparts; i++)
+        *ms = *ms * 60 + parts[i];
+    *ms = *ms * 1000 + frac;
+    return 0;
+}
+
 /* ---- Film-strip cells ----------------------------------------------- */
 
 int FB_ViewCells(const FBTimeView *v, int cell_w, FBCell *cells, int max)
@@ -295,31 +383,19 @@ int FB_ViewCells(const FBTimeView *v, int cell_w, FBCell *cells, int max)
 
 fb_us_t FB_TimelineClipStart(const FBTimeline *tl, int clip)
 {
-    fb_ms_t pos = 0;
-    int i;
-
-    for (i = 0; i < clip && i < tl->num_clips; i++)
-        pos += tl->clips[i].out - tl->clips[i].in;
-    return FB_US(pos);
+    if (clip < 0 || clip >= tl->num_clips)
+        return 0;
+    return FB_US(tl->clips[clip].start);
 }
 
 int FB_TimelineLocate(const FBTimeline *tl, fb_us_t t, fb_us_t *source_t)
 {
-    fb_us_t pos = 0;
     int i;
 
     if (t < 0)
         return -1;
-    for (i = 0; i < tl->num_clips; i++) {
-        const FBClip *c = &tl->clips[i];
-        fb_us_t len = FB_US(c->out - c->in);
-
-        if (t < pos + len) {
-            if (source_t)
-                *source_t = FB_US(c->in) + (t - pos);
-            return i;
-        }
-        pos += len;
-    }
-    return -1;
+    i = FB_TimelineClipAt(tl, FB_MS(t), NULL);
+    if (i >= 0 && source_t)
+        *source_t = FB_US(tl->clips[i].in) + (t - FB_US(tl->clips[i].start));
+    return i;
 }

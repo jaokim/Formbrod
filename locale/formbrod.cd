@@ -42,6 +42,14 @@ _Export...
 MSG_BTN_CANCEL (16//)
 _Cancel
 ;
+; Trim the selected clip (or the one under the playhead) at the playhead.
+; The I and O keys do the same.
+MSG_BTN_SET_IN (17//)
+Set in
+;
+MSG_BTN_SET_OUT (18//)
+Set out
+;
 ; ---- Clip list columns ----------------------------------------------------
 MSG_COL_NUMBER (20//)
 #
@@ -57,6 +65,12 @@ Out
 ;
 MSG_COL_EFFECTS (24//)
 Effects
+;
+MSG_COL_TRACK (25//)
+Track
+;
+MSG_COL_START (26//)
+Starts
 ;
 ; ---- Labels ---------------------------------------------------------------
 MSG_LABEL_PLAYHEAD (30//)
@@ -79,6 +93,14 @@ Drag right to zoom in around the playhead, left to see more of the edit
 ; Hint shown when the pointer rests on the ruler or the film strip.
 MSG_HINT_PLAYHEAD (35//)
 Click or drag to move the playhead
+;
+; Fields under the clip list for the selected clip: In, Out (the column
+; titles) and this.
+MSG_LABEL_LENGTH (36//)
+Length
+;
+MSG_HINT_TIMES (37//)
+Type a time like 1:05.5, or seconds like 12.5, and press Return
 ;
 ; ---- File requester titles ------------------------------------------------
 MSG_REQ_ADD_FILE (40//)
@@ -138,15 +160,26 @@ Can't open %s: %s
 ;
 ; %s is the file path.
 MSG_STATUS_NO_VIDEO (64//)
-%s has no video in it
+%s has no picture or sound in it
 ;
 ; %s is the file path.
 MSG_STATUS_NO_DURATION (65//)
 Can't tell how long %s is
 ;
+; Append file: a sound-only file onto a picture track, or the other way.
+MSG_STATUS_WRONG_TRACK (66//)
+%s can't go on that kind of track
+;
+MSG_STATUS_NO_SUCH_TRACK (67//)
+There is no such track
+;
 ; Settings, Write log file was turned on. %s is the file.
 MSG_STATUS_LOG_ON (68//)
 Writing a log to %s
+;
+; Set in / Set out with no clip selected and none under the playhead.
+MSG_STATUS_NO_CLIP_HERE (69//)
+Select a clip, or put the playhead on one
 ;
 ; ---- Render job errors ----------------------------------------------------
 MSG_JOB_EMPTY (70//)
@@ -166,6 +199,9 @@ The edit is too complex (filtergraph too long)
 ;
 MSG_JOB_UNKNOWN (75//)
 Unknown error
+;
+MSG_JOB_NEED_SIZE (76//)
+The frame size isn't known (the files haven't been read)
 ;
 ; ---- Shell messages at startup --------------------------------------------
 MSG_ERR_NO_WINDOW (80//)
@@ -247,9 +283,19 @@ Fill frame, crop edges
 MSG_MENU_FIT_STRETCH (115//)
 Stretch to frame
 ;
+; Settings menu, a checkmark item. Off is for slower Amigas.
+MSG_MENU_SHOW_PICTURES (116//)
+Show frame pictures
+;
 ; Settings menu, a checkmark item.
 MSG_MENU_WRITE_LOG (117//)
 Write log file
+;
+MSG_MENU_SET_IN (118//)
+Set in at the playhead
+;
+MSG_MENU_SET_OUT (119//)
+Set out at the playhead
 ;
 ; ---- About requester ------------------------------------------------------
 MSG_ABOUT_TITLE (120//)
@@ -351,6 +397,26 @@ The project has no file name yet
 MSG_STATUS_NOT_OPENED (151//)
 %s: %s
 ;
+; Set in at a playhead outside the selected clip (Set out: before its start).
+MSG_STATUS_OUTSIDE_CLIP (152//)
+Put the playhead inside the clip first
+;
+; After trimming: file name, then in and out times in the file.
+MSG_STATUS_TRIMMED (153//)
+%s now runs from %s to %s
+;
+; After Set out on a still picture: file name, then its new length.
+MSG_STATUS_STILL_LENGTH (154//)
+%s is now %s long
+;
+; A typed time that couldn't be read; %s is what was typed.
+MSG_STATUS_BAD_TIME (155//)
+%s isn't a time; write it like 1:05.5
+;
+; Trimming that would make the clip end before it starts or go past its file.
+MSG_STATUS_BAD_TRIM (156//)
+The clip has to end after it starts, and within its file
+;
 ; ---- Unsaved changes requester ---------------------------------------------
 MSG_UNSAVED_TITLE (160//)
 Unsaved changes
@@ -362,3 +428,69 @@ MSG_UNSAVED_TEXT (161//)
 ; The buttons, separated by '|'. The last one cancels.
 MSG_UNSAVED_BUTTONS (162//)
 Save|Discard|Cancel
+; ---- Track editor ----
+; The name column in front of the film strip, which shows the result.
+MSG_TRACK_RESULT (170//)
+Result
+;
+; Track names in the editor, numbered from the bottom one of each kind.
+MSG_TRACK_PICTURE (171//)
+Video %ld
+;
+MSG_TRACK_SOUND (172//)
+Audio %ld
+;
+; Shown in the empty space below the tracks.
+MSG_TRACK_DROP (173//)
+Drop files here: each one gets a track of its own
+;
+; The clip fields: where the clip starts in the edit, where in its file it
+; begins, and how long it is.
+MSG_LABEL_FROM_FILE (174//)
+From file
+;
+MSG_HINT_FROM_FILE (175//)
+Where in its file the clip begins. Type a time and press Return
+;
+MSG_HINT_STARTS (176//)
+Where the clip starts in the edit. Type a time and press Return: the clips after it move along
+;
+MSG_HINT_LANES (177//)
+Click a clip to select it, drag its ends to trim it. Click a track's name to select the track
+;
+MSG_MENU_TRACK (178//)
+Track
+;
+MSG_MENU_APPEND_FILE (179//)
+Append file...
+;
+MSG_MENU_MUTE (180//)
+Mute audio
+;
+MSG_MENU_HIDE (181//)
+Hide video
+;
+MSG_MENU_REMOVE_TRACK (182//)
+Remove track
+;
+MSG_STATUS_SELECT_TRACK (183//)
+Click a track's name first
+;
+; %s is the track's name.
+MSG_REQ_REMOVE_TRACK (184//)
+Remove %s and the clips on it?
+;
+MSG_REQ_REMOVE_TRACK_BUTTONS (185//)
+Remove|Cancel
+;
+MSG_INSPECTOR_NONE (186//)
+No clip selected
+;
+; Typing Starts earlier than the clip in front of it ends; %s is that time.
+MSG_STATUS_TOO_EARLY (187//)
+It can't start before %s, where the clip in front of it ends
+;
+; After typing Starts: the file name and the new start.
+MSG_STATUS_MOVED (188//)
+%s now starts at %s
+;

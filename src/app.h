@@ -37,8 +37,29 @@ int  App_SaveProject(const char *path);
 int  App_IsProjectFile(const char *path);
 
 /* Adds a file as a source and appends it as one clip. 0 on success. */
+/* Adds a file on a new track of its own; returns the track or -1.
+ * AppendFile puts it after the last clip on an existing track. */
 int  App_AddFile(const char *path);
-int  App_Split(fb_ms_t at);
+int  App_AppendFile(int track, const char *path);
+/* Splits at `at` on one track, or on all of them when track is -1. */
+int  App_Split(int track, fb_ms_t at);
+/* Tracks: remove one (with its clips; the tracks above move down), or
+ * turn off its sound or picture. */
+int  App_RemoveTrack(int track);
+int  App_SetTrackMuted(int track, int muted);
+int  App_SetTrackHidden(int track, int hidden);
+
+/* Trimming. TrimClip sets a clip's in and out points in its file; the
+ * clips after it on its track move along. SetIn / SetOut trim at timeline
+ * time `at` (the playhead): SetIn drops what's before it, SetOut what's
+ * after it, or makes the clip longer if `at` is past its end. With clip
+ * -1 they work on the picture seen at `at`. */
+int  App_TrimClip(int clip, fb_ms_t in, fb_ms_t out);
+/* Moves a clip to start at `start` in the edit; the clips after it on its
+ * track move along. Moving it later leaves a gap in front of it. */
+int  App_MoveClip(int clip, fb_ms_t start);
+int  App_SetIn(int clip, fb_ms_t at);
+int  App_SetOut(int clip, fb_ms_t at);
 int  App_RemoveClip(int clip);
 int  App_AddEffect(int clip, const char *module);
 int  App_SetEffectParam(int clip, int effect, const char *name, double value);
@@ -65,7 +86,7 @@ typedef enum {
     FB_PROBE_OK = 0,
     FB_PROBE_NO_LIBAV,      /* built without HAVE_LIBAV */
     FB_PROBE_CANT_OPEN,     /* libavformat failed; reason in `why` */
-    FB_PROBE_NO_VIDEO,
+    FB_PROBE_NO_VIDEO,      /* neither picture nor sound */
     FB_PROBE_NO_DURATION
 } FBProbeResult;
 
