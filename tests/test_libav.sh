@@ -21,6 +21,8 @@ gen -f lavfi -i testsrc=size=320x240:rate=25:duration=3 \
 # Music on its own: sound from another file than the pictures.
 gen -f lavfi -i sine=frequency=330:sample_rate=44100:duration=6 \
     -ac 2 -c:a pcm_s16le "$dir/d.wav"
+# A still picture, 8-bit with a palette, an odd size.
+gen -f lavfi -i testsrc=size=621x610 -frames:v 1 -pix_fmt pal8 "$dir/e.bmp"
 
 "$bin" "$dir"
 

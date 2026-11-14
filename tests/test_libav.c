@@ -672,8 +672,9 @@ static void test_play_player(int step_ms)
 }
 
 /* Pictures from one file and the sound from another (music on its own
- * track): the sound must keep up with the pictures. */
-static void test_play_separate_sound(void)
+ * track): the sound must keep up with the pictures. With `still`, the
+ * picture is a still (e.bmp) and playing starts 1 s into it. */
+static void test_play_separate_sound(int still)
 {
     static FBTimeline tl;
     static FBJob job;
@@ -687,19 +688,29 @@ static void test_play_separate_sound(void)
     long real = 0, turns = 0;
     int ended = 0, tr;
 
-    printf("play pictures from one file, sound from another\n");
-    in_path(c, "c.mp4");
+    static FBTimeline w;
+
+    printf("play %s from one file, sound from another\n",
+           still ? "a still picture" : "pictures");
+    in_path(c, still ? "e.bmp" : "c.mp4");
     in_path(d, "d.wav");
     FB_TimelineInit(&tl);
-    FB_TimelineAddSource(&tl, c, 3000, 1, 0);
-    FB_SourceSetVideo(&tl.sources[0], 320, 240, 1, 1, 25, 1);
+    if (still) {
+        FB_TimelineAddSource(&tl, c, 0, 1, 0);
+        FB_SourceSetVideo(&tl.sources[0], 621, 610, 1, 1, 0, 0);
+        tl.sources[0].still = 1;
+    } else {
+        FB_TimelineAddSource(&tl, c, 3000, 1, 0);
+        FB_SourceSetVideo(&tl.sources[0], 320, 240, 1, 1, 25, 1);
+    }
     FB_TimelineAddSource(&tl, d, 6000, 0, 1);
-    FB_TimelineAppendToTrack(&tl, 0, 0, 0, 3000);
+    FB_TimelineAppendToTrack(&tl, 0, 0, 0, still ? 4000 : 3000);
     tr = FB_TimelineAddTrack(&tl, FB_TRACK_AUDIO);
-    FB_TimelineAppendToTrack(&tl, tr, 1, 0, 3000);
+    FB_TimelineAppendToTrack(&tl, tr, 1, 0, still ? 4000 : 3000);
+    FB_TimelineWindow(&w, &tl, still ? 1000 : 0, 3000);
     memset(&o, 0, sizeof(o));
     o.quality = FB_QUALITY_PREVIEW;
-    CHECK(FB_JobBuild(&job, &tl, &o) == FB_JOB_OK);
+    CHECK(FB_JobBuild(&job, &w, &o) == FB_JOB_OK);
     CHECK(job.audio_out[0] != 0);
     CHECK(FB_PlayerInit(&pl, 1) == 0);
     sink = FB_PlayerSink(&pl);
@@ -726,6 +737,7 @@ static void test_play_separate_sound(void)
     printf("  %ld turns: %ld shown, %ld dropped, %ld ms of sound\n", turns,
            pl.num_shown, pl.num_dropped, real * 1000 / FB_PLAY_RATE);
     CHECK(real * 1000 / FB_PLAY_RATE > 2900);
+    CHECK(pl.num_dropped == 0);
     FB_PlayerFree(&pl);
     be->Dispose(be);
 }
@@ -753,7 +765,8 @@ int main(int argc, char **argv)
     test_play();
     test_play_player(10);
     test_play_player(100);
-    test_play_separate_sound();
+    test_play_separate_sound(0);
+    test_play_separate_sound(1);
 
     if (failures) {
         printf("%d check(s) failed\n", failures);

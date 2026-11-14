@@ -863,14 +863,33 @@ static void test_still(void)
 
     CHECK(FB_JobBuild(&job, &tl, &out) == FB_JOB_OK);
     printf("still: %s\n", job.filtergraph);
-    CHECK(strstr(job.filtergraph, "[0:v]loop=loop=-1:size=1:start=0,"
+    /* Fitted and converted once, then repeated (not scaled for every
+     * frame). Here it's the frame's size already. */
+    CHECK(strstr(job.filtergraph, "[0:v]null,setsar=1,format=yuv420p,"
+                                  "loop=loop=-1:size=1:start=0,"
                                   "setpts=N*1/(30*TB),trim=start=0.000:"
-                                  "end=3.000,setpts=PTS-STARTPTS") != NULL);
+                                  "end=3.000,setpts=PTS-STARTPTS,fps=30/1[v0]")
+          != NULL);
     CHECK(strstr(job.filtergraph, "[1:v]trim=start=0.000:end=4.000") != NULL);
     /* The picture has no sound: silence while it's shown. */
     CHECK(strstr(job.filtergraph, "anullsrc=r=48000:cl=stereo,atrim="
                                   "duration=3.000") != NULL);
     CHECK(job.length == 7000);
+
+    /* A picture of another size: scaled before it's repeated, and not
+     * again after. */
+    FB_SourceSetVideo(&tl.sources[pic], 621, 610, 1, 1, 25, 1);
+    CHECK(FB_JobBuild(&job, &tl, &out) == FB_JOB_OK);
+    {
+        const char *loop = strstr(job.filtergraph, "loop=loop=-1:size=1");
+        const char *scale = strstr(job.filtergraph, "[0:v]null,scale=");
+        const char *end = strstr(job.filtergraph, "[v0];");
+
+        const char *again = loop ? strstr(loop, "scale=") : NULL;
+
+        CHECK(scale && loop && end && scale < loop);
+        CHECK(!again || again > end);     /* no scaling after the loop */
+    }
 }
 
 static void test_time_text(void)
