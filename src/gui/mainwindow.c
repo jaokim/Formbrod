@@ -68,6 +68,7 @@
 
 #include "app.h"
 #include "formbrod/project.h"
+#include "formbrod/log.h"
 #include "mainwindow.h"
 #include "formbrod/module.h"
 #include "locale/catalog.h"
