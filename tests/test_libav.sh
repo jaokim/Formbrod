@@ -23,6 +23,11 @@ gen -f lavfi -i sine=frequency=330:sample_rate=44100:duration=6 \
     -ac 2 -c:a pcm_s16le "$dir/d.wav"
 # A still picture, 8-bit with a palette, an odd size.
 gen -f lavfi -i testsrc=size=621x610 -frames:v 1 -pix_fmt pal8 "$dir/e.bmp"
+# Longer: pictures for 30 s, and music as mp3 (like a song on its own track).
+gen -f lavfi -i testsrc=size=320x240:rate=25:duration=30 \
+    -c:v mpeg4 "$dir/f.mp4"
+gen -f lavfi -i sine=frequency=440:sample_rate=44100:duration=32 \
+    -ac 2 -c:a mp2 "$dir/g.mp2"
 
 "$bin" "$dir"
 

@@ -96,6 +96,7 @@ typedef struct Input {
     AVFormatContext *fmt;
     InStream         st[NUM_KINDS];
     int              eof;
+    unsigned         seen_req;       /* failed requests when last read */
 } Input;
 
 /* One output stream: sink -> encoder -> muxer stream. */
@@ -1256,26 +1257,45 @@ static int decode(LocalPriv *p, InStream *is, AVPacket *pkt)
     }
 }
 
-/* The input the graph is waiting for: most failed requests on its
- * sources, ties to the lowest number. -1 when all inputs are done. */
-static int next_input(LocalPriv *p)
+/* The input the graph is waiting for most: the one whose sources the
+ * graph has asked most often since it was last read (not since the
+ * start, or one asked a lot early on would win for ever), ties to the
+ * lowest number. Only inputs with a stream of a kind in `kinds` (bits
+ * 1 << KIND_...) count. -1 when none is left. */
+static int next_input(LocalPriv *p, int kinds)
 {
     unsigned best_req = 0;
     int i, k, s, best = -1;
 
     for (i = 0; i < p->job.num_inputs; i++) {
         unsigned req = 0;
+        int wanted = 0;
 
         if (p->in[i].eof)
             continue;
-        for (k = 0; k < NUM_KINDS; k++)
+        for (k = 0; k < NUM_KINDS; k++) {
+            if (p->in[i].st[k].dec && (kinds & (1 << k)))
+                wanted = 1;
             for (s = 0; s < p->in[i].st[k].num_src; s++)
                 req += av_buffersrc_get_nb_failed_requests(
                            p->in[i].st[k].src[s]);
+        }
+        if (!wanted)
+            continue;
+        req -= p->in[i].seen_req;
         if (best < 0 || req > best_req) {
             best = i;
             best_req = req;
         }
+    }
+    if (best >= 0) {
+        unsigned req = 0;
+
+        for (k = 0; k < NUM_KINDS; k++)
+            for (s = 0; s < p->in[best].st[k].num_src; s++)
+                req += av_buffersrc_get_nb_failed_requests(
+                           p->in[best].st[k].src[s]);
+        p->in[best].seen_req = req;
     }
     return best;
 }
@@ -1315,24 +1335,28 @@ static void local_slice(LocalPriv *p)
 {
     int64_t until = av_gettime_relative() +
                     (p->playing ? PLAY_SLICE_US : SLICE_US);
-    int n, ret;
+    int n, ret, want = (1 << KIND_VIDEO) | (1 << KIND_AUDIO);
 
     for (n = 0; n < MAX_SLICE_PACKETS &&
                 (n == 0 || av_gettime_relative() < until); n++) {
         int i;
 
+        want = (1 << KIND_VIDEO) | (1 << KIND_AUDIO);
         if (p->playing) {
             ret = drain_to_sink(p);
             if (ret < 0)
                 return;
             /* Both full: playback catches up first. Only the pictures
              * full: go on reading while the sound wants more, or sound
-             * from a file of its own (music) would fall behind. The
-             * graph asks for what it's waiting for (next_input), so this
-             * reads the sound's file, not more pictures. */
+             * from a file of its own (music) would fall behind. */
             if ((ret & (1 << KIND_AUDIO)) ||
                 ((ret & (1 << KIND_VIDEO)) && p->os[KIND_AUDIO].eof))
                 return;
+            /* Pictures full: read only files with sound in them, not
+             * more pictures that would only pile up. */
+            want = (ret & (1 << KIND_VIDEO)) ? 1 << KIND_AUDIO
+                                             : (1 << KIND_VIDEO) |
+                                               (1 << KIND_AUDIO);
             if (p->os[KIND_VIDEO].eof && p->os[KIND_AUDIO].eof) {
                 release(p, 1);
                 finish(p, FB_RENDER_DONE, "Played");
@@ -1356,7 +1380,9 @@ static void local_slice(LocalPriv *p)
             finish(p, FB_RENDER_DONE, p->job.output.path);
             return;
         }
-        i = next_input(p);
+        i = next_input(p, want);
+        if (i < 0 && want != ((1 << KIND_VIDEO) | (1 << KIND_AUDIO)))
+            return;     /* no sound left to read: wait for playback */
         if (i < 0) {
             /* Every input is flushed and the sinks still want more. */
             fail(p, 0, "The filtergraph stalled before the end");

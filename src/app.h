@@ -46,6 +46,8 @@ typedef struct FBApp {
         fb_ms_t  from, end;    /* in the edit */
         FBPlayer pl;
         long long shown_at;    /* clock of the last time text */
+        long     dry_ms;       /* sound that wasn't there in time */
+        fb_ms_t  first_dry;    /* where it first ran dry, or -1 */
     } play;
 } FBApp;
 

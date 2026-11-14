@@ -1400,9 +1400,19 @@ int App_Playing(void)
     return App.play.on;
 }
 
+/* Sound for AHI. Where there was none in time (and the edit isn't
+ * over), it's counted, for the log: on a machine that can't keep up the
+ * sound runs dry, and this says where and how much. */
 static long take_audio(void *ud, short *out, long frames)
 {
-    return FB_PlayerTakeAudio(ud, out, frames);
+    long real = FB_PlayerTakeAudio(ud, out, frames);
+
+    if (real < frames && App_PlayPosition() < App.play.end - 200) {
+        if (App.play.first_dry < 0)
+            App.play.first_dry = App_PlayPosition();
+        App.play.dry_ms += (frames - real) * 1000 / FB_PLAY_RATE;
+    }
+    return real;
 }
 
 int App_PlayStart(fb_ms_t from)
@@ -1459,6 +1469,8 @@ int App_PlayStart(fb_ms_t from)
     App.play.on = 1;
     App.play.ended = 0;
     App.play.shown_at = 0;
+    App.play.dry_ms = 0;
+    App.play.first_dry = -1;
     FB_FormatTimeMs(at, sizeof(at), from, Locale_DecimalPoint());
     if (job.audio_out[0] && !App.play.sound)
         App_SetStatus(FB_Str(MSG_STATUS_PLAYING_SILENT), at);
@@ -1481,6 +1493,11 @@ static void play_stop(const char *why)
     Audio_Stop();
     FB_Log(FB_LOG_INFO, "play", "Stopped at %s: %ld pictures shown, %ld "
            "skipped", at, App.play.pl.num_shown, App.play.pl.num_dropped);
+    if (App.play.dry_ms > 0)
+        FB_Log(FB_LOG_WARNING, "play", "The sound wasn't ready in time for "
+               "%ld ms in all, first at %lld ms in the edit (rendering "
+               "slower than playing)", App.play.dry_ms,
+               (long long)App.play.first_dry);
     FB_PlayerFree(&App.play.pl);
     if (why)
         App_SetStatus("%s", why);
