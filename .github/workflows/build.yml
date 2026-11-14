@@ -13,13 +13,26 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # tools/fetch-deps.sh needs lha or lhasa for .lha archives.
-      - name: Install unpack tools
+      # Reports versions only; never fails.
+      - name: Toolchain info
         run: |
-          if ! command -v lha >/dev/null && ! command -v lhasa >/dev/null; then
+          ppc-amigaos-gcc --version | head -1
+          for t in flexcat lha lhasa python3 curl; do
+            printf '%-8s %s\n' "$t" "$(command -v $t || echo missing)"
+          done
+
+      # tools/fetch-deps.sh needs lha or lhasa for .lha archives, and the
+      # catalog cross-check needs python3. The image has neither.
+      - name: Install tools
+        run: |
+          pkgs=
+          command -v lha >/dev/null || command -v lhasa >/dev/null || pkgs="$pkgs lhasa"
+          command -v curl >/dev/null || pkgs="$pkgs curl"
+          command -v python3 >/dev/null || pkgs="$pkgs python3"
+          if [ -n "$pkgs" ]; then
             SUDO=; [ "$(id -u)" = 0 ] || SUDO=sudo
             $SUDO apt-get update -qq
-            $SUDO apt-get install -y -qq lhasa curl
+            $SUDO apt-get install -y -qq $pkgs
           fi
 
       - name: Cache downloads
@@ -57,12 +70,7 @@ jobs:
       # Cross-check FlexCat's catalogs against tools/catgen.py, which also
       # generates src/locale/strings.h. Fails if the strings differ.
       - name: Compare with catgen
-        run: |
-          if command -v python3 >/dev/null; then
-            make compare-catalogs
-          else
-            echo "::warning::python3 is not in the image; FlexCat catalogs were not cross-checked"
-          fi
+        run: make compare-catalogs
 
       - name: Dump catalogs on failure
         if: failure()
