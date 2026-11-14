@@ -17,6 +17,7 @@
 #ifdef __amigaos4__
 #include <proto/exec.h>
 #include <proto/dos.h>
+#include <dos/dostags.h>   /* SYS_Asynch etc. */
 #endif
 
 static void cache_start(void);
