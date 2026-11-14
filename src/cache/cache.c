@@ -8,10 +8,16 @@
 
 #define SLICE (64 * 1024)   /* bytes read from each part of a file */
 
+/* Copies at most len - 1 characters and always ends the string. (Not
+ * strncpy: newer gcc warns about it truncating, even where that's meant.) */
 static void copy_str(char *dst, const char *src, size_t len)
 {
-    strncpy(dst, src, len - 1);
-    dst[len - 1] = '\0';
+    size_t n = strlen(src);
+
+    if (n >= len)
+        n = len - 1;
+    memcpy(dst, src, n);
+    dst[n] = '\0';
 }
 
 /* ---- Keys -------------------------------------------------------------- */

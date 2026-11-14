@@ -7,6 +7,9 @@
 
 #ifdef HAVE_LIBAV
 #include <libavformat/avformat.h>
+/* Since ffmpeg 5, avformat.h no longer brings in the codec descriptors
+ * (AVCodecDescriptor, AV_CODEC_PROP_INTRA_ONLY). */
+#include <libavcodec/avcodec.h>
 #include <libavutil/error.h>
 
 /* Before ffmpeg 4.0 (libavformat 58.9.100) demuxers had to be registered,
