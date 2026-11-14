@@ -91,6 +91,9 @@ static STRPTR FitLabels[FB_FIT_COUNT + 1];
 /* Which of the clip's other effects is shown (0 = the first). */
 static int EffectPos;
 
+/* Whether the working pointer is wanted (also for when it opens). */
+static BOOL Working;
+
 /* ---- Making the gadgets ---------------------------------------------- */
 
 static Object *label(const char *text)
@@ -655,6 +658,7 @@ void ClipWindow_Open(void)
         WA_SizeGadget,    TRUE,
         WA_IDCMP,         IDCMP_GADGETUP | IDCMP_CLOSEWINDOW |
                           IDCMP_VANILLAKEY,
+        WA_PointerType,   Working ? FB_WORKING_POINTER : POINTERTYPE_NORMAL,
         WINDOW_Position,  WPOS_CENTERMOUSE,
         WINDOW_Layout,    make_layout(),
         TAG_END);
@@ -668,6 +672,15 @@ void ClipWindow_Open(void)
         return;
     }
     ClipWindow_Refresh();
+}
+
+void ClipWindow_SetWorking(BOOL working)
+{
+    Working = working;
+    if (Win)
+        IIntuition->SetWindowPointer(Win,
+            WA_PointerType, working ? FB_WORKING_POINTER : POINTERTYPE_NORMAL,
+            TAG_END);
 }
 
 uint32 ClipWindow_SigMask(void)

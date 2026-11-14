@@ -1106,6 +1106,20 @@ void MainWindow_Refresh(void)
            (unsigned long)(t_end - t_lanes));
 }
 
+void MainWindow_SetWorking(BOOL working)
+{
+    static BOOL now;
+
+    if (working == now)
+        return;
+    now = working;
+    if (Win)
+        IIntuition->SetWindowPointer(Win,
+            WA_PointerType, working ? FB_WORKING_POINTER : POINTERTYPE_NORMAL,
+            TAG_END);
+    ClipWindow_SetWorking(working);
+}
+
 void MainWindow_SetProgress(const FBProgress *p)
 {
     int32 level = 0;

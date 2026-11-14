@@ -92,6 +92,9 @@ int main(int argc, char **argv)
             sigs = IExec->Wait(mask);
         }
 
+        /* The arrow with an hourglass while work goes on behind. */
+        MainWindow_SetWorking(App.rendering || App_CacheBusy());
+
         if (sigs & SIGBREAKF_CTRL_C)
             App.quit = 1;
         if (sigs & ARexx_SigMask()) {

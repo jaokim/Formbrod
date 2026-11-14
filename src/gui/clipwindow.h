@@ -13,6 +13,8 @@ void   ClipWindow_Open(void);
 /* Shows the main window's selected clip again (after any change). */
 void   ClipWindow_Refresh(void);
 uint32 ClipWindow_SigMask(void);      /* 0 while it's closed */
+/* The working pointer over it, or the normal one. */
+void   ClipWindow_SetWorking(BOOL working);
 void   ClipWindow_Handle(uint32 sigs);
 /* Closes it and lets go of its classes; at the end of the program. */
 void   ClipWindow_Close(void);
