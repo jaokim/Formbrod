@@ -572,6 +572,12 @@ static AVRational first_video_rate(LocalPriv *p)
 
 /* Builds the tail that adapts [label] to what the encoder takes and ends
  * in a pad called _fb_v/_fb_a, which gets the sink. */
+/* Encoders that only take full-range YUV (the JPEG kind). */
+static int needs_full_range(const AVCodec *codec)
+{
+    return codec->id == AV_CODEC_ID_MJPEG;
+}
+
 static int encoder_tail(LocalPriv *p, int kind, const AVCodec *codec,
                         AVCodecContext *enc, char *buf, size_t len)
 {
@@ -582,7 +588,7 @@ static int encoder_tail(LocalPriv *p, int kind, const AVCodec *codec,
     if (kind == KIND_VIDEO) {
         const enum AVPixelFormat *fmts = enc_pix_fmts(enc, codec);
         enum AVPixelFormat pf = AV_PIX_FMT_YUV420P;
-        char scale[64] = "", fps[48] = "";
+        char scale[64] = "", fps[48] = "", range[32] = "";
         AVRational fr = first_video_rate(p);
         int i, ok = !fmts;
 
@@ -591,6 +597,22 @@ static int encoder_tail(LocalPriv *p, int kind, const AVCodec *codec,
                 ok = 1;
         if (!ok)
             pf = fmts[0];
+        /* JPEG wants full-range colour (0-255, not video's 16-235), and
+         * the MJPEG encoder refuses ordinary yuv420p. Older ffmpeg has
+         * yuvj420p for that, and converting to it converts the range;
+         * where it's gone, convert the range with scale and tell the
+         * encoder (needs_full_range(), open_encoder()). */
+        if (needs_full_range(codec)) {
+            int j = 0;
+
+            for (i = 0; fmts && fmts[i] != AV_PIX_FMT_NONE; i++)
+                if (fmts[i] == AV_PIX_FMT_YUVJ420P)
+                    j = 1;
+            if (j)
+                pf = AV_PIX_FMT_YUVJ420P;
+            else
+                strcpy(range, "scale=out_range=full,");
+        }
         /* FB_JobBuild() already scales; this is for hand-written jobs. */
         if (p->job.output.width > 0)
             snprintf(scale, sizeof(scale), "scale=%d:%d,",
@@ -601,8 +623,8 @@ static int encoder_tail(LocalPriv *p, int kind, const AVCodec *codec,
          * CLI does for most containers. */
         if (fr.num > 0 && fr.den > 0)
             snprintf(fps, sizeof(fps), "fps=%d/%d,", fr.num, fr.den);
-        n = snprintf(buf, len, ";[%s]%s%sformat=pix_fmts=%s[_fb_v]", label,
-                     scale, fps, av_get_pix_fmt_name(pf));
+        n = snprintf(buf, len, ";[%s]%s%s%sformat=pix_fmts=%s[_fb_v]", label,
+                     scale, fps, range, av_get_pix_fmt_name(pf));
     } else {
         const enum AVSampleFormat *fmts = enc_sample_fmts(enc, codec);
         const int *rates = enc_sample_rates(enc, codec);
@@ -689,6 +711,8 @@ static int open_encoder(LocalPriv *p, int kind, const AVCodec *codec,
         enc->sample_aspect_ratio = av_buffersink_get_sample_aspect_ratio(sink);
         enc->framerate = fr;
         enc->time_base = av_inv_q(fr);
+        if (needs_full_range(codec))
+            enc->color_range = AVCOL_RANGE_JPEG;   /* see encoder_tail() */
     } else {
         enc->sample_fmt = (enum AVSampleFormat)av_buffersink_get_format(sink);
         enc->sample_rate = av_buffersink_get_sample_rate(sink);
