@@ -20,6 +20,7 @@
 #include "formbrod/job.h"
 #include "formbrod/module.h"
 #include "formbrod/backend.h"
+#include "formbrod/cache.h"
 
 static int failures;
 static char dir[400];
@@ -424,6 +425,179 @@ static void test_errors(void)
         fclose(f);
 }
 
+
+/* A preview copy: MJPEG (full-range colour) and PCM, smaller. */
+static void test_proxy(void)
+{
+    static FBCache c;
+    static FBJob job;
+    FBSource src;
+    FBResult res;
+    Probe pr;
+    int calls, t;
+
+    printf("proxy copy, MJPEG + PCM\n");
+    memset(&src, 0, sizeof(src));
+    in_path(src.path, "a.mp4");
+    strcpy(src.key, "0000000000proxy1");
+    src.duration = 5000;
+    src.has_video = 1;
+    src.has_audio = 1;
+    FB_SourceSetVideo(&src, 320, 240, 1, 1, 25, 1);
+    FB_CacheInit(&c, dir, 160);
+    {
+        char old[FB_PATH_LEN];   /* from an earlier run */
+
+        FB_CachePath(&c, src.key, FB_CACHE_PROXY, 0, old, sizeof(old));
+        remove(old);
+    }
+    CHECK(FB_CacheRequest(&c, &src) == FB_CACHE_QUEUED);
+    t = FB_CacheNextJob(&c, &job);
+    CHECK(t == 0);
+    CHECK(render(&job, &calls, &res) == FB_RENDER_DONE);
+    CHECK(FB_CacheFinish(&c, 1) == FB_CACHE_READY);
+    {
+        char path[FB_PATH_LEN];
+
+        CHECK(FB_CacheFind(&c, src.key, FB_CACHE_PROXY, path, sizeof(path)));
+        CHECK(probe(path, &pr) == 0);
+        CHECK(near(pr.duration, 5.0));
+        CHECK(pr.width == 160 && pr.height == 120);
+        CHECK(pr.video == 1 && pr.audio == 1);
+    }
+}
+
+/* A window from the middle: inputs jump to their first frame used. */
+static void test_window_seek(void)
+{
+    static FBTimeline tl, w;
+    static FBJob job;
+    FBOutput out;
+    FBResult res;
+    Probe pr;
+    char a[FB_PATH_LEN], b[FB_PATH_LEN];
+    int calls;
+
+    printf("a window from the middle, with jumps\n");
+    in_path(a, "a.mp4");
+    in_path(b, "b.mkv");
+    FB_TimelineInit(&tl);
+    FB_TimelineAddSource(&tl, a, 5000, 1, 1);
+    FB_TimelineAddSource(&tl, b, 4000, 1, 1);
+    FB_SourceSetVideo(&tl.sources[0], 320, 240, 1, 1, 25, 1);
+    FB_SourceSetVideo(&tl.sources[1], 640, 360, 1, 1, 30, 1);
+    FB_TimelineAppendClip(&tl, 0, 0, 5000);
+    FB_TimelineAppendClip(&tl, 1, 0, 4000);
+    CHECK(FB_TimelineWindow(&w, &tl, 3500, 3000) == 2);
+    set_output(&out, "out_window.mp4", "mpeg4", "aac", 0, 0,
+               FB_QUALITY_PREVIEW);
+    CHECK(FB_JobBuild(&job, &w, &out) == FB_JOB_OK);
+    CHECK(job.seek[0] == 3500 && job.seek[1] == 0);
+    CHECK(render(&job, &calls, &res) == FB_RENDER_DONE);
+    CHECK(probe(out.path, &pr) == 0);
+    CHECK(near(pr.duration, 3.0));
+}
+
+/* Playing to a sink that takes only a few frames at a time. */
+typedef struct TestSink {
+    int  room;            /* frames it takes before it's full */
+    int  video, audio_frames, refused;
+    int  width, height, stride;
+    fb_ms_t last_v, last_a;
+    int  backwards;
+} TestSink;
+
+static int sink_video(void *ud, const unsigned char *argb, int w, int h,
+                      int stride, fb_ms_t pts)
+{
+    TestSink *t = ud;
+
+    if (t->room <= 0) {
+        t->refused++;
+        return 1;
+    }
+    t->room--;
+    if (pts < t->last_v)
+        t->backwards++;
+    t->last_v = pts;
+    t->video++;
+    t->width = w;
+    t->height = h;
+    t->stride = stride;
+    /* Touch the first and last pixels, for the sanitizers. */
+    (void)(argb[0] + argb[(h - 1) * stride + w * 4 - 1]);
+    return 0;
+}
+
+static int sink_audio(void *ud, const short *s, int frames, fb_ms_t pts)
+{
+    TestSink *t = ud;
+
+    if (pts < t->last_a)
+        t->backwards++;
+    t->last_a = pts;
+    t->audio_frames += frames;
+    (void)(s[0] + s[frames * 2 - 1]);
+    return 0;
+}
+
+static void test_play(void)
+{
+    static FBTimeline tl, w;
+    static FBJob job;
+    FBBackend *be;
+    FBFrameSink sink;
+    FBOutput out;
+    FBProgress pr;
+    TestSink t;
+    char a[FB_PATH_LEN];
+    int calls = 0;
+
+    printf("play to a sink, from 1 s\n");
+    in_path(a, "a.mp4");
+    FB_TimelineInit(&tl);
+    FB_TimelineAddSource(&tl, a, 5000, 1, 1);
+    FB_SourceSetVideo(&tl.sources[0], 320, 240, 1, 1, 25, 1);
+    FB_TimelineAppendClip(&tl, 0, 0, 5000);
+    CHECK(FB_TimelineWindow(&w, &tl, 1000, 4000) == 1);
+    memset(&out, 0, sizeof(out));
+    out.quality = FB_QUALITY_PREVIEW;
+    CHECK(FB_JobBuild(&job, &w, &out) == FB_JOB_OK);
+
+    memset(&t, 0, sizeof(t));
+    sink.Video = sink_video;
+    sink.Audio = sink_audio;
+    sink.ud = &t;
+    be = FB_CreateLocalBackend();
+    CHECK(be->Play != NULL);
+    CHECK(be->Play(be, &job, &sink) == 0);
+    do {
+        t.room = 3;            /* "playback" takes 3 frames per call */
+        pr = be->Progress(be);
+        calls++;
+    } while (pr.state == FB_RENDER_RUNNING && calls < 100000);
+    printf("  %d calls: %d frames %dx%d, %d audio frames, %d refused\n",
+           calls, t.video, t.width, t.height, t.audio_frames, t.refused);
+    CHECK(pr.state == FB_RENDER_DONE);
+    CHECK(t.video >= 99 && t.video <= 101);          /* 4 s at 25 fps */
+    CHECK(t.width == 320 && t.height == 240);
+    CHECK(t.stride >= t.width * 4);
+    CHECK(t.audio_frames > 4 * FB_PLAY_RATE - 2000 &&
+          t.audio_frames < 4 * FB_PLAY_RATE + 2000);
+    CHECK(t.refused > 0);                          /* it was paced */
+    CHECK(t.backwards == 0);
+    CHECK(t.last_v >= 3900 && t.last_v <= 4000);
+
+    /* Cancelling mid-way. */
+    memset(&t, 0, sizeof(t));
+    t.room = 5;
+    CHECK(be->Play(be, &job, &sink) == 0);
+    be->Progress(be);
+    be->Cancel(be);
+    CHECK(be->Result(be).state == FB_RENDER_CANCELLED);
+    be->Dispose(be);
+}
+
 int main(int argc, char **argv)
 {
     if (argc != 2) {
@@ -442,6 +616,9 @@ int main(int argc, char **argv)
     test_h264();
     test_cancel();
     test_errors();
+    test_proxy();
+    test_window_seek();
+    test_play();
 
     if (failures) {
         printf("%d check(s) failed\n", failures);
