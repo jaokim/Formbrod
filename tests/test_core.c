@@ -1014,7 +1014,7 @@ static void test_cache_rules(void)
     FB_CacheInit(&c, CACHE_DIR, 0);
     CHECK(c.proxy_width == FB_PROXY_WIDTH);
     FB_CacheRecipe(&c, FB_CACHE_PROXY, recipe, sizeof(recipe));
-    CHECK(strcmp(recipe, "proxy1-640") == 0);
+    CHECK(strcmp(recipe, "proxy1-320") == 0);   /* the preview's width */
     FB_CacheInit(&c, CACHE_DIR, 33);
     CHECK(c.proxy_width == FB_PROXY_MIN_WIDTH);
     FB_CacheInit(&c, CACHE_DIR, 481);
@@ -1036,11 +1036,11 @@ static void test_cache_rules(void)
     s.key[0] = '\0';                   /* couldn't be read */
     CHECK(!FB_CacheWantsProxy(&c, &s));
 
-    CHECK(FB_CacheAutoWidth(1800, 2) == 640);   /* X1000 */
-    CHECK(FB_CacheAutoWidth(2000, 2) == 640);   /* X5000/20 */
-    CHECK(FB_CacheAutoWidth(1200, 2) == 480);   /* A1222 */
-    CHECK(FB_CacheAutoWidth(1150, 1) == 320);   /* Sam460 */
-    CHECK(FB_CacheAutoWidth(800, 1) == 320);    /* G4 */
+    /* Auto is the preview's width on every machine: wider proxies are
+     * only scaled down again (measured: 40 % more work at 480). */
+    CHECK(FB_CacheAutoWidth(1800, 2) == FB_PREVIEW_WIDTH);   /* X1000 */
+    CHECK(FB_CacheAutoWidth(1200, 2) == FB_PREVIEW_WIDTH);   /* A1222 */
+    CHECK(FB_CacheAutoWidth(800, 1) == FB_PREVIEW_WIDTH);    /* G4 */
     CHECK(FB_CacheAutoWidth(0, 0) == FB_PROXY_WIDTH);
 }
 
@@ -1347,6 +1347,15 @@ static void test_window_and_seek(void)
     CHECK(FB_JobBuild(&job, &w, &out) == FB_JOB_OK);
     CHECK(FB_JobToCommandLine(&job, text, sizeof(text)) > 0);
     CHECK(strncmp(text, "ffmpeg -y -i ", 13) == 0);
+
+    /* Previews have their sound at the player's rate (44.1 kHz), so it's
+     * resampled once at most; exports at 48 kHz. */
+    CHECK(FB_JobBuild(&job, &w, &out) == FB_JOB_OK);
+    CHECK(strstr(job.filtergraph, "aformat=sample_rates=44100") != NULL);
+    CHECK(strstr(job.filtergraph, "48000") == NULL);
+    out.quality = FB_QUALITY_FINAL;
+    CHECK(FB_JobBuild(&job, &w, &out) == FB_JOB_OK);
+    CHECK(strstr(job.filtergraph, "aformat=sample_rates=48000") != NULL);
 }
 
 /* Windows cutting into crossfades. */

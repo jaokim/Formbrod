@@ -40,7 +40,11 @@
 #include "timeline.h"
 #include "job.h"
 
-#define FB_PROXY_WIDTH      640    /* default proxy width */
+/* Proxies are read only for previews, which are FB_PREVIEW_WIDTH wide:
+ * a wider proxy is decoded and then scaled down for every frame, for
+ * nothing. Measured (20 s, two tracks): 480-wide proxies cost 40 % more
+ * than 320-wide ones. */
+#define FB_PROXY_WIDTH      FB_PREVIEW_WIDTH
 #define FB_PROXY_MIN_WIDTH  160
 /* An intra-only source (MJPEG, DV, ProRes...) at most this wide is
  * already quick to read and gets no proxy. */
@@ -95,9 +99,10 @@ int  FB_CacheWantsProxy(const FBCache *c, const FBSource *src);
  * least FB_PROXY_MIN_WIDTH. */
 void FB_CacheInit(FBCache *c, const char *dir, int proxy_width);
 
-/* A proxy width that suits a computer, from its CPU clock in MHz and
- * number of cores (0 if unknown): 640 for an X1000/X5000, 480 for a
- * Sam460 or A1222, 320 for older G3/G4 machines. */
+/* The proxy width for "auto". It was chosen from the CPU (bigger on
+ * faster machines), but proxies wider than the preview only cost, so
+ * it's the preview's width on every machine now. The CPU is kept as an
+ * argument for when previews get bigger on fast machines. */
 int  FB_CacheAutoWidth(int mhz, int cores);
 
 /* The path of a cached file; `partial` gives the name it has while it's

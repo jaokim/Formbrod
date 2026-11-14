@@ -352,7 +352,10 @@ press Space or Esc in it, to stop.
 
 Only the part being played is read: each file jumps straight to the first
 frame used (to the keyframe before it). With preview copies that jump is
-instant, and playing is cheaper too.
+instant, and playing is cheaper too. Previews scale with `fast_bilinear`
+and keep their sound at 44.1 kHz (the player's rate); exports use the
+better scaler and 48 kHz. If playing can't keep up, the log says so when
+it stops, with how long the sound was missing.
 
 The preview window can be made any size: the picture is scaled to fit,
 keeping its shape, by the graphics card where it can (compositing),
@@ -386,11 +389,13 @@ that. Exports still read the original files.
   it doesn't matter, and nor does using it in several projects. A copy is
   written under a temporary name and renamed when it is complete, so a
   copy in the cache drawer is always whole.
-- **Sized for the machine.** With `ProxyWidth` set to `auto` the width is
-  picked from the CPU: 640 pixels for an X1000 or X5000, 480 for an
-  A1222, 320 for a Sam460 or a G3/G4 machine. The width is part of the
-  file name (`<key>.proxy1-640.mov`), so changing it keeps the old copies,
-  and two Amigas can share one cache drawer.
+- **As wide as the preview.** With `ProxyWidth` set to `auto` (the
+  default) copies are 320 pixels wide, the preview's width: a wider copy
+  is only decoded and then scaled down again for every frame (measured:
+  40 % more work at 480). A width can still be chosen in *Settings →
+  Preview copy size*. The width is part of the file name
+  (`<key>.proxy1-320.mov`), so changing it keeps the old copies, and two
+  Amigas can share one cache drawer.
 - **In the background.** Copies are made a slice at a time (about 30 ms
   of work, at least one packet), one file at a time, and only once the
   window has been left alone for 1.5 s, so editing never waits for them.

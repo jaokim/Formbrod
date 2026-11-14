@@ -789,6 +789,16 @@ static int open_encoder(LocalPriv *p, int kind, const AVCodec *codec,
     return 0;
 }
 
+/* How every scaler in the graph works, as the start of the graph text.
+ * Previews scale with fast_bilinear: on an Amiga the default (bicubic)
+ * is a good part of the time a preview takes, and a preview is small.
+ * Exports keep the default. */
+static const char *scale_flags(const FBJob *job)
+{
+    return job->output.quality == FB_QUALITY_PREVIEW
+           ? "sws_flags=fast_bilinear;" : "";
+}
+
 /* ---- Playing to a sink ---------------------------------------------------- */
 
 static int connect_outputs(LocalPriv *p, AVFilterInOut *ins,
@@ -802,14 +812,14 @@ static int play_setup(LocalPriv *p)
     AVFilterInOut *ins = NULL, *outs = NULL;
     int kinds = job->audio_out[0] ? 2 : 1;
     char *graph_text;
-    size_t glen = strlen(job->filtergraph) + 256;
+    size_t glen = strlen(job->filtergraph) + 320;
     int k, ret;
 
     graph_text = av_malloc(glen);
     if (!graph_text)
         return fail(p, AVERROR(ENOMEM), "Out of memory");
-    snprintf(graph_text, glen, "%s;[%s]format=pix_fmts=argb[_fb_v]",
-             job->filtergraph, job->video_out);
+    snprintf(graph_text, glen, "%s%s;[%s]format=pix_fmts=argb[_fb_v]",
+             scale_flags(job), job->filtergraph, job->video_out);
     if (kinds > 1) {
         size_t n = strlen(graph_text);
 
@@ -1027,7 +1037,8 @@ static int local_setup(LocalPriv *p)
     graph_text = av_malloc(glen);
     if (!graph_text)
         return fail(p, AVERROR(ENOMEM), "Out of memory");
-    strcpy(graph_text, job->filtergraph);
+    strcpy(graph_text, scale_flags(job));
+    strcat(graph_text, job->filtergraph);
     for (k = 0; k < kinds; k++) {
         size_t n = strlen(graph_text);
 
@@ -1043,7 +1054,8 @@ static int local_setup(LocalPriv *p)
            codec[KIND_AUDIO] ? codec[KIND_AUDIO]->name : "no audio");
     FB_Log(FB_LOG_DEBUG, "render", "Conversion added to the filtergraph:");
     FB_LogText(FB_LOG_DEBUG, "render",
-               graph_text + strlen(job->filtergraph));
+               graph_text + strlen(scale_flags(job)) +
+               strlen(job->filtergraph));
 
     p->graph = avfilter_graph_alloc();
     if (!p->graph) {

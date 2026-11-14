@@ -151,17 +151,9 @@ int FB_CacheWantsProxy(const FBCache *c, const FBSource *src)
 
 int FB_CacheAutoWidth(int mhz, int cores)
 {
-    int score;
-
-    if (mhz <= 0)
-        return FB_PROXY_WIDTH;
-    /* A second core helps: libavcodec decodes on both. */
-    score = cores > 1 ? mhz * 3 / 2 : mhz;
-    if (score >= 2400)       /* X1000 (PA6T 1.8 GHz x2), X5000 */
-        return 640;
-    if (score >= 1500)       /* A1222 (1.2 GHz x2) */
-        return 480;
-    return 320;              /* Sam460, Sam440, G3/G4 machines */
+    (void)mhz;
+    (void)cores;
+    return FB_PREVIEW_WIDTH;
 }
 
 /* ---- The cache ----------------------------------------------------------- */
