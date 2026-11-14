@@ -263,6 +263,7 @@ static void zoom_to(uint32 slider)
 static void update_clip_fields(int clip);
 static void sync_menus(void);
 static int selected_clip(void);
+static uint32 now_ms(void);
 
 /* The track editor reports a selection, a dragged edge, a dragged clip,
  * or (like the ruler) a moved playhead. */
@@ -277,10 +278,14 @@ static void lanes_changed(struct TagItem *tags)
     }
     if (IUtility->FindTagItem(LANES_MoveClip, tags)) {
         int32 track = (int32)IUtility->GetTagData(LANES_MoveTrack, -1, tags);
+        uint32 t0 = now_ms();
         int idx = App_MoveClipTo(
             (int32)IUtility->GetTagData(LANES_MoveClip, 0, tags),
             track < 0 ? App.timeline.num_tracks : track,
             (int32)IUtility->GetTagData(LANES_MoveAt, 0, tags));
+
+        FB_Log(FB_LOG_DEBUG, "gui", "move: %lu ms",
+               (unsigned long)(now_ms() - t0));
 
         if (idx >= 0) {
             /* It stays selected, where it went. */
@@ -1030,10 +1035,22 @@ static void clip_field_changed(uint32 id)
     }
 }
 
+/* Milliseconds by the system clock, in 20 ms steps (DOS ticks): enough
+ * to see which part of a refresh takes long. */
+static uint32 now_ms(void)
+{
+    struct DateStamp ds;
+
+    IDOS->DateStamp(&ds);
+    return ((uint32)ds.ds_Minute * 60 * TICKS_PER_SECOND + (uint32)ds.ds_Tick)
+           * (1000 / TICKS_PER_SECOND);
+}
+
 void MainWindow_Refresh(void)
 {
     const FBTimeline *tl = &App.timeline;
     fb_ms_t total = FB_TimelineDuration(tl);
+    uint32 t0 = now_ms(), t_fields, t_ruler, t_film, t_lanes, t_end;
     int sel;
 
     if (!WinObj)
@@ -1046,17 +1063,21 @@ void MainWindow_Refresh(void)
         SelectedTrack = -1;
     sel = Selected;
     update_clip_fields(sel);
+    t_fields = now_ms();
 
     Timebase_SetTimeline(&TB, tl);
     IIntuition->SetGadgetAttrs(Gad[GID_RULER], Win, NULL,
                                TRACK_Timeline, tl, TAG_END);
+    t_ruler = now_ms();
     IIntuition->SetGadgetAttrs(Gad[GID_FILMSTRIP], Win, NULL,
                                TRACK_Timeline, tl, TAG_END);
+    t_film = now_ms();
     IIntuition->SetGadgetAttrs(Gad[GID_LANES], Win, NULL,
                                LANES_Selected, Selected,
                                LANES_Track,    SelectedTrack,
                                TRACK_Timeline, tl,
                                TAG_END);
+    t_lanes = now_ms();
     sync_controls();
 
     IIntuition->SetGadgetAttrs(Gad[GID_SPLIT], Win, NULL, GA_Disabled, total <= 0, TAG_END);
@@ -1073,6 +1094,15 @@ void MainWindow_Refresh(void)
     update_title();
     sync_menus();
     ClipWindow_Refresh();
+
+    /* Where a slow refresh spends its time (INFO when it's slow). */
+    t_end = now_ms();
+    FB_Log(t_end - t0 >= 200 ? FB_LOG_INFO : FB_LOG_DEBUG, "gui",
+           "refresh %lu ms: fields %lu, ruler %lu, film strip %lu, "
+           "tracks %lu, the rest %lu", (unsigned long)(t_end - t0),
+           (unsigned long)(t_fields - t0), (unsigned long)(t_ruler - t_fields),
+           (unsigned long)(t_film - t_ruler), (unsigned long)(t_lanes - t_film),
+           (unsigned long)(t_end - t_lanes));
 }
 
 void MainWindow_SetProgress(const FBProgress *p)
