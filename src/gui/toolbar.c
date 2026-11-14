@@ -47,8 +47,8 @@
  * libauto from opening the class a second time. */
 struct SpeedBarIFace *ISpeedBar;
 
-static struct ClassLibrary *SpeedBarBase, *BitMapBase;
-static Class *SpeedBarClass, *BitMapClass;
+static struct ClassLibrary *SbLib, *BmLib;
+static Class *SbClass, *BmClass;
 
 typedef struct {
     const ToolbarButton *def;
@@ -112,7 +112,7 @@ static Object *load_icon(const char *names)
     Object *img = NULL;
     APTR oldwin;
 
-    if (!names || !*names || !BitMapClass)
+    if (!names || !*names || !BmClass)
         return NULL;
     /* No "Please insert volume TBImages:" requester when AISS is missing. */
     oldwin = IDOS->SetProcWindow((APTR)-1);
@@ -126,7 +126,7 @@ static Object *load_icon(const char *names)
             if (file_exists(path)) {
                 snprintf(sel, sizeof(sel), "%s_s", path);
                 snprintf(dis, sizeof(dis), "%s_g", path);
-                img = IIntuition->NewObject(BitMapClass, NULL,
+                img = IIntuition->NewObject(BmClass, NULL,
                     BITMAP_SourceFile,         path,
                     BITMAP_SelectSourceFile,   file_exists(sel) ? sel : NULL,
                     BITMAP_DisabledSourceFile, file_exists(dis) ? dis : NULL,
@@ -145,16 +145,16 @@ static Object *load_icon(const char *names)
 
 static BOOL open_classes(void)
 {
-    SpeedBarBase = IIntuition->OpenClass("gadgets/speedbar.gadget", 52,
-                                         &SpeedBarClass);
-    if (!SpeedBarBase)
+    SbLib = IIntuition->OpenClass("gadgets/speedbar.gadget", 52,
+                                         &SbClass);
+    if (!SbLib)
         return FALSE;
     ISpeedBar = (struct SpeedBarIFace *)IExec->GetInterface(
-        (struct Library *)SpeedBarBase, "main", 1, NULL);
+        (struct Library *)SbLib, "main", 1, NULL);
     if (!ISpeedBar)
         return FALSE;
     /* Without bitmap.image the bar still works, as text. */
-    BitMapBase = IIntuition->OpenClass("images/bitmap.image", 52, &BitMapClass);
+    BmLib = IIntuition->OpenClass("images/bitmap.image", 52, &BmClass);
     return TRUE;
 }
 
@@ -210,7 +210,7 @@ Object *Toolbar_New(uint32 gadget_id, const ToolbarButton *buttons, int count,
         Count = i + 1;
     }
 
-    Bar = IIntuition->NewObject(SpeedBarClass, NULL,
+    Bar = IIntuition->NewObject(SbClass, NULL,
         GA_ID,               gadget_id,
         GA_RelVerify,        TRUE,
         SPEEDBAR_Buttons,    &Buttons,
@@ -313,10 +313,10 @@ void Toolbar_Free(void)
         IExec->DropInterface((struct Interface *)ISpeedBar);
         ISpeedBar = NULL;
     }
-    if (BitMapBase)
-        IIntuition->CloseClass(BitMapBase);
-    if (SpeedBarBase)
-        IIntuition->CloseClass(SpeedBarBase);
-    BitMapBase = SpeedBarBase = NULL;
-    BitMapClass = SpeedBarClass = NULL;
+    if (BmLib)
+        IIntuition->CloseClass(BmLib);
+    if (SbLib)
+        IIntuition->CloseClass(SbLib);
+    BmLib = SbLib = NULL;
+    BmClass = SbClass = NULL;
 }
