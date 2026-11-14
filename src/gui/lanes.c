@@ -30,6 +30,10 @@
  *     At) and moves it with App_MoveClipTo(). A track it can't go on (a
  *     video clip on an audio track) shows a grey outline and no line.
  *     The gadget never changes the timeline itself; the window does;
+ *   - while trimming or moving, the tracks go on as far as the drag needs
+ *     (the view gets longer), and holding the pointer near or past either
+ *     edge scrolls the view that way (LANES_Scrolled tells the window, so
+ *     the ruler, film strip and scroller follow);
  *   - anywhere else moves the playhead, like the ruler.
  */
 #include <stdio.h>
@@ -472,6 +476,15 @@ static void lanes_notify(Class *cl, Object *o, struct GadgetInfo *gi,
     IIntuition->IDoSuperMethodA(cl, o, (Msg)&msg);
 }
 
+static void notify_scrolled(Class *cl, Object *o, struct GadgetInfo *gi)
+{
+    struct TagItem tags[3];
+
+    tags[0].ti_Tag  = LANES_Scrolled;
+    tags[0].ti_Data = TRUE;
+    lanes_notify(cl, o, gi, tags, 1);
+}
+
 static void notify_selection(Class *cl, Object *o, struct GadgetInfo *gi,
                              struct LanesData *ld)
 {
@@ -651,6 +664,31 @@ static void move_to(struct LanesData *ld, long x, long y)
                                            &ld->to_insert);
 }
 
+/* Keeps room after what is being dragged: the clip's outline when moving
+ * it, its end when trimming. TRUE if the view got longer. */
+static BOOL make_room(struct LanesData *ld)
+{
+    const FBClip *c = &ld->tl->clips[ld->drag_clip];
+    fb_ms_t end;
+
+    if (ld->mode == MODE_MOVE)
+        end = ld->to_land + (c->out - c->in);
+    else if (ld->mode == MODE_TRIM_OUT)
+        end = c->start + (ld->drag_out - c->in);
+    else
+        return FALSE;
+    return FB_ViewMakeRoom(&ld->tb->view, FB_US(end)) != 0;
+}
+
+/* Follows the pointer after the view moved under it. */
+static void drag_follow(struct LanesData *ld, long x, long y)
+{
+    if (ld->mode == MODE_MOVE)
+        move_to(ld, x, y);
+    else
+        trim_to(ld, x);
+}
+
 static uint32 lanes_handle_input(Class *cl, Object *o, struct gpInput *msg)
 {
     struct LanesData *ld = INST_DATA(cl, o);
@@ -662,6 +700,23 @@ static uint32 lanes_handle_input(Class *cl, Object *o, struct gpInput *msg)
         return IIntuition->IDoSuperMethodA(cl, o, (Msg)msg);
     if (ld->mode == MODE_NONE)
         return GMR_NOREUSE;
+
+    /* Intuition sends timer ticks (about ten a second) to the active
+     * gadget: near an edge while dragging, they scroll the view. */
+    if (ie->ie_Class == IECLASS_TIMER &&
+        (ld->mode == MODE_MOVE || ld->mode == MODE_TRIM_IN ||
+         ld->mode == MODE_TRIM_OUT)) {
+        /* Room first: at the end of the view there'd be nowhere to
+         * scroll to. The room then grows with each step. */
+        BOOL grew = make_room(ld);
+
+        if (FB_ViewEdgeScroll(&ld->tb->view, x, FB_VIEW_EDGE_PX) || grew) {
+            drag_follow(ld, x, msg->gpi_Mouse.Y);
+            lanes_redraw(o, msg->gpi_GInfo);
+            notify_scrolled(cl, o, msg->gpi_GInfo);
+        }
+        return GMR_MEACTIVE;
+    }
     if (ie->ie_Class != IECLASS_RAWMOUSE)
         return GMR_MEACTIVE;
 
@@ -709,6 +764,10 @@ static uint32 lanes_handle_input(Class *cl, Object *o, struct gpInput *msg)
                 BOOL ok = ld->to_ok;
 
                 move_to(ld, x, y);
+                if (make_room(ld)) {
+                    move_to(ld, x, y);    /* past the old end: free now */
+                    notify_scrolled(cl, o, msg->gpi_GInfo);
+                }
                 if (started || track != ld->to_track ||
                     land != ld->to_land || ok != ld->to_ok)
                     lanes_redraw(o, msg->gpi_GInfo);
@@ -746,6 +805,10 @@ static uint32 lanes_handle_input(Class *cl, Object *o, struct gpInput *msg)
         fb_ms_t in = ld->drag_in, out = ld->drag_out;
 
         trim_to(ld, x);
+        if (make_room(ld)) {
+            trim_to(ld, x);
+            notify_scrolled(cl, o, msg->gpi_GInfo);
+        }
         if (in != ld->drag_in || out != ld->drag_out)
             lanes_redraw(o, msg->gpi_GInfo);
         break;

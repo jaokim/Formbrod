@@ -399,3 +399,51 @@ int FB_TimelineLocate(const FBTimeline *tl, fb_us_t t, fb_us_t *source_t)
         *source_t = FB_US(tl->clips[i].in) + (t - FB_US(tl->clips[i].start));
     return i;
 }
+
+/* ---- Room after the end, and scrolling while dragging ------------------ */
+
+fb_ms_t FB_TimelineViewLength(const FBTimeline *tl)
+{
+    fb_ms_t duration = FB_TimelineDuration(tl), room = duration / 2;
+    int i;
+
+    if (duration <= 0)
+        return 0;
+    if (room < FB_VIEW_MIN_ROOM)
+        room = FB_VIEW_MIN_ROOM;
+    for (i = 0; i < tl->num_clips; i++)
+        if (tl->clips[i].out - tl->clips[i].in > room)
+            room = tl->clips[i].out - tl->clips[i].in;
+    return duration + room;
+}
+
+int FB_ViewMakeRoom(FBTimeView *v, fb_us_t end)
+{
+    fb_us_t want = end + FB_US(FB_VIEW_MIN_ROOM);
+
+    if (want <= v->length)
+        return 0;
+    FB_ViewSetLength(v, want);
+    return 1;
+}
+
+int FB_ViewEdgeScroll(FBTimeView *v, long x, int edge)
+{
+    fb_us_t before = v->start;
+    long over, px;
+
+    if (v->width <= 0 || edge <= 0)
+        return 0;
+    if (x >= v->width - edge)
+        over = x - (v->width - edge);
+    else if (x < edge)
+        over = -(edge - x);
+    else
+        return 0;
+    /* A few pixels a tick at the edge, more the further out. */
+    px = 4 + (over < 0 ? -over : over) / 2;
+    if (px > v->width / 4 && v->width >= 16)
+        px = v->width / 4;
+    FB_ViewSetStart(v, v->start + (over < 0 ? -1 : 1) * (fb_us_t)px * v->per_px);
+    return v->start != before;
+}

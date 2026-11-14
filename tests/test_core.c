@@ -1199,6 +1199,63 @@ static void test_move_clips(void)
     CHECK(FB_TimelineMoveClipTo(&tl, 0, 7, 0) == -1);
 }
 
+/* The tracks go on after the last clip, and drags near an edge scroll. */
+static void test_view_room(void)
+{
+    static FBTimeline tl;
+    FBTimeView v;
+    int k, s;
+
+    FB_TimelineInit(&tl);
+    CHECK(FB_TimelineViewLength(&tl) == 0);
+
+    /* A still picture made 15.6 s long and an 11.9 s video: the room
+     * after the end is the longest clip, so the video can go after it. */
+    k = FB_TimelineAddSource(&tl, "k.jpg", 0, 1, 0);
+    tl.sources[k].still = 1;
+    s = FB_TimelineAddSource(&tl, "s.mp4", 11895, 1, 1);
+    FB_TimelineAppendToTrack(&tl, 0, k, 0, 15600);
+    FB_TimelineAppendToTrack(&tl, 1, s, 0, 11895);
+    CHECK(FB_TimelineViewLength(&tl) == 15600 + 15600);
+
+    /* Short: at least FB_VIEW_MIN_ROOM. Long: half again. */
+    FB_TimelineInit(&tl);
+    s = FB_TimelineAddSource(&tl, "s.mp4", 60000, 1, 1);
+    FB_TimelineAppendToTrack(&tl, 0, s, 0, 3000);
+    CHECK(FB_TimelineViewLength(&tl) == 3000 + FB_VIEW_MIN_ROOM);
+    FB_TimelineAppendToTrack(&tl, 0, s, 0, 20000);
+    FB_TimelineAppendToTrack(&tl, 0, s, 0, 20000);
+    CHECK(FB_TimelineViewLength(&tl) == 43000 + 21500);
+
+    /* Dragging something to end past the room makes the view longer. */
+    FB_ViewInit(&v, 400);
+    FB_ViewSetLength(&v, FB_US(20000));
+    FB_ViewZoomToFit(&v);
+    CHECK(!FB_ViewMakeRoom(&v, FB_US(5000)));
+    CHECK(FB_ViewMakeRoom(&v, FB_US(15000)));
+    CHECK(v.length == FB_US(15000 + FB_VIEW_MIN_ROOM));
+    CHECK(FB_ViewXToTime(&v, 10000) == v.length);   /* still clamped */
+
+    /* Zoomed in, the pointer near or past the right edge scrolls right,
+     * further when further out; near the left edge it scrolls back. */
+    FB_ViewSetZoom(&v, v.min_per_px * 4, 0);
+    FB_ViewSetStart(&v, 0);
+    CHECK(!FB_ViewEdgeScroll(&v, 200, FB_VIEW_EDGE_PX));
+    CHECK(FB_ViewEdgeScroll(&v, 399, FB_VIEW_EDGE_PX));
+    {
+        fb_us_t a = v.start, b;
+
+        CHECK(a > 0);
+        CHECK(FB_ViewEdgeScroll(&v, 500, FB_VIEW_EDGE_PX));
+        b = v.start - a;
+        CHECK(b > a);
+        CHECK(FB_ViewEdgeScroll(&v, 0, FB_VIEW_EDGE_PX));
+        CHECK(v.start < a + b);
+    }
+    FB_ViewSetStart(&v, 0);
+    CHECK(!FB_ViewEdgeScroll(&v, 0, FB_VIEW_EDGE_PX));   /* at the start */
+}
+
 /* Three picture tracks: each overlay reads what the one before wrote. */
 static void test_job_three_tracks(void)
 {
@@ -1247,6 +1304,7 @@ int main(void)
     test_job_errors();
     test_fit();
     test_timeview();
+    test_view_room();
     test_time_text();
     test_paths();
     test_project_roundtrip();

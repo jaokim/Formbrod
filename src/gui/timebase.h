@@ -34,10 +34,6 @@ void Timebase_Init(FBTimebase *tb, int cell_w);
 /* Adds a track gadget, so Timebase_Redraw() redraws it. */
 void Timebase_Attach(FBTimebase *tb, struct Gadget *track);
 
-/* How far the view goes for a timeline `duration` long: a fifth more, at
- * least 5 s, so the playhead can be put after the last clip and Set out
- * can make it longer. 0 for an empty timeline. */
-fb_ms_t Timebase_ViewLength(fb_ms_t duration);
 
 /* Takes the length and frame rate from the timeline. When the timeline
  * goes from empty to not empty, zooms so all of it fits. */

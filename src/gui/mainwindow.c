@@ -254,6 +254,13 @@ static int selected_clip(void);
  * or (like the ruler) a moved playhead. */
 static void lanes_changed(struct TagItem *tags)
 {
+    /* A drag near the edge scrolled the view, or made it longer: the
+     * ruler, film strip and scroller follow. (Dropping or releasing sets
+     * the length from the timeline again.) */
+    if (IUtility->FindTagItem(LANES_Scrolled, tags)) {
+        timebase_changed(Gad[GID_LANES]);
+        return;
+    }
     if (IUtility->FindTagItem(LANES_MoveClip, tags)) {
         int32 track = (int32)IUtility->GetTagData(LANES_MoveTrack, -1, tags);
         int idx = App_MoveClipTo(

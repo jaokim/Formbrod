@@ -76,6 +76,29 @@ long    FB_ViewTimeToX(const FBTimeView *v, fb_us_t t);
 fb_us_t FB_ViewXToTime(const FBTimeView *v, long x);   /* clamped to 0..length */
 fb_us_t FB_ViewEnd(const FBTimeView *v);               /* time at x = width */
 
+/* ---- Room after the end, and scrolling while dragging ---- */
+
+#define FB_VIEW_MIN_ROOM   10000   /* ms after the end, at least */
+#define FB_VIEW_EDGE_PX    24      /* drags this close to an edge scroll */
+
+/* How far the time axis goes for a timeline: to its end plus room to drag
+ * clips into, so the tracks go on after the last clip. The room is half
+ * the timeline's length, at least FB_VIEW_MIN_ROOM, and at least its
+ * longest clip, so any clip can be dropped after all the others. 0 for an
+ * empty timeline. */
+fb_ms_t FB_TimelineViewLength(const FBTimeline *tl);
+
+/* While something is dragged to end at `end`: makes the view longer if
+ * that leaves less than FB_VIEW_MIN_ROOM after it. Returns 1 if it grew.
+ * (Once the drag is done the length is set from the timeline again.) */
+int     FB_ViewMakeRoom(FBTimeView *v, fb_us_t end);
+
+/* While dragging with the pointer at x: if it is within `edge` pixels of
+ * either end of the view, or past it, scrolls the view that way, faster
+ * the further out the pointer is. Called on every timer tick of the drag.
+ * Returns 1 if the view moved. */
+int     FB_ViewEdgeScroll(FBTimeView *v, long x, int edge);
+
 /* For a scroller: everything in pixels at the current zoom. */
 long    FB_ViewTotalPx(const FBTimeView *v);
 long    FB_ViewStartPx(const FBTimeView *v);
