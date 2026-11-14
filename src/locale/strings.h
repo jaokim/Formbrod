@@ -292,8 +292,18 @@
 #define MSG_MENU_PROXY_AUTO_STR          "Automatic"
 #define MSG_MENU_PROXY_WIDTH             193
 #define MSG_MENU_PROXY_WIDTH_STR         "%d pixels wide"
+#define MSG_BTN_STOP_PREVIEW             194
+#define MSG_BTN_STOP_PREVIEW_STR         "_Stop"
+#define MSG_STATUS_PREVIEW_FROM          195
+#define MSG_STATUS_PREVIEW_FROM_STR      "Rendering a preview from %s..."
+#define MSG_STATUS_PREVIEW_AHEAD         196
+#define MSG_STATUS_PREVIEW_AHEAD_STR     "Preview ready to %s of %s (renders at %s x real time)"
+#define MSG_STATUS_PREVIEW_END           197
+#define MSG_STATUS_PREVIEW_END_STR       "Preview ready to the end: %s"
+#define MSG_STATUS_PREVIEW_STOPPED       198
+#define MSG_STATUS_PREVIEW_STOPPED_STR   "Preview stopped"
 
-#define FB_NUM_STRINGS 140
+#define FB_NUM_STRINGS 145
 
 #ifdef FB_STRINGS_ARRAY
 static const struct FBBuiltinString {
@@ -440,6 +450,11 @@ static const struct FBBuiltinString {
     { MSG_MENU_PROXY_SIZE, MSG_MENU_PROXY_SIZE_STR },
     { MSG_MENU_PROXY_AUTO, MSG_MENU_PROXY_AUTO_STR },
     { MSG_MENU_PROXY_WIDTH, MSG_MENU_PROXY_WIDTH_STR },
+    { MSG_BTN_STOP_PREVIEW, MSG_BTN_STOP_PREVIEW_STR },
+    { MSG_STATUS_PREVIEW_FROM, MSG_STATUS_PREVIEW_FROM_STR },
+    { MSG_STATUS_PREVIEW_AHEAD, MSG_STATUS_PREVIEW_AHEAD_STR },
+    { MSG_STATUS_PREVIEW_END, MSG_STATUS_PREVIEW_END_STR },
+    { MSG_STATUS_PREVIEW_STOPPED, MSG_STATUS_PREVIEW_STOPPED_STR },
 };
 #endif
 

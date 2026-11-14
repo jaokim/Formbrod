@@ -2,6 +2,8 @@
  * mainwindow.c - the ReAction main window.
  *
  *   [Add file...] [Split] [Set in] [Set out] [Remove] [Fade] [Preview]
+ *   (Preview renders from the playhead in 10 s windows, and turns into
+ *   Stop while it does: App_PreviewStart())
  *   [Export...]
  *   | 0:00     | 0:05     | 0:10     | 0:15          ruler
  *   [#][#][#][#][#][#][#][#|#][#][#][#][#]          film strip
@@ -990,7 +992,12 @@ void MainWindow_Refresh(void)
     IIntuition->SetGadgetAttrs(Gad[GID_SPLIT], Win, NULL, GA_Disabled, total <= 0, TAG_END);
     IIntuition->SetGadgetAttrs(Gad[GID_REMOVE], Win, NULL, GA_Disabled, total <= 0, TAG_END);
     IIntuition->SetGadgetAttrs(Gad[GID_FADE], Win, NULL, GA_Disabled, total <= 0, TAG_END);
-    IIntuition->SetGadgetAttrs(Gad[GID_PREVIEW], Win, NULL, GA_Disabled, total <= 0, TAG_END);
+    /* While previewing, Preview turns into Stop. */
+    IIntuition->SetGadgetAttrs(Gad[GID_PREVIEW], Win, NULL,
+        GA_Text,     FB_Str(App_Previewing() ? MSG_BTN_STOP_PREVIEW
+                                             : MSG_BTN_PREVIEW),
+        GA_Disabled, total <= 0 && !App_Previewing(),
+        TAG_END);
     /* While rendering, Export turns into Cancel. */
     IIntuition->SetGadgetAttrs(Gad[GID_EXPORT], Win, NULL,
         GA_Text,     FB_Str(App.rendering ? MSG_BTN_CANCEL : MSG_BTN_EXPORT),
@@ -1214,7 +1221,11 @@ static void handle_gadget(uint32 id)
             App_SetStatus("%s", FB_Str(MSG_STATUS_SELECT_CLIP));
         break;
     case GID_PREVIEW:
-        App_Export("T:formbrod-preview.mp4", TRUE);
+        /* From the playhead, on until stopped; pressed again, stops. */
+        if (App_Previewing())
+            App_PreviewStop();
+        else
+            App_PreviewStart(FB_MS(TB.playhead));
         break;
     case GID_EXPORT:
         if (App.rendering)

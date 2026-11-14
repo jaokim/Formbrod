@@ -25,6 +25,18 @@ typedef struct FBApp {
     FBCache     cache;
     FBBackend  *cache_backend;
     int         caching;       /* a cache job is running */
+    /* A rolling preview from the playhead (App_PreviewStart). */
+    struct {
+        int     on;
+        int     rendering;     /* App.backend is rendering a window */
+        fb_ms_t from, end;     /* in the edit */
+        int     count;         /* windows from `from` to `end` */
+        int     next;          /* the next window to render */
+        int     ready;         /* windows rendered so far */
+        int     gone;          /* windows deleted behind playback */
+        long    clock0;        /* when window 0 was ready (ms), or -1 */
+        long    started;       /* when the preview was asked for (ms) */
+    } preview;
 } FBApp;
 
 extern FBApp App;
@@ -112,6 +124,26 @@ void App_SetProxies(int on);
 int  App_ProxyWidthSetting(void);
 int  App_ProxyWidth(void);
 void App_SetProxyWidth(int width);
+
+/* A preview from the playhead that goes on until it's stopped or the edit
+ * ends. It is rendered as 10-second windows (FB_TimelineWindow), each its
+ * own file T:formbrod-preview-NNN.mp4, read from proxies where they're
+ * ready, and each input jumps straight to its first frame used.
+ * T:formbrod-preview.m3u lists every window from the start, so a player
+ * can be started at once on the playlist; rendering stays at most two
+ * windows ahead of where a player started then would be, and old windows
+ * are deleted behind it. The setting "PreviewPlayer" (a command, the
+ * playlist's path is added after it) starts a player when the first
+ * window is ready; empty = none.
+ *
+ * PollPreview starts the next window when it's time; the main loop calls
+ * it while PreviewWaiting is true. */
+int  App_PreviewStart(fb_ms_t from);
+void App_PreviewStop(void);
+int  App_Previewing(void);
+int  App_PreviewWaiting(void);
+void App_PollPreview(void);
+const char *App_PreviewPlaylist(void);
 
 /* Media probing (src/backend/media.c). Fills duration, stream flags and
  * video size/aspect/rate of `info` (not its path). */

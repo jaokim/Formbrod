@@ -424,3 +424,18 @@ Automatisk
 MSG_MENU_PROXY_WIDTH
 %d bildpunkter breda
 ;
+MSG_BTN_STOP_PREVIEW
+_Stoppa
+;
+MSG_STATUS_PREVIEW_FROM
+Gör en förhandsvisning från %s...
+;
+MSG_STATUS_PREVIEW_AHEAD
+Förhandsvisningen är klar till %s av %s (går %s gånger realtid)
+;
+MSG_STATUS_PREVIEW_END
+Förhandsvisningen är klar till slutet: %s
+;
+MSG_STATUS_PREVIEW_STOPPED
+Förhandsvisningen stoppad
+;

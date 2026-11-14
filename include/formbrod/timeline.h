@@ -235,6 +235,15 @@ double  FB_EffectGetParam(const FBEffect *fx, const char *name, double def);
 /* Where the last clip on any track ends. */
 fb_ms_t FB_TimelineDuration(const FBTimeline *tl);
 
+/* A stretch of the edit as a timeline of its own: what is shown from
+ * `from` for `len` ms, moved to start at 0. Clips are cut to the window,
+ * clips outside it left out; tracks, sources and gaps stay as they are.
+ * For previews from the playhead. Effects keep their settings, so a fade
+ * on a clip cut by the window is placed from the cut. Returns how many
+ * clips are left. */
+int FB_TimelineWindow(FBTimeline *dst, const FBTimeline *src, fb_ms_t from,
+                      fb_ms_t len);
+
 /* ---- Output format and fitting ---- */
 
 /* Sets the video info of a source (from probing). */

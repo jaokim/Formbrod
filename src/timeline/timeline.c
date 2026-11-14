@@ -612,3 +612,31 @@ int FB_FitFromName(const char *name)
     }
     return -1;
 }
+
+int FB_TimelineWindow(FBTimeline *dst, const FBTimeline *src, fb_ms_t from,
+                      fb_ms_t len)
+{
+    fb_ms_t to = from + len;
+    int i, n = 0;
+
+    if (dst != src)
+        *dst = *src;
+    for (i = 0; i < dst->num_clips; i++) {
+        FBClip c = dst->clips[i];
+        fb_ms_t a = c.start, b = FB_ClipEnd(&c);
+
+        if (b <= from || a >= to || len <= 0)
+            continue;               /* outside the window */
+        if (a < from) {
+            c.in += from - a;
+            a = from;
+        }
+        if (b > to)
+            b = to;
+        c.out = c.in + (b - a);
+        c.start = a - from;
+        dst->clips[n++] = c;
+    }
+    dst->num_clips = n;
+    return n;
+}

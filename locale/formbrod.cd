@@ -515,3 +515,25 @@ Automatic
 ; In the size submenu; %d is a width in pixels.
 MSG_MENU_PROXY_WIDTH (193//)
 %d pixels wide
+;
+; The Preview button while a preview is being rendered: stops it.
+MSG_BTN_STOP_PREVIEW (194//)
+_Stop
+;
+; %s is a time in the edit, where the preview starts (the playhead).
+MSG_STATUS_PREVIEW_FROM (195//)
+Rendering a preview from %s...
+;
+; A preview is rendered in short pieces as it plays. %1 is how far it has
+; been rendered, %2 the length of the edit (both times), %3 how many times
+; faster than real time it renders, e.g. "1.6" (below 1 = slower).
+MSG_STATUS_PREVIEW_AHEAD (196//)
+Preview ready to %s of %s (renders at %s x real time)
+;
+; The preview has been rendered to the end of the edit; %s is the
+; playlist to play it with.
+MSG_STATUS_PREVIEW_END (197//)
+Preview ready to the end: %s
+;
+MSG_STATUS_PREVIEW_STOPPED (198//)
+Preview stopped

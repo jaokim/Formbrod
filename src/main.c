@@ -60,12 +60,22 @@ int main(int argc, char **argv)
             MainWindow_SetProgress(&p);
             if (!App.rendering)
                 MainWindow_Refresh();
-        } else if (App_CacheBusy()) {
-            /* Proxies are made in the background, a slice at a time,
-             * between window and ARexx events. */
+        } else if (App_CacheBusy() || App_PreviewWaiting()) {
+            /* Between preview windows (waiting for playback to catch up),
+             * the next window starts when it's time. Proxies are made in
+             * the background meanwhile, a slice at a time, between window
+             * and ARexx events. */
+            int was = App_Previewing();
+
             sigs = IExec->SetSignal(0, mask) & mask;
-            if (App_PollCache())
-                MainWindow_Refresh();
+            App_PollPreview();
+            if (App.rendering || was != App_Previewing())
+                MainWindow_Refresh();     /* a window started, or it ended */
+            else if (App_CacheBusy()) {
+                if (App_PollCache())
+                    MainWindow_Refresh();
+            } else
+                IDOS->Delay(5);           /* only waiting: don't spin */
         } else {
             sigs = IExec->Wait(mask);
         }
