@@ -91,7 +91,8 @@ enum {
     MID_NEW, MID_OPEN, MID_SAVE, MID_SAVE_AS,
     MID_FIT_FIT, MID_FIT_FILL, MID_FIT_STRETCH, MID_SHOW_PICTURES,
     MID_WRITE_LOG, MID_TRACK_APPEND, MID_TRACK_MUTE, MID_TRACK_HIDE,
-    MID_TRACK_REMOVE,
+    MID_TRACK_REMOVE, MID_PROXIES, MID_PROXY_SIZE_MENU,
+    MID_PROXY_AUTO, MID_PROXY_320, MID_PROXY_480, MID_PROXY_640,
     MID_EFFECT = 200     /* + module index */
 };
 
@@ -249,10 +250,32 @@ static void update_clip_fields(int clip);
 static void sync_menus(void);
 static int selected_clip(void);
 
-/* The track editor reports a selection, a dragged edge, or (like the
- * ruler) a moved playhead. */
+/* The track editor reports a selection, a dragged edge, a dragged clip,
+ * or (like the ruler) a moved playhead. */
 static void lanes_changed(struct TagItem *tags)
 {
+    /* A drag near the edge scrolled the view, or made it longer: the
+     * ruler, film strip and scroller follow. (Dropping or releasing sets
+     * the length from the timeline again.) */
+    if (IUtility->FindTagItem(LANES_Scrolled, tags)) {
+        timebase_changed(Gad[GID_LANES]);
+        return;
+    }
+    if (IUtility->FindTagItem(LANES_MoveClip, tags)) {
+        int32 track = (int32)IUtility->GetTagData(LANES_MoveTrack, -1, tags);
+        int idx = App_MoveClipTo(
+            (int32)IUtility->GetTagData(LANES_MoveClip, 0, tags),
+            track < 0 ? App.timeline.num_tracks : track,
+            (int32)IUtility->GetTagData(LANES_MoveAt, 0, tags));
+
+        if (idx >= 0) {
+            /* It stays selected, where it went. */
+            Selected = idx;
+            SelectedTrack = App.timeline.clips[idx].track;
+        }
+        MainWindow_Refresh();
+        return;
+    }
     if (IUtility->FindTagItem(LANES_EditClip, tags)) {
         App_TrimClip((int32)IUtility->GetTagData(LANES_EditClip, 0, tags),
                      (int32)IUtility->GetTagData(LANES_EditIn, 0, tags),
@@ -319,6 +342,32 @@ static void set_show_pictures(BOOL on)
     Prefs_Save();
     IIntuition->SetGadgetAttrs(Gad[GID_FILMSTRIP], Win, NULL,
                                FILMSTRIP_Pictures, on, TAG_END);
+}
+
+/* ---- Preview copies ---------------------------------------------------- */
+
+/* The size items: Automatic, then these widths. */
+static const int ProxyWidths[] = { 320, 480, 640 };
+#define NUM_PROXY_ITEMS 4
+
+static int is_proxy_size_id(uint32 id)
+{
+    return id >= MID_PROXY_AUTO && id <= MID_PROXY_640;
+}
+
+static uint32 proxy_size_id(void)
+{
+    int w = App_ProxyWidthSetting(), i;
+
+    for (i = 0; i < NUM_PROXY_ITEMS - 1; i++)
+        if (ProxyWidths[i] == w)
+            return MID_PROXY_320 + i;
+    return MID_PROXY_AUTO;   /* also a width set by hand in the prefs */
+}
+
+static int proxy_width_of(uint32 id)
+{
+    return id == MID_PROXY_AUTO ? 0 : ProxyWidths[id - MID_PROXY_320];
 }
 
 /* ---- Menus ------------------------------------------------------------ */
@@ -396,6 +445,18 @@ static int update_menu_items(BOOL apply)
                     flags &= ~ITEMENABLED;
                 if (is_fit_id(id)) {
                     if (id == want_fit)
+                        flags |= CHECKED;
+                    else
+                        flags &= ~CHECKED;
+                }
+                if (is_proxy_size_id(id)) {
+                    if (id == proxy_size_id())
+                        flags |= CHECKED;
+                    else
+                        flags &= ~CHECKED;
+                }
+                if (id == MID_PROXIES) {
+                    if (App_ProxiesEnabled())
                         flags |= CHECKED;
                     else
                         flags &= ~CHECKED;
@@ -479,7 +540,7 @@ static BOOL make_menus(struct Screen *scr)
     struct NewMenu *nm;
     int n = 0, i;
 
-    nm = calloc(40 + nmods, sizeof(*nm));
+    nm = calloc(48 + nmods, sizeof(*nm));
     if (!nm)
         return FALSE;
 
@@ -537,6 +598,26 @@ static BOOL make_menus(struct Screen *scr)
              MID_SHOW_PICTURES);
     nm[n - 1].nm_Flags = CHECKIT | MENUTOGGLE |
                          (show_pictures() ? CHECKED : 0);
+    add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_PROXIES), NULL, MID_PROXIES);
+    nm[n - 1].nm_Flags = CHECKIT | MENUTOGGLE |
+                         (App_ProxiesEnabled() ? CHECKED : 0);
+    add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_PROXY_SIZE), NULL,
+             MID_PROXY_SIZE_MENU);
+    for (i = 0; i < NUM_PROXY_ITEMS; i++) {
+        static char labels[NUM_PROXY_ITEMS - 1][48];
+        uint32 id = MID_PROXY_AUTO + (uint32)i;
+        const char *label = FB_Str(MSG_MENU_PROXY_AUTO);
+
+        if (i > 0) {
+            snprintf(labels[i - 1], sizeof(labels[i - 1]),
+                     FB_Str(MSG_MENU_PROXY_WIDTH), ProxyWidths[i - 1]);
+            label = labels[i - 1];
+        }
+        add_menu(nm, &n, NM_SUB, label, NULL, id);
+        nm[n - 1].nm_Flags = CHECKIT | (id == proxy_size_id() ? CHECKED : 0);
+        nm[n - 1].nm_MutualExclude = ((1UL << NUM_PROXY_ITEMS) - 1) &
+                                     ~(1UL << i);
+    }
     add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_WRITE_LOG), NULL, MID_WRITE_LOG);
     nm[n - 1].nm_Flags = CHECKIT | MENUTOGGLE |
                          (App_LogEnabled() ? CHECKED : 0);
@@ -700,12 +781,21 @@ static void handle_menu(uint32 id)
         MainWindow_Refresh();
         return;
     }
+    if (is_proxy_size_id(id)) {
+        App_SetProxyWidth(proxy_width_of(id));
+        MainWindow_Refresh();
+        return;
+    }
     switch (id) {
     case MID_TRACK_APPEND:
     case MID_TRACK_MUTE:
     case MID_TRACK_HIDE:
     case MID_TRACK_REMOVE:
         track_menu(id);
+        break;
+    case MID_PROXIES:
+        /* A toggle, like Show frame pictures below. */
+        App_SetProxies(!App_ProxiesEnabled());
         break;
     case MID_SHOW_PICTURES:
         /* A toggle: the menu has already flipped its checkmark, and

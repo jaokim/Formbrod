@@ -66,6 +66,7 @@ SRC = src/main.c \
       src/timeline/timeview.c \
       src/log/log.c \
       src/job/job.c \
+      src/cache/cache.c \
       src/job/module.c \
       src/backend/local_backend.c \
       src/backend/media.c \

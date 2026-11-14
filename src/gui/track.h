@@ -63,6 +63,12 @@ struct FBTimebase;
 #define LANES_DropText       (TRACK_Dummy + 206) /* CONST_STRPTR      (I)    */
 #define LANES_PictureName    (TRACK_Dummy + 207) /* "Video %ld"       (I)    */
 #define LANES_SoundName      (TRACK_Dummy + 208) /* "Audio %ld"       (I)    */
+#define LANES_MoveClip       (TRACK_Dummy + 209) /* N: a clip was dragged:   */
+#define LANES_MoveTrack      (TRACK_Dummy + 210) /*    the clip, the track   */
+#define LANES_MoveAt         (TRACK_Dummy + 211) /*    (-1: a new one) and   */
+                                                 /*    where it starts, ms   */
+#define LANES_Scrolled       (TRACK_Dummy + 212) /* N: a drag scrolled the   */
+                                                 /*    view or made it longer */
 
 /* Which track is at a point in the window (for files dropped on it):
  * returns the track, -1 for the drop area below the tracks, or -2 if the

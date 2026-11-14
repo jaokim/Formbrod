@@ -10,6 +10,7 @@
 #include "formbrod/timeview.h"
 #include "formbrod/log.h"
 #include "formbrod/project.h"
+#include "formbrod/cache.h"
 
 static int failures;
 
@@ -903,23 +904,415 @@ static void test_time_text(void)
     CHECK(FB_ParseTime(buf, ',', &ms) == 0 && ms == 3725125);
 }
 
+
+/* ---- Media cache --------------------------------------------------------- */
+
+#define CACHE_DIR "build/host"
+
+static void write_bytes(const char *path, const unsigned char *p, size_t n)
+{
+    FILE *f = fopen(path, "wb");
+
+    if (f) {
+        fwrite(p, 1, n, f);
+        fclose(f);
+    }
+}
+
+static int exists(const char *path)
+{
+    FILE *f = fopen(path, "rb");
+
+    if (f)
+        fclose(f);
+    return f != NULL;
+}
+
+static void test_cache_keys(void)
+{
+    static unsigned char big[300 * 1024];
+    char k1[FB_KEY_LEN], k2[FB_KEY_LEN];
+    size_t i;
+
+    for (i = 0; i < sizeof(big); i++)
+        big[i] = (unsigned char)(i * 7 + (i >> 9));
+
+    /* The same bytes give the same key, in memory and from a file. */
+    FB_CacheKeyData(big, sizeof(big), k1);
+    CHECK(strlen(k1) == 16);
+    write_bytes(CACHE_DIR "/key-big.bin", big, sizeof(big));
+    CHECK(FB_CacheKey(CACHE_DIR "/key-big.bin", k2) == 0);
+    CHECK(strcmp(k1, k2) == 0);
+
+    /* Small files are hashed whole. */
+    FB_CacheKeyData(big, 1000, k1);
+    write_bytes(CACHE_DIR "/key-small.bin", big, 1000);
+    CHECK(FB_CacheKey(CACHE_DIR "/key-small.bin", k2) == 0);
+    CHECK(strcmp(k1, k2) == 0);
+
+    /* A change in the start, middle or end, or in length, changes it. */
+    FB_CacheKeyData(big, sizeof(big), k1);
+    big[10] ^= 1;
+    FB_CacheKeyData(big, sizeof(big), k2);
+    CHECK(strcmp(k1, k2) != 0);
+    big[10] ^= 1;
+    big[sizeof(big) / 2] ^= 1;
+    FB_CacheKeyData(big, sizeof(big), k2);
+    CHECK(strcmp(k1, k2) != 0);
+    big[sizeof(big) / 2] ^= 1;
+    big[sizeof(big) - 1] ^= 1;
+    FB_CacheKeyData(big, sizeof(big), k2);
+    CHECK(strcmp(k1, k2) != 0);
+    big[sizeof(big) - 1] ^= 1;
+    FB_CacheKeyData(big, sizeof(big) - 1, k2);
+    CHECK(strcmp(k1, k2) != 0);
+
+    CHECK(FB_CacheKey(CACHE_DIR "/no-such-file", k2) == -1);
+    CHECK(k2[0] == '\0');
+}
+
+static FBSource cache_source(const char *path, const char *key, int w, int h)
+{
+    FBSource s;
+
+    memset(&s, 0, sizeof(s));
+    strcpy(s.path, path);
+    strcpy(s.key, key);
+    s.duration = 12000;
+    s.has_video = 1;
+    s.has_audio = 1;
+    FB_SourceSetVideo(&s, w, h, 1, 1, 25, 1);
+    return s;
+}
+
+static void test_cache_rules(void)
+{
+    static FBCache c;
+    FBSource s = cache_source("a.mp4", "0123456789abcdef", 1920, 1080);
+    char recipe[64];
+
+    FB_CacheInit(&c, CACHE_DIR, 0);
+    CHECK(c.proxy_width == FB_PROXY_WIDTH);
+    FB_CacheRecipe(&c, FB_CACHE_PROXY, recipe, sizeof(recipe));
+    CHECK(strcmp(recipe, "proxy1-640") == 0);
+    FB_CacheInit(&c, CACHE_DIR, 33);
+    CHECK(c.proxy_width == FB_PROXY_MIN_WIDTH);
+    FB_CacheInit(&c, CACHE_DIR, 481);
+    CHECK(c.proxy_width == 480);
+
+    CHECK(FB_CacheWantsProxy(&c, &s));
+    s.intra = 1;                       /* full HD MJPEG: still worth it */
+    CHECK(FB_CacheWantsProxy(&c, &s));
+    FB_SourceSetVideo(&s, 720, 576, 64, 45, 25, 1);   /* DV */
+    CHECK(!FB_CacheWantsProxy(&c, &s));
+    s.intra = 0;                       /* small H.264: yes, for seeking */
+    CHECK(FB_CacheWantsProxy(&c, &s));
+    s.still = 1;
+    CHECK(!FB_CacheWantsProxy(&c, &s));
+    s.still = 0;
+    s.has_video = 0;                   /* music */
+    CHECK(!FB_CacheWantsProxy(&c, &s));
+    s.has_video = 1;
+    s.key[0] = '\0';                   /* couldn't be read */
+    CHECK(!FB_CacheWantsProxy(&c, &s));
+
+    CHECK(FB_CacheAutoWidth(1800, 2) == 640);   /* X1000 */
+    CHECK(FB_CacheAutoWidth(2000, 2) == 640);   /* X5000/20 */
+    CHECK(FB_CacheAutoWidth(1200, 2) == 480);   /* A1222 */
+    CHECK(FB_CacheAutoWidth(1150, 1) == 320);   /* Sam460 */
+    CHECK(FB_CacheAutoWidth(800, 1) == 320);    /* G4 */
+    CHECK(FB_CacheAutoWidth(0, 0) == FB_PROXY_WIDTH);
+}
+
+static void test_cache_queue(void)
+{
+    static FBCache c;
+    static FBJob job, back;
+    static char text[FB_FILTERGRAPH_LEN + 4096];
+    FBSource a = cache_source("Work:Video/a.mp4", "00000000000000aa", 1920, 1080);
+    FBSource b = cache_source("Work:Video/b.mp4", "00000000000000bb", 480, 270);
+    char path[FB_PATH_LEN];
+    int t;
+
+    b.has_audio = 0;
+    remove(CACHE_DIR "/00000000000000aa.proxy1-640.mov");
+    remove(CACHE_DIR "/00000000000000bb.proxy1-640.mov");
+    FB_CacheInit(&c, CACHE_DIR, 640);
+
+    CHECK(FB_CachePath(&c, a.key, FB_CACHE_PROXY, 1, path, sizeof(path)) == 0);
+    CHECK(strcmp(path, CACHE_DIR "/00000000000000aa.proxy1-640-part.mov") == 0);
+
+    /* Asking twice queues it once. */
+    CHECK(FB_CacheRequest(&c, &a) == FB_CACHE_QUEUED);
+    CHECK(FB_CacheRequest(&c, &a) == FB_CACHE_QUEUED);
+    CHECK(FB_CacheRequest(&c, &b) == FB_CACHE_QUEUED);
+    CHECK(c.num_tasks == 2 && FB_CachePending(&c) == 2);
+
+    /* The job: scaled down, MJPEG and PCM, into the partial file. */
+    t = FB_CacheNextJob(&c, &job);
+    CHECK(t == 0);
+    CHECK(FB_CacheNextJob(&c, &back) == -1);   /* one at a time */
+    CHECK(FB_CacheRequest(&c, &a) == FB_CACHE_BUSY);
+    CHECK(job.num_inputs == 1 && strcmp(job.inputs[0], a.path) == 0);
+    CHECK(strcmp(job.filtergraph,
+                 "[0:v]scale=640:-2:flags=fast_bilinear[outv];"
+                 "[0:a]anull[outa]") == 0);
+    CHECK(strcmp(job.output.vcodec, "mjpeg") == 0);
+    CHECK(strcmp(job.output.acodec, "pcm_s16le") == 0);
+    CHECK(strcmp(job.output.path, path) == 0);
+    CHECK(job.length == 12000);
+    CHECK(FB_JobWrite(&job, text, sizeof(text)) > 0);
+    CHECK(FB_JobParse(&back, text) == 0);
+    CHECK(strcmp(back.filtergraph, job.filtergraph) == 0);
+
+    /* Finished: the partial file becomes the real one. */
+    write_bytes(path, (const unsigned char *)"x", 1);
+    CHECK(FB_CacheFinish(&c, 1) == FB_CACHE_READY);
+    CHECK(!exists(path));
+    CHECK(FB_CacheFind(&c, a.key, FB_CACHE_PROXY, path, sizeof(path)));
+    CHECK(strcmp(path, CACHE_DIR "/00000000000000aa.proxy1-640.mov") == 0);
+    CHECK(exists(CACHE_DIR "/00000000000000aa.info"));
+    CHECK(FB_CacheRequest(&c, &a) == FB_CACHE_READY);
+    CHECK(FB_CacheState(&c, a.key, FB_CACHE_PROXY) == FB_CACHE_READY);
+
+    /* Another width is another file. */
+    {
+        static FBCache small;
+
+        FB_CacheInit(&small, CACHE_DIR, 320);
+        CHECK(!FB_CacheFind(&small, a.key, FB_CACHE_PROXY, NULL, 0));
+    }
+
+    /* A small one isn't scaled; no sound, no audio chain. Aborting puts
+     * it back in the queue; failing doesn't retry it. */
+    t = FB_CacheNextJob(&c, &job);
+    CHECK(t == 1);
+    CHECK(strcmp(job.filtergraph, "[0:v]null[outv]") == 0);
+    CHECK(job.audio_out[0] == '\0');
+    FB_CacheAbort(&c);
+    CHECK(FB_CacheState(&c, b.key, FB_CACHE_PROXY) == FB_CACHE_QUEUED);
+    CHECK(FB_CacheNextJob(&c, &job) == 1);
+    CHECK(FB_CacheFinish(&c, 0) == FB_CACHE_FAILED);
+    CHECK(FB_CacheRequest(&c, &b) == FB_CACHE_FAILED);
+    CHECK(FB_CachePending(&c) == 0);
+    CHECK(FB_CacheNextJob(&c, &job) == -1);
+
+    /* A copy that appears meanwhile (from a render server) isn't made. */
+    {
+        FBSource d = cache_source("Work:d.mp4", "00000000000000dd", 1280, 720);
+
+        remove(CACHE_DIR "/00000000000000dd.proxy1-640.mov");
+        CHECK(FB_CacheRequest(&c, &d) == FB_CACHE_QUEUED);
+        write_bytes(CACHE_DIR "/00000000000000dd.proxy1-640.mov",
+                    (const unsigned char *)"x", 1);
+        CHECK(FB_CacheNextJob(&c, &job) == -1);
+        CHECK(FB_CacheState(&c, d.key, FB_CACHE_PROXY) == FB_CACHE_READY);
+    }
+}
+
+static void test_move_clips(void)
+{
+    FBTimeline tl;
+    int a, b, m, i;
+
+    FB_TimelineInit(&tl);
+    a = FB_TimelineAddSource(&tl, "a.mp4", 10000, 1, 1);
+    b = FB_TimelineAddSource(&tl, "b.mp4", 10000, 1, 0);
+    m = FB_TimelineAddSource(&tl, "music.mp3", 60000, 0, 1);
+    /* Video 1 (track 0): A 0-2, B 2-5, A 5-6. Audio 1 (track 1): music. */
+    FB_TimelineAppendToTrack(&tl, 0, a, 0, 2000);
+    FB_TimelineAppendToTrack(&tl, 0, b, 0, 3000);
+    FB_TimelineAppendToTrack(&tl, 0, a, 4000, 5000);
+    FB_TimelineAppendToTrack(&tl, 1, m, 0, 20000);
+    tl.clips[0].volume = 0.5;
+    FB_ClipAddEffect(&tl.clips[0], "fade");
+
+    /* Where a 1 s clip dropped at a time goes: there, if nothing is in
+     * the way; else in front of the first clip whose middle is after its
+     * middle, or after the last clip. */
+    {
+        int ins;
+
+        CHECK(FB_TimelineDropPoint(&tl, 0, 0, 1000, -1, &ins) == 0 && ins);
+        CHECK(FB_TimelineDropPoint(&tl, 0, 1000, 1000, -1, &ins) == 2000 &&
+              ins);
+        CHECK(FB_TimelineDropPoint(&tl, 0, 3500, 1000, -1, &ins) == 5000 &&
+              ins);
+        CHECK(FB_TimelineDropPoint(&tl, 0, 5800, 1000, -1, &ins) == 6000 &&
+              !ins);                                /* after the last */
+        CHECK(FB_TimelineDropPoint(&tl, 0, 9000, 1000, -1, &ins) == 9000 &&
+              !ins);                                /* free: a gap */
+        CHECK(FB_TimelineDropPoint(&tl, 0, 6000, 1000, -1, &ins) == 6000 &&
+              !ins);
+        CHECK(FB_TimelineDropPoint(&tl, 5, 7000, 1000, -1, &ins) == 7000 &&
+              !ins);                                /* no clips */
+        /* With B (2-5) taken out, the last A moves up to 2-3: 3-4 is
+         * free, and where it was (5-6) is free too. */
+        CHECK(FB_TimelineStartWithout(&tl, 2, 1) == 2000);
+        CHECK(FB_TimelineStartWithout(&tl, 0, 1) == 0);
+        CHECK(FB_TimelineStartWithout(&tl, 3, 1) == 0);   /* other track */
+        CHECK(FB_TimelineDropPoint(&tl, 0, 3000, 1000, 1, &ins) == 3000 &&
+              !ins);
+        CHECK(FB_TimelineDropPoint(&tl, 0, 2200, 1000, 1, &ins) == 3000 &&
+              !ins);                                /* in the way: after */
+    }
+
+    /* The last clip, dragged further out, keeps a gap in front of it. */
+    i = FB_TimelineMoveClipTo(&tl, 2, 0, 8000);
+    CHECK(i == 2 && tl.clips[2].start == 8000);
+    CHECK(FB_TimelineMoveClipTo(&tl, 2, 0, 5000) == 2);   /* and back */
+    CHECK(tl.clips[2].start == 5000);
+
+    /* The first clip (A 0-2, with a fade) to the end of its track:
+     * B 0-3, A 3-4, A 4-6. */
+    i = FB_TimelineMoveClipTo(&tl, 0, 0, 4000);
+    CHECK(i == 2);
+    CHECK(tl.clips[0].source == b && tl.clips[0].start == 0);
+    CHECK(tl.clips[1].start == 3000 && tl.clips[1].in == 4000);
+    CHECK(tl.clips[2].start == 4000 && tl.clips[2].in == 0 &&
+          tl.clips[2].volume == 0.5 && tl.clips[2].num_effects == 1);
+    CHECK(FB_TimelineTrackEnd(&tl, 0) == 6000);
+
+    /* Back to the front: A 0-2, B 2-5, A 5-6. */
+    i = FB_TimelineMoveClipTo(&tl, 2, 0, 0);
+    CHECK(i == 0 && tl.clips[0].start == 0 && tl.clips[0].num_effects == 1);
+    CHECK(tl.clips[1].start == 2000 && tl.clips[2].start == 5000);
+
+    /* A video clip can't go on the music track; sound can't go on video. */
+    CHECK(FB_TimelineMoveClipTo(&tl, 1, 1, 0) == -1);
+    CHECK(FB_TimelineMoveClipTo(&tl, 3, 0, 0) == -1);
+    CHECK(tl.num_clips == 4);
+
+    /* B to a new track, at 1.5 s: Video 1 closes up to A 0-2, A 2-3. */
+    i = FB_TimelineMoveClipTo(&tl, 1, tl.num_tracks, 1500);
+    CHECK(tl.num_tracks == 3 && tl.tracks[2].kind == FB_TRACK_VIDEO);
+    CHECK(i == 3 && tl.clips[i].track == 2 && tl.clips[i].start == 1500);
+    CHECK(tl.clips[1].start == 2000 && FB_TimelineTrackEnd(&tl, 0) == 3000);
+
+    /* And onto Video 1 between the two A clips. */
+    i = FB_TimelineMoveClipTo(&tl, 3, 0, 500);   /* its middle: 2 s */
+    CHECK(i == 1 && tl.clips[1].source == b && tl.clips[1].start == 2000);
+    CHECK(tl.clips[2].start == 5000 && FB_TimelineTrackEnd(&tl, 2) == 0);
+
+    /* Nothing to move, or no such track. */
+    CHECK(FB_TimelineMoveClipTo(&tl, 9, 0, 0) == -1);
+    CHECK(FB_TimelineMoveClipTo(&tl, 0, 7, 0) == -1);
+}
+
+/* The tracks go on after the last clip, and drags near an edge scroll. */
+static void test_view_room(void)
+{
+    static FBTimeline tl;
+    FBTimeView v;
+    int k, s;
+
+    FB_TimelineInit(&tl);
+    CHECK(FB_TimelineViewLength(&tl) == 0);
+
+    /* A still picture made 15.6 s long and an 11.9 s video: the room
+     * after the end is the longest clip, so the video can go after it. */
+    k = FB_TimelineAddSource(&tl, "k.jpg", 0, 1, 0);
+    tl.sources[k].still = 1;
+    s = FB_TimelineAddSource(&tl, "s.mp4", 11895, 1, 1);
+    FB_TimelineAppendToTrack(&tl, 0, k, 0, 15600);
+    FB_TimelineAppendToTrack(&tl, 1, s, 0, 11895);
+    CHECK(FB_TimelineViewLength(&tl) == 15600 + 15600);
+
+    /* Short: at least FB_VIEW_MIN_ROOM. Long: half again. */
+    FB_TimelineInit(&tl);
+    s = FB_TimelineAddSource(&tl, "s.mp4", 60000, 1, 1);
+    FB_TimelineAppendToTrack(&tl, 0, s, 0, 3000);
+    CHECK(FB_TimelineViewLength(&tl) == 3000 + FB_VIEW_MIN_ROOM);
+    FB_TimelineAppendToTrack(&tl, 0, s, 0, 20000);
+    FB_TimelineAppendToTrack(&tl, 0, s, 0, 20000);
+    CHECK(FB_TimelineViewLength(&tl) == 43000 + 21500);
+
+    /* Dragging something to end past the room makes the view longer. */
+    FB_ViewInit(&v, 400);
+    FB_ViewSetLength(&v, FB_US(20000));
+    FB_ViewZoomToFit(&v);
+    CHECK(!FB_ViewMakeRoom(&v, FB_US(5000)));
+    CHECK(FB_ViewMakeRoom(&v, FB_US(15000)));
+    CHECK(v.length == FB_US(15000 + FB_VIEW_MIN_ROOM));
+    CHECK(FB_ViewXToTime(&v, 10000) == v.length);   /* still clamped */
+
+    /* Zoomed in, the pointer near or past the right edge scrolls right,
+     * further when further out; near the left edge it scrolls back. */
+    FB_ViewSetZoom(&v, v.min_per_px * 4, 0);
+    FB_ViewSetStart(&v, 0);
+    CHECK(!FB_ViewEdgeScroll(&v, 200, FB_VIEW_EDGE_PX));
+    CHECK(FB_ViewEdgeScroll(&v, 399, FB_VIEW_EDGE_PX));
+    {
+        fb_us_t a = v.start, b;
+
+        CHECK(a > 0);
+        CHECK(FB_ViewEdgeScroll(&v, 500, FB_VIEW_EDGE_PX));
+        b = v.start - a;
+        CHECK(b > a);
+        CHECK(FB_ViewEdgeScroll(&v, 0, FB_VIEW_EDGE_PX));
+        CHECK(v.start < a + b);
+    }
+    FB_ViewSetStart(&v, 0);
+    CHECK(!FB_ViewEdgeScroll(&v, 0, FB_VIEW_EDGE_PX));   /* at the start */
+}
+
+/* Three picture tracks: each overlay reads what the one before wrote. */
+static void test_job_three_tracks(void)
+{
+    static FBTimeline tl;
+    static FBJob job;
+    FBOutput out;
+    int k, s, m;
+
+    FB_TimelineInit(&tl);
+    k = FB_TimelineAddSource(&tl, "k.jpg", 0, 1, 0);
+    FB_SourceSetVideo(&tl.sources[k], 800, 600, 1, 1, 0, 0);
+    tl.sources[k].still = 1;
+    s = FB_TimelineAddSource(&tl, "s.mp4", 11895, 1, 1);
+    FB_SourceSetVideo(&tl.sources[s], 640, 360, 1, 1, 25, 1);
+    m = FB_TimelineAddSource(&tl, "m.mpg", 10466, 1, 1);
+    FB_SourceSetVideo(&tl.sources[m], 720, 480, 8, 9, 30000, 1001);
+    CHECK(FB_TimelineAppendToTrack(&tl, 0, k, 0, 5100) >= 0);
+    CHECK(FB_TimelineAppendToTrack(&tl, 1, s, 0, 11895) >= 0);
+    CHECK(FB_TimelineAppendToTrack(&tl, 2, m, 0, 10466) >= 0);
+    CHECK(FB_TimelineAppendToTrack(&tl, 3, s, 0, 3000) >= 0);
+
+    memset(&out, 0, sizeof(out));
+    strcpy(out.path, "out.mp4");
+    out.quality = FB_QUALITY_PREVIEW;
+    CHECK(FB_JobBuild(&job, &tl, &out) == FB_JOB_OK);
+    CHECK(strstr(job.filtergraph,
+                 "[t0v][t1v]overlay=format=auto:eof_action=pass[c0];") != NULL);
+    CHECK(strstr(job.filtergraph,
+                 "[c0][t2v]overlay=format=auto:eof_action=pass[c1];") != NULL);
+    CHECK(strstr(job.filtergraph,
+                 "[c1][t3v]overlay=format=auto:eof_action=pass[outv]") != NULL);
+    printf("three tracks: %s\n", job.filtergraph);
+}
+
 int main(void)
 {
     FB_RegisterBuiltinModules();
     test_timeline();
     test_tracks();
+    test_move_clips();
     test_log();
     test_job_build_and_roundtrip();
     test_job_tracks();
+    test_job_three_tracks();
     test_still();
     test_job_errors();
     test_fit();
     test_timeview();
+    test_view_room();
     test_time_text();
     test_paths();
     test_project_roundtrip();
     test_project_hand_edited();
     test_project_tracks();
+    test_cache_keys();
+    test_cache_rules();
+    test_cache_queue();
     if (failures) {
         printf("%d check(s) failed\n", failures);
         return 1;

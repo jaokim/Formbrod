@@ -6,6 +6,7 @@ CFLAGS  ?= -std=c99 -Wall -Wextra -Werror -O1 -g
 CFLAGS  += -Iinclude
 
 CORE_SRC = src/timeline/timeline.c src/timeline/timeview.c src/timeline/project.c src/log/log.c src/job/job.c src/job/module.c \
+           src/cache/cache.c \
            modules/fade/fade.c
 
 build/host/test_core: tests/test_core.c $(CORE_SRC)

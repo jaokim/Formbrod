@@ -19,8 +19,21 @@
  *   - a clip selects it;
  *   - a clip's edge, dragged, trims it: the clip is drawn at its new
  *     length while dragging, and on release the window is told the new in
- *     and out points (LANES_EditClip/In/Out). The gadget never changes the
- *     timeline itself; the window does that through App_TrimClip();
+ *     and out points (LANES_EditClip/In/Out);
+ *   - a clip's middle, dragged, moves it. Its old place closes up on the
+ *     screen straight away, and an outline shows where it will land: where
+ *     it's dropped if there's room (leaving a gap in front of it), else in
+ *     between the clips there, with a line marking the spot. Its ends
+ *     snap to other clips' ends, the start and the playhead when near
+ *     them. Below the tracks means a new track. On release
+ *     the window is told the clip, track and start (LANES_MoveClip/Track/
+ *     At) and moves it with App_MoveClipTo(). A track it can't go on (a
+ *     video clip on an audio track) shows a grey outline and no line.
+ *     The gadget never changes the timeline itself; the window does;
+ *   - while trimming or moving, the tracks go on as far as the drag needs
+ *     (the view gets longer), and holding the pointer near or past either
+ *     edge scrolls the view that way (LANES_Scrolled tells the window, so
+ *     the ruler, film strip and scroller follow);
  *   - anywhere else moves the playhead, like the ruler.
  */
 #include <stdio.h>
@@ -60,6 +73,11 @@
 #define COL_OFF_EDGE   0x5F5E5A
 #define COL_OFF_TEXT   0x2C2C2A
 #define COL_SELECTED   0xFFFFFF
+#define COL_GHOST      0xFFFFFF      /* a dragged clip's outline */
+#define COL_GHOST_NO   0x888780      /* ...where it can't go */
+#define COL_INSERT     0xEF9F27      /* where it will go in */
+#define DRAG_PX        3             /* move this far before it's a drag */
+#define SNAP_PX        6             /* ends this near something snap to it */
 
 enum { ROW_PICTURE, ROW_LINKED, ROW_SOUND };
 
@@ -68,7 +86,8 @@ typedef struct Row {
     long y, h;              /* from the gadget's top */
 } Row;
 
-enum { MODE_NONE, MODE_PLAYHEAD, MODE_TRIM_IN, MODE_TRIM_OUT };
+enum { MODE_NONE, MODE_PLAYHEAD, MODE_TRIM_IN, MODE_TRIM_OUT, MODE_PRESS,
+       MODE_MOVE };
 
 struct LanesData {
     FBTimebase       *tb;
@@ -81,6 +100,16 @@ struct LanesData {
     int               drag_clip;
     fb_ms_t           drag_in, drag_out;   /* while trimming */
     int               font_h;              /* from the last drawing */
+    /* While moving a clip: where it was picked up, how far into the clip
+     * (ms), and where it is now: track (-1 below the tracks: a new one),
+     * start, and whether it can go there. */
+    long              press_x, press_y;
+    fb_ms_t           grab;
+    int               to_track;
+    fb_ms_t           to_start;      /* where it's dropped */
+    BOOL              to_ok;
+    fb_ms_t           to_land;       /* where it will go */
+    int               to_insert;     /* in between clips (they move on) */
 };
 
 /* ---- Rows ------------------------------------------------------------ */
@@ -178,14 +207,19 @@ static void clip_span(const struct LanesData *ld, int clip, long *x0, long *x1)
 {
     const FBClip *c = &ld->tl->clips[clip];
     const FBTimeView *v = &ld->tb->view;
-    fb_ms_t in = c->in, out = c->out;
+    fb_ms_t in = c->in, out = c->out, start = c->start;
 
-    if (ld->mode >= MODE_TRIM_IN && clip == ld->drag_clip) {
+    if ((ld->mode == MODE_TRIM_IN || ld->mode == MODE_TRIM_OUT) &&
+        clip == ld->drag_clip) {
         in = ld->drag_in;
         out = ld->drag_out;
     }
-    *x0 = FB_ViewTimeToX(v, FB_US(c->start + (in - c->in)));
-    *x1 = FB_ViewTimeToX(v, FB_US(c->start + (out - c->in))) - 1;
+    /* While one is being moved, the clips after it on its track are
+     * already shown moved up into its place. */
+    if (ld->mode == MODE_MOVE)
+        start = FB_TimelineStartWithout(ld->tl, clip, ld->drag_clip);
+    *x0 = FB_ViewTimeToX(v, FB_US(start + (in - c->in)));
+    *x1 = FB_ViewTimeToX(v, FB_US(start + (out - c->in))) - 1;
 }
 
 enum { HIT_NONE, HIT_BODY, HIT_IN, HIT_OUT };
@@ -296,6 +330,51 @@ static void draw_clip(const struct LanesData *ld, struct trackDraw *d,
     }
 }
 
+/* While a clip is dragged: its outline where it is, and on a track it can
+ * go on, a line where it will go in. */
+static void draw_move(const struct LanesData *ld, struct trackDraw *d,
+                      const Row *rows, int n, long bottom)
+{
+    struct RastPort *rp = d->trd_RPort;
+    const FBTimeline *tl = ld->tl;
+    const FBClip *c = &tl->clips[ld->drag_clip];
+    const FBTimeView *v = &ld->tb->view;
+    long left = d->trd_Box.Left, top = d->trd_Box.Top;
+    long w = d->trd_Box.Width;
+    long y0, y1, x0, x1;
+    struct Rectangle box;
+    int r;
+
+    box.MinX = left;
+    box.MaxX = left + w - 1;
+    box.MinY = top;
+    box.MaxY = top + d->trd_Box.Height - 1;
+
+    /* The row it's over: the picture or audio row of the track. */
+    y0 = top + bottom + 2;
+    y1 = y0 + row_height(ROW_PICTURE, ld->font_h) - 1;
+    for (r = 0; ld->to_track >= 0 && r < n; r++)
+        if (rows[r].track == ld->to_track && rows[r].kind != ROW_LINKED) {
+            y0 = top + rows[r].y;
+            y1 = y0 + rows[r].h - 1;
+            break;
+        }
+
+    x0 = left + FB_ViewTimeToX(v, FB_US(ld->to_land));
+    x1 = left + FB_ViewTimeToX(v, FB_US(ld->to_land + (c->out - c->in))) - 1;
+    Track_SetRGB(rp, ld->to_ok ? COL_GHOST : COL_GHOST_NO);
+    Track_FillClipped(rp, &box, x0, y0, x1, y0 + 1);
+    Track_FillClipped(rp, &box, x0, y1 - 1, x1, y1);
+    Track_FillClipped(rp, &box, x0, y0, x0 + 1, y1);
+    Track_FillClipped(rp, &box, x1 - 1, y0, x1, y1);
+
+    if (ld->to_ok && ld->to_insert) {
+        /* Going in between clips: a line where. */
+        Track_SetRGB(rp, COL_INSERT);
+        Track_FillClipped(rp, &box, x0 - 1, y0 - 2, x0 + 1, y1 + 2);
+    }
+}
+
 static void lanes_draw(struct LanesData *ld, struct trackDraw *d)
 {
     struct RastPort *rp = d->trd_RPort;
@@ -347,9 +426,13 @@ static void lanes_draw(struct LanesData *ld, struct trackDraw *d)
         }
 
         for (i = 0; i < tl->num_clips; i++)
-            if (tl->clips[i].track == row->track)
+            if (tl->clips[i].track == row->track &&
+                !(ld->mode == MODE_MOVE && i == ld->drag_clip))
                 draw_clip(ld, d, row, i);
     }
+
+    if (ld->mode == MODE_MOVE)
+        draw_move(ld, d, rows, n, bottom);
 
     /* The drop area below the tracks. */
     if (ld->drop_text && top + bottom + font->tf_YSize < gbottom) {
@@ -391,6 +474,15 @@ static void lanes_notify(Class *cl, Object *o, struct GadgetInfo *gi,
     msg.opu_GInfo    = gi;
     msg.opu_Flags    = 0;
     IIntuition->IDoSuperMethodA(cl, o, (Msg)&msg);
+}
+
+static void notify_scrolled(Class *cl, Object *o, struct GadgetInfo *gi)
+{
+    struct TagItem tags[3];
+
+    tags[0].ti_Tag  = LANES_Scrolled;
+    tags[0].ti_Data = TRUE;
+    lanes_notify(cl, o, gi, tags, 1);
 }
 
 static void notify_selection(Class *cl, Object *o, struct GadgetInfo *gi,
@@ -476,8 +568,125 @@ static uint32 lanes_go_active(Class *cl, Object *o, struct gpInput *msg)
         lanes_redraw(o, msg->gpi_GInfo);
         return GMR_MEACTIVE;
     }
+    /* Maybe the start of a drag to move it. */
+    ld->mode = MODE_PRESS;
+    ld->drag_clip = clip;
+    ld->press_x = msg->gpi_Mouse.X;
+    ld->press_y = y;
+    ld->grab = FB_MS(FB_ViewXToTime(&ld->tb->view, x)) -
+               ld->tl->clips[clip].start;
     lanes_redraw(o, msg->gpi_GInfo);
-    return GMR_NOREUSE;
+    return GMR_MEACTIVE;
+}
+
+/* Moves t to `to` if it is within SNAP_PX of it; *best keeps the
+ * nearest so far. */
+static void snap_near(fb_ms_t t, fb_ms_t to, fb_ms_t range, fb_ms_t *best,
+                      fb_ms_t *dist)
+{
+    fb_ms_t d = t > to ? t - to : to - t;
+
+    if (d <= range && d < *dist) {
+        *dist = d;
+        *best = to;
+    }
+}
+
+/* Lets a dragged clip's start or end snap to the start of the edit, the
+ * playhead, and the ends of the clips on the track it's over (as they
+ * will be once it's out of its place). */
+static void snap(struct LanesData *ld, fb_ms_t len)
+{
+    const FBTimeline *tl = ld->tl;
+    fb_ms_t range = FB_MS((fb_us_t)SNAP_PX * ld->tb->view.per_px);
+    fb_ms_t start = ld->to_start, end = start + len;
+    fb_ms_t best_s = start, dist_s = range + 1;
+    fb_ms_t best_e = end, dist_e = range + 1;
+    fb_ms_t playhead = FB_MS(ld->tb->playhead);
+    int i;
+
+    snap_near(start, 0, range, &best_s, &dist_s);
+    snap_near(start, playhead, range, &best_s, &dist_s);
+    snap_near(end, playhead, range, &best_e, &dist_e);
+    for (i = 0; ld->to_track >= 0 && i < tl->num_clips; i++) {
+        const FBClip *c = &tl->clips[i];
+        fb_ms_t s;
+
+        if (i == ld->drag_clip || c->track != ld->to_track)
+            continue;
+        s = FB_TimelineStartWithout(tl, i, ld->drag_clip);
+        snap_near(start, s + (c->out - c->in), range, &best_s, &dist_s);
+        snap_near(start, s, range, &best_s, &dist_s);
+        snap_near(end, s, range, &best_e, &dist_e);
+        snap_near(end, s + (c->out - c->in), range, &best_e, &dist_e);
+    }
+    if (dist_s <= range && dist_s <= dist_e)
+        ld->to_start = best_s;
+    else if (dist_e <= range && best_e - len >= 0)
+        ld->to_start = best_e - len;
+}
+
+/* Where a dragged clip is now, for the pointer at x (on the time axis)
+ * and y (from the gadget's top). */
+static void move_to(struct LanesData *ld, long x, long y)
+{
+    const FBTimeline *tl = ld->tl;
+    const FBClip *c = &tl->clips[ld->drag_clip];
+    fb_us_t frame = ld->tb->frame_us > 0 ? ld->tb->frame_us
+                                         : FB_DEFAULT_FRAME_US;
+    fb_us_t t = FB_ViewXToTime(&ld->tb->view, x);
+    Row rows[MAX_ROWS];
+    long bottom;
+    int n, r;
+
+    t -= t % frame;
+    ld->to_start = FB_MS(t) - ld->grab;
+    if (ld->to_start < 0)
+        ld->to_start = 0;
+    n = make_rows(tl, ld->font_h > 0 ? ld->font_h : 8, rows, &bottom);
+    r = row_at(rows, n, y);
+    if (r >= 0) {
+        ld->to_track = rows[r].track;
+        ld->to_ok = FB_TrackFits(tl, ld->to_track, &tl->sources[c->source]);
+    } else if (y >= bottom) {
+        ld->to_track = -1;             /* below the tracks: a new track */
+        ld->to_ok = TRUE;
+    } else {
+        ld->to_ok = FALSE;              /* above the top track */
+    }
+    snap(ld, c->out - c->in);
+
+    ld->to_insert = 0;
+    ld->to_land = ld->to_start;
+    if (ld->to_ok && ld->to_track >= 0)
+        ld->to_land = FB_TimelineDropPoint(tl, ld->to_track, ld->to_start,
+                                           c->out - c->in, ld->drag_clip,
+                                           &ld->to_insert);
+}
+
+/* Keeps room after what is being dragged: the clip's outline when moving
+ * it, its end when trimming. TRUE if the view got longer. */
+static BOOL make_room(struct LanesData *ld)
+{
+    const FBClip *c = &ld->tl->clips[ld->drag_clip];
+    fb_ms_t end;
+
+    if (ld->mode == MODE_MOVE)
+        end = ld->to_land + (c->out - c->in);
+    else if (ld->mode == MODE_TRIM_OUT)
+        end = c->start + (ld->drag_out - c->in);
+    else
+        return FALSE;
+    return FB_ViewMakeRoom(&ld->tb->view, FB_US(end)) != 0;
+}
+
+/* Follows the pointer after the view moved under it. */
+static void drag_follow(struct LanesData *ld, long x, long y)
+{
+    if (ld->mode == MODE_MOVE)
+        move_to(ld, x, y);
+    else
+        trim_to(ld, x);
 }
 
 static uint32 lanes_handle_input(Class *cl, Object *o, struct gpInput *msg)
@@ -491,8 +700,83 @@ static uint32 lanes_handle_input(Class *cl, Object *o, struct gpInput *msg)
         return IIntuition->IDoSuperMethodA(cl, o, (Msg)msg);
     if (ld->mode == MODE_NONE)
         return GMR_NOREUSE;
+
+    /* Intuition sends timer ticks (about ten a second) to the active
+     * gadget: near an edge while dragging, they scroll the view. */
+    if (ie->ie_Class == IECLASS_TIMER &&
+        (ld->mode == MODE_MOVE || ld->mode == MODE_TRIM_IN ||
+         ld->mode == MODE_TRIM_OUT)) {
+        /* Room first: at the end of the view there'd be nowhere to
+         * scroll to. The room then grows with each step. */
+        BOOL grew = make_room(ld);
+
+        if (FB_ViewEdgeScroll(&ld->tb->view, x, FB_VIEW_EDGE_PX) || grew) {
+            drag_follow(ld, x, msg->gpi_Mouse.Y);
+            lanes_redraw(o, msg->gpi_GInfo);
+            notify_scrolled(cl, o, msg->gpi_GInfo);
+        }
+        return GMR_MEACTIVE;
+    }
     if (ie->ie_Class != IECLASS_RAWMOUSE)
         return GMR_MEACTIVE;
+
+    if (ld->mode == MODE_PRESS || ld->mode == MODE_MOVE) {
+        long y = msg->gpi_Mouse.Y;
+
+        switch (ie->ie_Code) {
+        case SELECTUP:
+            if (ld->mode == MODE_MOVE) {
+                move_to(ld, x, y);
+                if (ld->to_ok) {
+                    struct TagItem tags[5];
+
+                    tags[0].ti_Tag  = LANES_MoveClip;
+                    tags[0].ti_Data = (uint32)ld->drag_clip;
+                    tags[1].ti_Tag  = LANES_MoveTrack;
+                    tags[1].ti_Data = (uint32)ld->to_track;
+                    tags[2].ti_Tag  = LANES_MoveAt;
+                    tags[2].ti_Data = (uint32)ld->to_start;
+                    lanes_notify(cl, o, msg->gpi_GInfo, tags, 3);
+                }
+                ld->mode = MODE_NONE;
+                lanes_redraw(o, msg->gpi_GInfo);
+            }
+            ld->mode = MODE_NONE;
+            *msg->gpi_Termination = 0;
+            return GMR_NOREUSE | GMR_VERIFY;
+        case MENUDOWN:
+            ld->mode = MODE_NONE;
+            lanes_redraw(o, msg->gpi_GInfo);
+            return GMR_REUSE;
+        case IECODE_NOBUTTON: {
+            BOOL started = FALSE;
+
+            if (ld->mode == MODE_PRESS &&
+                (msg->gpi_Mouse.X - ld->press_x > DRAG_PX ||
+                 ld->press_x - msg->gpi_Mouse.X > DRAG_PX ||
+                 y - ld->press_y > DRAG_PX || ld->press_y - y > DRAG_PX)) {
+                ld->mode = MODE_MOVE;
+                started = TRUE;         /* its old place closes up now */
+            }
+            if (ld->mode == MODE_MOVE) {
+                int track = ld->to_track;
+                fb_ms_t land = ld->to_land;
+                BOOL ok = ld->to_ok;
+
+                move_to(ld, x, y);
+                if (make_room(ld)) {
+                    move_to(ld, x, y);    /* past the old end: free now */
+                    notify_scrolled(cl, o, msg->gpi_GInfo);
+                }
+                if (started || track != ld->to_track ||
+                    land != ld->to_land || ok != ld->to_ok)
+                    lanes_redraw(o, msg->gpi_GInfo);
+            }
+            break;
+        }
+        }
+        return GMR_MEACTIVE;
+    }
 
     c = &ld->tl->clips[ld->drag_clip];
     switch (ie->ie_Code) {
@@ -521,6 +805,10 @@ static uint32 lanes_handle_input(Class *cl, Object *o, struct gpInput *msg)
         fb_ms_t in = ld->drag_in, out = ld->drag_out;
 
         trim_to(ld, x);
+        if (make_room(ld)) {
+            trim_to(ld, x);
+            notify_scrolled(cl, o, msg->gpi_GInfo);
+        }
         if (in != ld->drag_in || out != ld->drag_out)
             lanes_redraw(o, msg->gpi_GInfo);
         break;

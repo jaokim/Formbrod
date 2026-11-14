@@ -409,3 +409,18 @@ Det kan inte börja före %s, där klippet framför slutar
 MSG_STATUS_MOVED
 %s börjar nu vid %s
 ;
+MSG_STATUS_PROXY_READY
+Förhandsvisningskopian av %s är klar
+;
+MSG_MENU_PROXIES
+Gör förhandsvisningskopior
+;
+MSG_MENU_PROXY_SIZE
+Förhandsvisningskopiornas storlek
+;
+MSG_MENU_PROXY_AUTO
+Automatisk
+;
+MSG_MENU_PROXY_WIDTH
+%d bildpunkter breda
+;

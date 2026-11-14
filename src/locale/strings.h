@@ -282,8 +282,18 @@
 #define MSG_STATUS_TOO_EARLY_STR         "It can't start before %s, where the clip in front of it ends"
 #define MSG_STATUS_MOVED                 188
 #define MSG_STATUS_MOVED_STR             "%s now starts at %s"
+#define MSG_STATUS_PROXY_READY           189
+#define MSG_STATUS_PROXY_READY_STR       "Preview copy of %s is ready"
+#define MSG_MENU_PROXIES                 190
+#define MSG_MENU_PROXIES_STR             "Make preview copies"
+#define MSG_MENU_PROXY_SIZE              191
+#define MSG_MENU_PROXY_SIZE_STR          "Preview copy size"
+#define MSG_MENU_PROXY_AUTO              192
+#define MSG_MENU_PROXY_AUTO_STR          "Automatic"
+#define MSG_MENU_PROXY_WIDTH             193
+#define MSG_MENU_PROXY_WIDTH_STR         "%d pixels wide"
 
-#define FB_NUM_STRINGS 135
+#define FB_NUM_STRINGS 140
 
 #ifdef FB_STRINGS_ARRAY
 static const struct FBBuiltinString {
@@ -425,6 +435,11 @@ static const struct FBBuiltinString {
     { MSG_INSPECTOR_NONE, MSG_INSPECTOR_NONE_STR },
     { MSG_STATUS_TOO_EARLY, MSG_STATUS_TOO_EARLY_STR },
     { MSG_STATUS_MOVED, MSG_STATUS_MOVED_STR },
+    { MSG_STATUS_PROXY_READY, MSG_STATUS_PROXY_READY_STR },
+    { MSG_MENU_PROXIES, MSG_MENU_PROXIES_STR },
+    { MSG_MENU_PROXY_SIZE, MSG_MENU_PROXY_SIZE_STR },
+    { MSG_MENU_PROXY_AUTO, MSG_MENU_PROXY_AUTO_STR },
+    { MSG_MENU_PROXY_WIDTH, MSG_MENU_PROXY_WIDTH_STR },
 };
 #endif
 

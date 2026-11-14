@@ -12,6 +12,15 @@
 #include "version.h"
 #include "locale/catalog.h"
 
+#ifdef __amigaos4__
+#include <proto/exec.h>
+#include <proto/dos.h>
+#endif
+
+static void cache_start(void);
+static void cache_request(FBSource *src);
+static void cache_stop(void);
+
 FBApp App;
 
 int App_Init(void)
@@ -22,12 +31,21 @@ int App_Init(void)
     App.backend = FB_CreateLocalBackend();
     if (!App.backend)
         return -1;
+    /* Proxies are made locally for now. A RemoteBackend here would make
+     * them on a render server, into a cache drawer both can see. */
+    App.cache_backend = FB_CreateLocalBackend();
+    cache_start();
     App_SetStatus("%s", FB_Str(MSG_STATUS_WELCOME));
     return 0;
 }
 
 void App_Cleanup(void)
 {
+    if (App.cache_backend) {
+        cache_stop();   /* no half-made proxies left behind */
+        App.cache_backend->Dispose(App.cache_backend);
+        App.cache_backend = NULL;
+    }
     if (App.backend) {
         App.backend->Dispose(App.backend);
         App.backend = NULL;
@@ -212,9 +230,11 @@ int App_OpenProject(const char *path)
             src->has_video = info.has_video;
             src->has_audio = info.has_audio;
             src->still     = info.still;
+            src->intra     = info.intra;
             FB_SourceSetVideo(src, info.width, info.height,
                               info.sar_num, info.sar_den,
                               info.fps_num, info.fps_den);
+            cache_request(src);
         } else {
             missing++;
             for (c = 0; c < tl.num_clips; c++)
@@ -320,6 +340,8 @@ static int add_source(const char *path)
     FB_SourceSetVideo(&App.timeline.sources[src], info.width, info.height,
                       info.sar_num, info.sar_den, info.fps_num, info.fps_den);
     App.timeline.sources[src].still = info.still;
+    App.timeline.sources[src].intra = info.intra;
+    cache_request(&App.timeline.sources[src]);
     return src;
 }
 
@@ -493,6 +515,34 @@ int App_MoveClip(int clip, fb_ms_t start)
     App_SetStatus(FB_Str(MSG_STATUS_MOVED),
                   file_part(tl->sources[tl->clips[clip].source].path), when);
     return 0;
+}
+
+int App_MoveClipTo(int clip, int track, fb_ms_t at)
+{
+    FBTimeline *tl = &App.timeline;
+    const char *name;
+    char when[24];
+    int idx;
+
+    if (clip < 0 || clip >= tl->num_clips) {
+        App_SetStatus("%s", FB_Str(MSG_STATUS_NO_SUCH_CLIP));
+        return -1;
+    }
+    if (track < 0 || track > tl->num_tracks) {
+        App_SetStatus("%s", FB_Str(MSG_STATUS_NO_SUCH_TRACK));
+        return -1;
+    }
+    name = file_part(tl->sources[tl->clips[clip].source].path);
+    idx = FB_TimelineMoveClipTo(tl, clip, track, at);
+    if (idx < 0) {
+        App_SetStatus(FB_Str(MSG_STATUS_WRONG_TRACK), name);
+        return -1;
+    }
+    App.modified = 1;
+    FB_FormatTimecode(when, sizeof(when), FB_US(tl->clips[idx].start),
+                      FB_US(100), 0, Locale_DecimalPoint());
+    App_SetStatus(FB_Str(MSG_STATUS_MOVED), name, when);
+    return idx;
 }
 
 int App_TrimClip(int clip, fb_ms_t in, fb_ms_t out)
@@ -669,6 +719,34 @@ const char *App_JobErrorString(FBJobError err)
     return FB_Str(MSG_JOB_UNKNOWN);
 }
 
+/* The timeline with each source that has a proxy ready reading that
+ * instead. The probed info stays the original's: the frame size and shape
+ * come from it, and the job scales whatever it reads to that frame. The
+ * proxy has the same frames and timing, so clip times stay valid. */
+static const FBTimeline *with_proxies(void)
+{
+    static FBTimeline tl;   /* large; keep it off the stack */
+    char path[FB_PATH_LEN];
+    int i, used = 0;
+
+    tl = App.timeline;
+    for (i = 0; i < tl.num_sources; i++) {
+        FBSource *s = &tl.sources[i];
+
+        if (FB_CacheFind(&App.cache, s->key, FB_CACHE_PROXY,
+                         path, sizeof(path))) {
+            FB_Log(FB_LOG_INFO, "cache", "Preview reads %s for %s",
+                   path, s->path);
+            strcpy(s->path, path);
+            used++;
+        }
+    }
+    if (used < tl.num_sources)
+        FB_Log(FB_LOG_INFO, "cache", "%d of %d files have a proxy",
+               used, tl.num_sources);
+    return &tl;
+}
+
 int App_Export(const char *path, int preview)
 {
     static FBJob job;   /* large; keep it off the stack */
@@ -686,7 +764,7 @@ int App_Export(const char *path, int preview)
     strcpy(out.acodec, "aac");
     out.quality = preview ? FB_QUALITY_PREVIEW : FB_QUALITY_FINAL;
 
-    err = FB_JobBuild(&job, &App.timeline, &out);
+    err = FB_JobBuild(&job, preview ? with_proxies() : &App.timeline, &out);
     if (err != FB_JOB_OK) {
         FB_Log(FB_LOG_ERROR, "job", "Can't build the job: %s",
                FB_JobErrorString(err));
@@ -725,4 +803,196 @@ FBProgress App_PollRender(void)
             App_SetStatus(FB_Str(MSG_STATUS_FAILED), r.message);
     }
     return p;
+}
+
+/* ---- Media cache ---------------------------------------------------------- */
+
+int App_ProxiesEnabled(void)
+{
+    return strcmp(Prefs_GetString("MakeProxies", "1"), "0") != 0;
+}
+
+int App_ProxyWidthSetting(void)
+{
+    const char *v = Prefs_GetString("ProxyWidth", "auto");
+
+    return atoi(v) > 0 ? atoi(v) : 0;
+}
+
+/* The CPU's clock in MHz and its cores, 0 if unknown. */
+static void cpu_info(int *mhz, int *cores)
+{
+    *mhz = 0;
+    *cores = 0;
+#ifdef __amigaos4__
+    {
+        uint64 speed = 0;
+        uint32 n = 0;
+
+        /* GCIT_NumberOfCPUs is newer than GCIT_ProcessorSpeed; an exec
+         * without it leaves n at 0, which counts as one core. */
+        IExec->GetCPUInfoTags(GCIT_ProcessorSpeed, &speed,
+                              GCIT_NumberOfCPUs, &n, TAG_DONE);
+        *mhz = (int)(speed / 1000000);
+        *cores = (int)n;
+    }
+#endif
+}
+
+int App_ProxyWidth(void)
+{
+    return App.cache.proxy_width;
+}
+
+static void cache_start(void)
+{
+    const char *dir = Prefs_GetString("CacheDir", "PROGDIR:Cache");
+    int width = App_ProxyWidthSetting();
+    int mhz, cores;
+
+    if (width <= 0) {
+        cpu_info(&mhz, &cores);
+        width = FB_CacheAutoWidth(mhz, cores);
+        FB_Log(FB_LOG_INFO, "cache",
+               "CPU at %d MHz with %d core(s): proxies %d wide",
+               mhz, cores, width);
+    }
+#ifdef __amigaos4__
+    {
+        /* Make the drawer if it isn't there; fails harmlessly if it is. */
+        BPTR lock = IDOS->CreateDir(dir);
+
+        if (lock)
+            IDOS->UnLock(lock);
+    }
+#endif
+    FB_CacheInit(&App.cache, dir, width);
+    FB_Log(FB_LOG_INFO, "cache", "Cache in %s, proxies %d wide",
+           dir, App.cache.proxy_width);
+}
+
+/* Reads the file's fingerprint if needed and asks for its proxy. */
+static void cache_request(FBSource *src)
+{
+    FBCacheState st;
+
+    if (!App.cache_backend || !App_ProxiesEnabled())
+        return;
+    if (!src->key[0] && src->has_video && !src->still &&
+        FB_CacheKey(src->path, src->key) != 0) {
+        FB_Log(FB_LOG_WARNING, "cache", "%s: can't read its fingerprint",
+               src->path);
+        return;
+    }
+    st = FB_CacheRequest(&App.cache, src);
+    if (st == FB_CACHE_QUEUED)
+        FB_Log(FB_LOG_INFO, "cache", "%s (%s): proxy queued",
+               src->path, src->key);
+    else if (st == FB_CACHE_READY)
+        FB_Log(FB_LOG_INFO, "cache", "%s (%s): proxy ready",
+               src->path, src->key);
+}
+
+/* Asks again for every source, after the settings change. */
+static void cache_request_all(void)
+{
+    int i;
+
+    for (i = 0; i < App.timeline.num_sources; i++)
+        cache_request(&App.timeline.sources[i]);
+}
+
+/* Stops the cache job that's running, putting it back in the queue. */
+static void cache_stop(void)
+{
+    if (!App.caching)
+        return;
+    /* Cancel closes the files at once, so the partial one can go. */
+    App.cache_backend->Cancel(App.cache_backend);
+    FB_CacheAbort(&App.cache);
+    App.caching = 0;
+}
+
+void App_SetProxies(int on)
+{
+    Prefs_SetString("MakeProxies", on ? "1" : "0");
+    Prefs_Save();
+    if (on) {
+        cache_request_all();
+    } else {
+        /* Forget what was waiting; turning it on again asks anew. */
+        cache_stop();
+        App.cache.num_tasks = 0;
+    }
+}
+
+void App_SetProxyWidth(int width)
+{
+    char v[16];
+
+    if (width > 0)
+        snprintf(v, sizeof(v), "%d", width);
+    else
+        strcpy(v, "auto");
+    Prefs_SetString("ProxyWidth", v);
+    Prefs_Save();
+    cache_stop();
+    cache_start();          /* a new, empty queue for the new size */
+    cache_request_all();
+}
+
+int App_CacheBusy(void)
+{
+    return App.caching ||
+           (App.cache_backend && FB_CachePending(&App.cache) > 0);
+}
+
+int App_PollCache(void)
+{
+    static FBJob job;   /* large; keep it off the stack */
+    FBProgress p;
+
+    /* An export has the machine to itself; the cache job waits. */
+    if (!App.cache_backend || App.rendering)
+        return 0;
+
+    if (!App.caching) {
+        int t = FB_CacheNextJob(&App.cache, &job);
+
+        if (t < 0)
+            return 0;
+        FB_Log(FB_LOG_INFO, "cache", "Making a proxy of %s",
+               App.cache.tasks[t].source.path);
+        log_job(&job);
+        if (App.cache_backend->Submit(App.cache_backend, &job) != 0) {
+            FB_Log(FB_LOG_WARNING, "cache", "Can't start it: %s",
+                   App.cache_backend->Result(App.cache_backend).message);
+            FB_CacheFinish(&App.cache, 0);   /* not tried again */
+            return 0;
+        }
+        App.caching = 1;
+        return 0;
+    }
+
+    p = App.cache_backend->Progress(App.cache_backend);
+    if (p.state == FB_RENDER_RUNNING)
+        return 0;
+    {
+        FBResult r = App.cache_backend->Result(App.cache_backend);
+        int t = App.cache.current;
+        char name[FB_PATH_LEN] = "";
+
+        if (t >= 0)
+            strcpy(name, App.cache.tasks[t].source.path);
+        App.caching = 0;
+        if (FB_CacheFinish(&App.cache, r.state == FB_RENDER_DONE)
+            == FB_CACHE_READY) {
+            FB_Log(FB_LOG_INFO, "cache", "Proxy of %s is ready", name);
+            App_SetStatus(FB_Str(MSG_STATUS_PROXY_READY), file_part(name));
+            return 1;
+        }
+        FB_Log(FB_LOG_WARNING, "cache", "No proxy of %s: %s", name,
+               r.message);
+    }
+    return 0;
 }

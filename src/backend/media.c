@@ -7,6 +7,9 @@
 
 #ifdef HAVE_LIBAV
 #include <libavformat/avformat.h>
+/* Since ffmpeg 5, avformat.h no longer brings in the codec descriptors
+ * (AVCodecDescriptor, AV_CODEC_PROP_INTRA_ONLY). */
+#include <libavcodec/avcodec.h>
 #include <libavutil/error.h>
 
 /* Before ffmpeg 4.0 (libavformat 58.9.100) demuxers had to be registered,
@@ -88,8 +91,13 @@ static FBProbeResult probe(const char *path, FBSource *info,
         AVRational sar = av_guess_sample_aspect_ratio(fmt, st, NULL);
         AVRational fr  = av_guess_frame_rate(fmt, st, NULL);
 
+        const AVCodecDescriptor *desc =
+            avcodec_descriptor_get(st->codecpar->codec_id);
+
         FB_SourceSetVideo(info, st->codecpar->width, st->codecpar->height,
                           sar.num, sar.den, fr.num, fr.den);
+        /* Every frame a keyframe: quick to seek in, may need no proxy. */
+        info->intra = desc && (desc->props & AV_CODEC_PROP_INTRA_ONLY);
     }
 
     /* A still picture (PNG, JPEG, IFF...) is a clip of any length. ffmpeg
@@ -143,12 +151,13 @@ FBProbeResult FB_ProbeMedia(const char *path, FBSource *info,
 
     if (r == FB_PROBE_OK)
         FB_Log(FB_LOG_INFO, "probe",
-               "%s: %lld ms, %s %dx%d (pixel shape %d:%d) at %d/%d fps, %s",
+               "%s: %lld ms, %s %dx%d (pixel shape %d:%d) at %d/%d fps%s, %s",
                path, (long long)info->duration,
                info->still ? "still picture" :
                info->has_video ? "picture" : "no picture",
                info->width, info->height, info->sar_num, info->sar_den,
                info->fps_num, info->fps_den,
+               info->intra ? ", keyframes only" : "",
                info->has_audio ? "sound" : "no sound");
     else
         FB_Log(FB_LOG_WARNING, "probe", "%s: %s%s%s", path,

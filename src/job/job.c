@@ -418,10 +418,12 @@ FBJobError FB_JobBuild(FBJob *job, const FBTimeline *tl, const FBOutput *out)
                 vdone = 1;
                 continue;
             }
+            /* The pile so far: the bottom track, or the overlay before,
+             * which wrote [c<vdone - 2>]. */
             if (vdone == 1)
                 buf_printf(&b, "[t%dv]", bottom);
             else
-                buf_printf(&b, "[c%d]", vdone - 1);
+                buf_printf(&b, "[c%d]", vdone - 2);
             buf_printf(&b, "[t%dv]overlay=format=auto:eof_action=pass", t);
             if (++vdone == vtracks)
                 buf_printf(&b, "[outv];");

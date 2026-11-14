@@ -60,6 +60,12 @@ int main(int argc, char **argv)
             MainWindow_SetProgress(&p);
             if (!App.rendering)
                 MainWindow_Refresh();
+        } else if (App_CacheBusy()) {
+            /* Proxies are made in the background, a slice at a time,
+             * between window and ARexx events. */
+            sigs = IExec->SetSignal(0, mask) & mask;
+            if (App_PollCache())
+                MainWindow_Refresh();
         } else {
             sigs = IExec->Wait(mask);
         }
