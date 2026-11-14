@@ -18,8 +18,8 @@
  *   - a track's name selects the track (for the Track menu);
  *   - a clip selects it; double-clicking it reports LANES_Open (the
  *     window opens the clip's settings). Where two clips overlap in a crossfade, the
- *     overlap is marked with an X over the clip before it (the later
- *     clip's box starts after the overlap, its name over the X), and
+ *     overlap is split by a line from the later clip's top-left to the
+ *     earlier one's bottom-right, each side in its clip's colour, and
  *     belongs to the clip fading in (except the very end, which is the
  *     earlier clip's end);
  *   - a clip's edge, dragged, trims it: the clip is drawn at its new
@@ -65,15 +65,9 @@
 #define DROP_MIN_H   40        /* the drop area is at least this tall */
 
 /* Clip colours: fill, edge, text. */
-#define COL_PIC_FILL   0x5DCAA5
-#define COL_PIC_EDGE   0x0F6E56
-#define COL_PIC_TEXT   0x04342C
-#define COL_STILL_FILL 0xAFA9EC
-#define COL_STILL_EDGE 0x534AB7
-#define COL_STILL_TEXT 0x26215C
-#define COL_SND_FILL   0xF0997B
+/* Clips take their file's colour (Track_SourceRamp); a video's sound
+ * lane is light coral under it. */
 #define COL_SND_EDGE   0x993C1D
-#define COL_SND_TEXT   0x4A1B0C
 #define COL_LINK_FILL  0xF5C4B3
 #define COL_OFF_FILL   0xB4B2A9      /* muted or hidden */
 #define COL_OFF_EDGE   0x5F5E5A
@@ -286,19 +280,16 @@ static void clip_colours(const struct LanesData *ld, const Row *row, int clip,
 {
     const FBClip *c = &ld->tl->clips[clip];
     const FBTrack *tr = &ld->tl->tracks[c->track];
-    const FBSource *src = &ld->tl->sources[c->source];
+    const TrackRamp *ramp = Track_SourceRamp(c->source);
     BOOL off = row->kind == ROW_PICTURE ? tr->hidden : tr->muted;
 
     if (off) {
         *fill = COL_OFF_FILL; *edge = COL_OFF_EDGE; *text = COL_OFF_TEXT;
-    } else if (row->kind == ROW_PICTURE && src->still) {
-        *fill = COL_STILL_FILL; *edge = COL_STILL_EDGE;
-        *text = COL_STILL_TEXT;
-    } else if (row->kind == ROW_PICTURE) {
-        *fill = COL_PIC_FILL; *edge = COL_PIC_EDGE; *text = COL_PIC_TEXT;
+    } else if (row->kind == ROW_LINKED) {
+        *fill = COL_LINK_FILL; *edge = COL_SND_EDGE; *text = ramp->text;
     } else {
-        *fill = row->kind == ROW_LINKED ? COL_LINK_FILL : COL_SND_FILL;
-        *edge = COL_SND_EDGE; *text = COL_SND_TEXT;
+        /* Clips from one file look alike, wherever they are. */
+        *fill = ramp->fill; *edge = ramp->edge; *text = ramp->text;
     }
 }
 
@@ -334,6 +325,28 @@ static long body_x0(const struct LanesData *ld, int clip, long x0)
             return p1;
     }
     return x0;
+}
+
+/* A clip's name needs at least this much of its own part. */
+#define NAME_MIN_PX 24
+
+/* Where a clip's own part ends: where the next clip on its track starts,
+ * if it fades in over this one. */
+static long body_x1(const struct LanesData *ld, int clip, long x1)
+{
+    const FBTimeline *tl = ld->tl;
+    int n = clip + 1;
+    long n0, n1;
+
+    if (n < tl->num_clips && tl->clips[n].track == tl->clips[clip].track &&
+        tl->clips[n].xfade > 0 &&
+        !(ld->mode == MODE_MOVE && (n == ld->drag_clip ||
+                                    clip == ld->drag_clip))) {
+        clip_span(ld, n, &n0, &n1);
+        if (n0 < x1)
+            return n0;
+    }
+    return x1;
 }
 
 /* A clip's file name from x0, inside `box`. */
@@ -402,10 +415,19 @@ static void draw_clip(const struct LanesData *ld, struct trackDraw *d,
                               left + x1 - 2, top + row->h / 2);
         }
     }
-    /* The name from its start; over a crossfade, draw_crossfade puts it
-     * on top of the X. */
-    if (row->kind != ROW_LINKED && b0 == x0)
-        draw_name(d, row, &box, x0, text, src);
+    /* The name in its own part, between the crossfades at its ends; if
+     * that's too narrow, over the whole clip. */
+    if (row->kind != ROW_LINKED) {
+        long e1 = body_x1(ld, clip, x1);
+        struct Rectangle own = box;
+
+        if (e1 - b0 >= NAME_MIN_PX) {
+            own.MaxX = left + (e1 < w ? e1 : w - 1);
+            draw_name(d, row, &own, b0, text, src);
+        } else {
+            draw_name(d, row, &box, x0, text, src);
+        }
+    }
 
     if (clip == ld->selected) {
         /* A white frame, and grips at the ends to show they can be
@@ -432,17 +454,19 @@ static void line_in_box(struct RastPort *rp, const struct Rectangle *box,
     IGraphics->Draw(rp, left + cb, ya + (yb - ya) * (cb - xa) / (xb - xa));
 }
 
-/* A crossfade: the overlap of a clip and the one before it, marked with
- * an X and a line at each end, and nothing else: the clip underneath shows
- * through. A few lines, so it's quick on any screen. */
+/* A crossfade: the overlap of a clip and the one before it. A line runs
+ * from the top where the later clip starts to the bottom where the
+ * earlier one ends; above it is the later clip's colour, growing as it
+ * fades in, and below it the earlier one's, as it fades out. Filled a
+ * pixel row at a time: a few fills, quick on any screen. */
 static void draw_crossfade(const struct LanesData *ld, struct trackDraw *d,
                            const Row *row, int clip)
 {
     struct RastPort *rp = d->trd_RPort;
     long left = d->trd_Box.Left, w = d->trd_Box.Width;
     long top = d->trd_Box.Top + row->y, bottom = top + row->h - 1;
-    long x0, x1, p0, p1;
-    uint32 fa, ea, ta, fb, eb, tb;
+    long x0, x1, p0, p1, y, h = row->h - 1;
+    uint32 fa, ea, ta, fb, eb, tb, edge;
     struct Rectangle box;
 
     if (clip <= 0 || ld->tl->clips[clip - 1].track != row->track)
@@ -454,7 +478,7 @@ static void draw_crossfade(const struct LanesData *ld, struct trackDraw *d,
     clip_span(ld, clip - 1, &p0, &p1);
     if (p1 > x1)
         p1 = x1;
-    if (p1 <= x0 || p1 < 0 || x0 >= w)
+    if (p1 <= x0 || p1 < 0 || x0 >= w || h <= 0)
         return;
     box.MinX = left + (x0 > 0 ? x0 : 0);
     box.MaxX = left + (p1 < w ? p1 : w - 1);
@@ -463,24 +487,22 @@ static void draw_crossfade(const struct LanesData *ld, struct trackDraw *d,
 
     clip_colours(ld, row, clip - 1, &fa, &ea, &ta);
     clip_colours(ld, row, clip, &fb, &eb, &tb);
-    (void)fa; (void)ta; (void)fb;
-    Track_SetRGB(rp, mix_rgb(ea, eb, 1, 2));
+    (void)fa; (void)ta; (void)tb;
+    edge = mix_rgb(ea, eb, 1, 2);
 
-    /* Where it starts and ends, and the X between. */
+    /* The later clip's part: on row y, right of the line. */
+    Track_SetRGB(rp, fb);
+    for (y = 1; y < h; y++) {
+        long xl = x0 + (p1 - x0) * y / h + 1;
+
+        Track_FillClipped(rp, &box, left + xl, top + y, left + p1 - 1,
+                          top + y);
+    }
+    /* The line, and the ends of the overlap. */
+    Track_SetRGB(rp, edge);
+    line_in_box(rp, &box, left, x0, top, p1, bottom);
     Track_FillClipped(rp, &box, left + x0, top, left + x0, bottom);
     Track_FillClipped(rp, &box, left + p1, top, left + p1, bottom);
-    line_in_box(rp, &box, left, x0, top, p1, bottom);
-    line_in_box(rp, &box, left, x0, bottom, p1, top);
-
-    /* The name of the clip fading in, from its start, over the X. */
-    if (row->kind != ROW_LINKED) {
-        struct Rectangle whole;
-
-        whole = box;
-        whole.MaxX = left + (x1 < w ? x1 : w - 1);
-        draw_name(d, row, &whole, x0, tb, &ld->tl->sources[
-                  ld->tl->clips[clip].source]);
-    }
 
     if (clip == ld->selected) {
         Track_SetRGB(rp, COL_SELECTED);

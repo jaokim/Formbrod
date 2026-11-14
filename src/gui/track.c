@@ -483,7 +483,25 @@ static BOOL film_set(struct FilmData *fd, struct TagItem *tags, BOOL init)
     return changed;
 }
 
-/* A colour per source, used by the dummy pictures and the plain blocks. */
+/* Teal first (the first file looks as clips always did), then hues far
+ * apart; grey is left for muted and hidden tracks. */
+static const TrackRamp Ramps[TRACK_NUM_RAMPS] = {
+    { 0x5DCAA5, 0x1D9E75, 0x0F6E56, 0x04342C },     /* teal */
+    { 0xAFA9EC, 0x7F77DD, 0x534AB7, 0x26215C },     /* purple */
+    { 0xEF9F27, 0xBA7517, 0x854F0B, 0x412402 },     /* amber */
+    { 0x85B7EB, 0x378ADD, 0x185FA5, 0x042C53 },     /* blue */
+    { 0xED93B1, 0xD4537E, 0x993556, 0x4B1528 },     /* pink */
+    { 0x97C459, 0x639922, 0x3B6D11, 0x173404 },     /* green */
+    { 0xF0997B, 0xD85A30, 0x993C1D, 0x4A1B0C },     /* coral */
+    { 0xF09595, 0xE24B4A, 0xA32D2D, 0x501313 },     /* red */
+};
+
+const TrackRamp *Track_SourceRamp(int source)
+{
+    return &Ramps[(source < 0 ? 0 : source) % TRACK_NUM_RAMPS];
+}
+
+/* A colour per source, used by the dummy pictures. */
 static const uint32 sky[]    = { 0x378ADD, 0x534AB7, 0x1D9E75,
                                  0xD85A30, 0xD4537E, 0x888780 };
 
@@ -598,7 +616,7 @@ static void film_draw(struct FilmData *fd, struct trackDraw *d)
             continue;
         if (!fd->pictures) {
             /* Plain: the file's colour, and its name where it starts. */
-            Track_SetRGB(rp, sky[req.source % 6]);
+            Track_SetRGB(rp, Track_SourceRamp(req.source)->mid);
             Track_FillClipped(rp, &req.clip, req.clip.MinX, req.clip.MinY,
                          req.clip.MaxX, req.clip.MaxY);
             if (clip != prev_clip && num_names < MAX_NAMES) {
