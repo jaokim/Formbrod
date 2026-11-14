@@ -671,6 +671,65 @@ static void test_play_player(int step_ms)
     be->Dispose(be);
 }
 
+/* Pictures from one file and the sound from another (music on its own
+ * track): the sound must keep up with the pictures. */
+static void test_play_separate_sound(void)
+{
+    static FBTimeline tl;
+    static FBJob job;
+    static FBPlayer pl;
+    static short out[441 * 2];
+    FBBackend *be = FB_CreateLocalBackend();
+    FBFrameSink sink;
+    FBOutput o;
+    char c[FB_PATH_LEN], d[FB_PATH_LEN];
+    long long now = 1000000;
+    long real = 0, turns = 0;
+    int ended = 0, tr;
+
+    printf("play pictures from one file, sound from another\n");
+    in_path(c, "c.mp4");
+    in_path(d, "d.wav");
+    FB_TimelineInit(&tl);
+    FB_TimelineAddSource(&tl, c, 3000, 1, 0);
+    FB_SourceSetVideo(&tl.sources[0], 320, 240, 1, 1, 25, 1);
+    FB_TimelineAddSource(&tl, d, 6000, 0, 1);
+    FB_TimelineAppendToTrack(&tl, 0, 0, 0, 3000);
+    tr = FB_TimelineAddTrack(&tl, FB_TRACK_AUDIO);
+    FB_TimelineAppendToTrack(&tl, tr, 1, 0, 3000);
+    memset(&o, 0, sizeof(o));
+    o.quality = FB_QUALITY_PREVIEW;
+    CHECK(FB_JobBuild(&job, &tl, &o) == FB_JOB_OK);
+    CHECK(job.audio_out[0] != 0);
+    CHECK(FB_PlayerInit(&pl, 1) == 0);
+    sink = FB_PlayerSink(&pl);
+    CHECK(be->Play(be, &job, &sink) == 0);
+    while (!FB_PlayerFinished(&pl, now) && turns < 5000) {
+        if (!ended) {
+            FBProgress p = be->Progress(be);
+
+            if (p.state != FB_RENDER_RUNNING) {
+                CHECK(p.state == FB_RENDER_DONE);
+                FB_PlayerSetEnded(&pl);
+                ended = 1;
+            }
+        }
+        if (!FB_PlayerStarted(&pl) && FB_PlayerReady(&pl))
+            FB_PlayerStart(&pl, now);
+        if (FB_PlayerStarted(&pl)) {
+            FB_PlayerFrame(&pl, now);
+            real += FB_PlayerTakeAudio(&pl, out, 441);
+        }
+        now += 10000;
+        turns++;
+    }
+    printf("  %ld turns: %ld shown, %ld dropped, %ld ms of sound\n", turns,
+           pl.num_shown, pl.num_dropped, real * 1000 / FB_PLAY_RATE);
+    CHECK(real * 1000 / FB_PLAY_RATE > 2900);
+    FB_PlayerFree(&pl);
+    be->Dispose(be);
+}
+
 int main(int argc, char **argv)
 {
     if (argc != 2) {
@@ -694,6 +753,7 @@ int main(int argc, char **argv)
     test_play();
     test_play_player(10);
     test_play_player(100);
+    test_play_separate_sound();
 
     if (failures) {
         printf("%d check(s) failed\n", failures);

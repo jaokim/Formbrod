@@ -18,6 +18,9 @@ gen -f lavfi -i testsrc2=size=640x360:rate=30:duration=4 \
     -c:v mpeg4 -c:a mp2 -shortest "$dir/b.mkv"
 gen -f lavfi -i testsrc=size=320x240:rate=25:duration=3 \
     -c:v mpeg4 "$dir/c.mp4"
+# Music on its own: sound from another file than the pictures.
+gen -f lavfi -i sine=frequency=330:sample_rate=44100:duration=6 \
+    -ac 2 -c:a pcm_s16le "$dir/d.wav"
 
 "$bin" "$dir"
 

@@ -863,9 +863,10 @@ static int give(LocalPriv *p, int kind, AVFrame *f)
     return full;
 }
 
-/* Like drain_sinks, to the sink. Returns 1 when the sink is full for
- * either kind, -1 on failure. A full picture queue doesn't stop the sound
- * already made from going on (and the other way round). */
+/* Like drain_sinks, to the sink. Returns which kinds the sink is full for
+ * (1 << KIND_VIDEO, 1 << KIND_AUDIO), or -1 on failure. A full picture
+ * queue doesn't stop the sound already made from going on (and the other
+ * way round). */
 static int drain_to_sink(LocalPriv *p)
 {
     int k, ret, full = 0;
@@ -875,7 +876,7 @@ static int drain_to_sink(LocalPriv *p)
 
         if (p->held[k]) {
             if (give(p, k, p->held[k])) {
-                full = 1;
+                full |= 1 << k;
                 continue;
             }
             av_frame_free(&p->held[k]);
@@ -895,7 +896,7 @@ static int drain_to_sink(LocalPriv *p)
                 av_frame_unref(p->frame);
                 if (!p->held[k])
                     return fail(p, AVERROR(ENOMEM), "Out of memory");
-                full = 1;
+                full |= 1 << k;
                 break;
             }
             av_frame_unref(p->frame);
@@ -1303,8 +1304,16 @@ static void local_slice(LocalPriv *p)
 
         if (p->playing) {
             ret = drain_to_sink(p);
-            if (ret != 0)
-                return;          /* full (playback catches up) or failed */
+            if (ret < 0)
+                return;
+            /* Both full: playback catches up first. Only the pictures
+             * full: go on reading while the sound wants more, or sound
+             * from a file of its own (music) would fall behind. The
+             * graph asks for what it's waiting for (next_input), so this
+             * reads the sound's file, not more pictures. */
+            if ((ret & (1 << KIND_AUDIO)) ||
+                ((ret & (1 << KIND_VIDEO)) && p->os[KIND_AUDIO].eof))
+                return;
             if (p->os[KIND_VIDEO].eof && p->os[KIND_AUDIO].eof) {
                 release(p, 1);
                 finish(p, FB_RENDER_DONE, "Played");

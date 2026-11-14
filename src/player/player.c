@@ -137,8 +137,9 @@ int FB_PlayerReady(const FBPlayer *pl)
 {
     int video = pl->count >= FB_PLAY_START_FRAMES ||
                 pl->count >= FB_PLAY_FRAMES || pl->ended;
+    /* Sound must be there too: starting on pictures alone would make
+     * sound that comes later count as late, and be dropped. */
     int audio = !pl->has_audio || pl->ended ||
-                pl->count >= FB_PLAY_FRAMES ||
                 pl->audio_count * 1000 / FB_PLAY_RATE >= FB_PLAY_START_MS;
 
     return video && audio;
