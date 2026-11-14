@@ -993,6 +993,21 @@ static int encode(LocalPriv *p, int kind, AVFrame *frame)
     }
 }
 
+/* How long a frame from a sink lasts: one frame period for video, its
+ * samples for audio. 0 if the sink doesn't say. */
+static fb_ms_t frame_length_ms(AVFilterContext *sink, const AVFrame *frame)
+{
+    if (frame->nb_samples > 0 && frame->sample_rate > 0)
+        return av_rescale(frame->nb_samples, 1000, frame->sample_rate);
+    if (frame->nb_samples == 0) {
+        AVRational fr = av_buffersink_get_frame_rate(sink);
+
+        if (fr.num > 0 && fr.den > 0)
+            return av_rescale(fr.den, 1000, fr.num);
+    }
+    return 0;
+}
+
 /* Moves every frame the sinks have ready into the encoders. */
 static int drain_sinks(LocalPriv *p)
 {
@@ -1020,7 +1035,11 @@ static int drain_sinks(LocalPriv *p)
             tb = av_buffersink_get_time_base(os->sink);
             pts = p->frame->pts;
             if (pts != AV_NOPTS_VALUE) {
-                fb_ms_t ms = av_rescale_q(pts, tb, (AVRational){ 1, 1000 });
+                /* Progress counts to where the frame ends, not where it
+                 * starts, or the last frame leaves the bar short of the
+                 * total (9960 of 10000 ms at 25 fps shows 99%). */
+                fb_ms_t ms = av_rescale_q(pts, tb, (AVRational){ 1, 1000 }) +
+                             frame_length_ms(os->sink, p->frame);
 
                 if (ms > p->progress.position)
                     p->progress.position = ms;
@@ -1160,6 +1179,12 @@ static void local_slice(LocalPriv *p)
                 return;
             }
             release(p, 1);
+            /* Done is all of it, whatever the estimate said: the bar
+             * ends full and RENDERSTATUS's numbers agree. */
+            if (p->progress.position > p->progress.total)
+                p->progress.total = p->progress.position;
+            else
+                p->progress.position = p->progress.total;
             finish(p, FB_RENDER_DONE, p->job.output.path);
             return;
         }

@@ -106,6 +106,11 @@ static FBRenderState render(const FBJob *job, int *calls, FBResult *res)
         last = pr.position;
     } while (pr.state == FB_RENDER_RUNNING && *calls < 100000);
     *res = be->Result(be);
+    if (res->state == FB_RENDER_DONE && pr.position != pr.total) {
+        printf("FAIL: done at %lld of %lld ms, not the whole length\n",
+               (long long)pr.position, (long long)pr.total);
+        failures++;
+    }
     printf("  %s: %s after %d calls, %lld/%lld ms\n", job->output.path,
            res->state == FB_RENDER_DONE ? "done" : res->message, *calls,
            (long long)pr.position, (long long)pr.total);

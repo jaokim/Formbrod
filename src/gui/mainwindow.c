@@ -1124,8 +1124,12 @@ void MainWindow_SetProgress(const FBProgress *p)
 {
     int32 level = 0;
 
-    if (p->total > 0)
+    if (p->state == FB_RENDER_DONE)
+        level = 100;
+    else if (p->total > 0)
         level = (int32)(p->position * 100 / p->total);
+    if (level > 100)   /* the length is an estimate */
+        level = 100;
     IIntuition->SetGadgetAttrs(Gad[GID_PROGRESS], Win, NULL,
                                FUELGAUGE_Level, level, TAG_END);
 }
