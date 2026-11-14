@@ -41,6 +41,7 @@
 #include "gui/clipwindow.h"
 #include "gui/mainwindow.h"
 #include "gui/xfadekinds.h"
+#include "gui/winprefs.h"
 
 /* How many parameters of an effect are shown. Modules with more show the
  * first ones (FB_MAX_PARAMS is the most an effect can have). */
@@ -617,6 +618,8 @@ static Object *make_layout(void)
 void ClipWindow_Open(void)
 {
     struct Screen *scr;
+    struct TagItem place[5];
+    BOOL placed;
     int i;
 
     if (Win) {
@@ -648,6 +651,7 @@ void ClipWindow_Open(void)
     scr = IIntuition->LockPubScreen(NULL);
     if (!scr)
         return;
+    placed = WinPrefs_Tags("ClipWindow", scr, place);
     WinObj = IIntuition->NewObject(CLS(K_WINDOW), NULL,
         WA_PubScreen,     scr,
         WA_Title,         FB_Str(MSG_CLIPWIN_TITLE),
@@ -659,9 +663,9 @@ void ClipWindow_Open(void)
         WA_IDCMP,         IDCMP_GADGETUP | IDCMP_CLOSEWINDOW |
                           IDCMP_VANILLAKEY,
         WA_PointerType,   Working ? FB_WORKING_POINTER : POINTERTYPE_NORMAL,
-        WINDOW_Position,  WPOS_CENTERMOUSE,
+        placed ? TAG_IGNORE : WINDOW_Position, WPOS_CENTERMOUSE,
         WINDOW_Layout,    make_layout(),
-        TAG_END);
+        TAG_MORE,         place);
     if (WinObj)
         Win = (struct Window *)IIntuition->IDoMethod(WinObj, WM_OPEN, NULL);
     IIntuition->UnlockPubScreen(NULL, scr);
@@ -696,6 +700,7 @@ uint32 ClipWindow_SigMask(void)
 static void close_window(void)
 {
     if (WinObj) {
+        WinPrefs_Save("ClipWindow", Win);
         IIntuition->DisposeObject(WinObj);
         WinObj = NULL;
         Win = NULL;

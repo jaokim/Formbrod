@@ -33,6 +33,22 @@ typedef struct FBResult {
     char          message[256];   /* error text or output path */
 } FBResult;
 
+/* Playing instead of writing a file (FBBackend.Play): the frames the job
+ * makes are handed to a sink as they come, picture as ARGB (8 bits each,
+ * in that byte order) and sound as signed 16-bit stereo at FB_PLAY_RATE.
+ * Times are the frame's place in the job's result, in ms. A callback
+ * returns 0 when it took the frame and 1 when it's full: the backend then
+ * keeps that frame, stops its slice, and offers it again next time. So
+ * playback paces the work. */
+#define FB_PLAY_RATE 44100
+
+typedef struct FBFrameSink {
+    int  (*Video)(void *ud, const unsigned char *argb, int width,
+                  int height, int stride, fb_ms_t pts);
+    int  (*Audio)(void *ud, const short *samples, int frames, fb_ms_t pts);
+    void *ud;
+} FBFrameSink;
+
 typedef struct FBBackend FBBackend;
 
 struct FBBackend {
@@ -44,16 +60,27 @@ struct FBBackend {
     void       (*Cancel)(FBBackend *be);
     FBResult   (*Result)(FBBackend *be);
     void       (*Dispose)(FBBackend *be);
+    /* Like Submit, but to a sink (see FBFrameSink); the job's output path
+     * and codecs are not used. NULL where a backend can't play (a remote
+     * one). Progress, Cancel and Result work as for Submit. */
+    int        (*Play)(FBBackend *be, const FBJob *job,
+                       const FBFrameSink *sink);
 
     void       *priv;
 };
 
 FBBackend *FB_CreateLocalBackend(void);
 
+/* A clock in microseconds for playback timing; only differences count. */
+long long FB_BackendClockUs(void);
+
 /* Logs the libav versions and, if the log (formbrod/log.h) is open, sends
- * ffmpeg's own messages there instead of to the shell. Stop puts them
- * back. Call after FB_LogOpen() and before FB_LogClose(). */
+ * ffmpeg's own messages there. Stop makes them quiet again (they never go
+ * to the shell). Call after FB_LogOpen() and before FB_LogClose(). */
 void FB_BackendLogStart(void);
 void FB_BackendLogStop(void);
+/* Keeps ffmpeg's messages out of the shell while there is no log: they
+ * are only of use in the log file. Call once at start. */
+void FB_BackendQuiet(void);
 
 #endif

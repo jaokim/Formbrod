@@ -25,6 +25,11 @@
  *   CACHE ON/S,OFF/S,WIDTH/N,AUTO/S     preview copies: turn them on or
  *                                       off, set their width (or AUTO);
  *                                       returns "ON|OFF <width> <waiting>"
+ *   PLAY AT/N,STOP/S                    play in the preview window from AT
+ *                                       ms (default: 0) to the end, or stop
+ *   PREVIEW AT/N,STOP/S                 preview from AT ms (default: 0)
+ *                                       in 10 s windows until stopped;
+ *                                       returns the playlist's path
  *   TRACKS                              number of tracks
  *   REMOVE CLIP/N/A
  *   EFFECT CLIP/N/A,MODULE/A            add an effect, returns its index
@@ -184,6 +189,38 @@ static void cmd_tracks(struct ARexxCmd *cmd, struct RexxMsg *rm)
 {
     (void)rm;
     snprintf(result, sizeof(result), "%d", App.timeline.num_tracks);
+    set_result(cmd, 0);
+}
+
+static void cmd_play(struct ARexxCmd *cmd, struct RexxMsg *rm)
+{
+    (void)rm;
+    result[0] = '\0';
+    if (cmd->ac_ArgList[1]) {
+        App_PlayStop();
+        set_result(cmd, 0);
+        return;
+    }
+    set_result(cmd, App_PlayStart(cmd->ac_ArgList[0]
+                                  ? *(int32 *)cmd->ac_ArgList[0] : 0)
+                    ? RC_ERROR : 0);
+}
+
+static void cmd_preview(struct ARexxCmd *cmd, struct RexxMsg *rm)
+{
+    (void)rm;
+    result[0] = '\0';
+    if (cmd->ac_ArgList[1]) {
+        App_PreviewStop();
+        set_result(cmd, 0);
+        return;
+    }
+    if (App_PreviewStart(cmd->ac_ArgList[0] ? *(int32 *)cmd->ac_ArgList[0]
+                                            : 0) != 0) {
+        set_result(cmd, RC_ERROR);
+        return;
+    }
+    snprintf(result, sizeof(result), "%s", App_PreviewPlaylist());
     set_result(cmd, 0);
 }
 
@@ -415,6 +452,8 @@ static struct ARexxCmd commands[] = {
     { "TRACKS",       18, cmd_tracks,       NULL,                0, NULL, 0, 0, NULL },
     { "TRIM",         19, cmd_trim,         "CLIP/N/A,IN/N,OUT/N", 0, NULL, 0, 0, NULL },
     { "MOVE",         20, cmd_move,         "CLIP/N/A,AT/N/A,TRACK/N", 0, NULL, 0, 0, NULL },
+    { "PLAY",         23, cmd_play,         "AT/N,STOP/S",       0, NULL, 0, 0, NULL },
+    { "PREVIEW",      22, cmd_preview,      "AT/N,STOP/S",       0, NULL, 0, 0, NULL },
     { "CACHE",        21, cmd_cache,        "ON/S,OFF/S,WIDTH/N,AUTO/S", 0, NULL, 0, 0, NULL },
     { "CROSSFADE",    22, cmd_crossfade,    "CLIP/N/A,LENGTH/N/A,KIND/K", 0, NULL, 0, 0, NULL },
     { "REMOVEEFFECT", 23, cmd_removeeffect, "CLIP/N/A,EFFECT/N/A", 0, NULL, 0, 0, NULL },

@@ -59,6 +59,8 @@ SRC = src/main.c \
       src/gui/track.c \
       src/gui/lanes.c \
       src/gui/clipwindow.c \
+      src/gui/playwindow.c \
+      src/gui/winprefs.c \
       src/locale/catalog.c \
       src/arexx/arexx.c \
       src/prefs/prefs.c \
@@ -68,6 +70,8 @@ SRC = src/main.c \
       src/log/log.c \
       src/job/job.c \
       src/cache/cache.c \
+      src/player/player.c \
+      src/player/audio.c \
       src/job/module.c \
       src/backend/local_backend.c \
       src/backend/media.c \

@@ -46,6 +46,7 @@ Early skeleton. Working so far:
       to a new one
 - [x] Preview copies (proxies): each video gets a small MJPEG copy in
       the background, once per file, and previews are rendered from them
+- [x] Playing from the playhead in a preview window, with sound (AHI)
 - [x] Crossfades between clips on a track: the clips overlap, drawn with
       an X over them; picture with ffmpeg's `xfade` (fade, wipes, slides, circle...),
       sound with `acrossfade`. Not yet tried on AmigaOS
@@ -218,6 +219,8 @@ The port is called `FORMBROD`.
 | `TRIM` | `CLIP/N/A,IN/N,OUT/N` (ms in the clip's file; left out = unchanged) | |
 | `MOVE` | `CLIP/N/A,AT/N/A,TRACK/N`: without `TRACK`, start the clip at `AT` ms (the clips after it move along); with `TRACK`, move it there like a drag: at `AT` if there's room, else in between that track's clips (`TRACK` = the number of tracks makes a new one) | the clip's new number, with `TRACK` |
 | `CROSSFADE` | `CLIP/N/A,LENGTH/N/A,KIND/K`: crossfade `LENGTH` ms from the clip before it on its track (0 = a plain cut); a gap between them closes first, then the clips overlap, so it and the ones after it move earlier. `KIND` is an ffmpeg `xfade` transition (`fade`, `fadeblack`, `wipeleft`, `slideleft`, `circleopen`, ...) | the length set (shortened if it didn't fit) |
+| `PLAY` | `AT/N,STOP/S`: play in the preview window from `AT` ms to the end, or stop | |
+| `PREVIEW` | `AT/N,STOP/S`: preview from `AT` ms in 10 s windows until stopped | the playlist's path |
 | `CACHE` | `ON/S,OFF/S,WIDTH/N,AUTO/S` (preview copies) | `ON\|OFF <width> <waiting>` |
 | `REMOVE` | `CLIP/N/A` | |
 | `EFFECT` | `CLIP/N/A,MODULE/A` | effect index |
@@ -331,10 +334,43 @@ show plain blocks with file names and decode nothing, for slower Amigas;
 and for the log file `Log`, `LogFile` and `LogLevel` (see below). Without
 application.library 53 the drawers are only remembered until Formbrod quits.
 
+Sound for the preview goes through AHI unit `AHIUnit` (default 0).
+
 Preview copies have three settings: `MakeProxies` (*Settings → Make
 preview copies*, `1` or `0`), `ProxyWidth` (*Settings → Preview copy
 size*: `auto` or a width in pixels) and `CacheDir` (default
 `PROGDIR:Cache`; there is no menu item for it yet).
+
+## Previews
+
+*Preview* (or Space) plays the edit from the playhead in a small preview
+window, with sound, until you press it again or the edit ends. Nothing is
+written to disk: the pictures go straight to the window and the sound to
+AHI. If the machine can't keep up, pictures are skipped so it stays in
+time with the sound. The playhead follows along. Close the window, or
+press Space or Esc in it, to stop.
+
+Only the part being played is read: each file jumps straight to the first
+frame used (to the keyframe before it). With preview copies that jump is
+instant, and playing is cheaper too.
+
+The preview window can be made any size: the picture is scaled to fit,
+keeping its shape, by the graphics card where it can (compositing),
+else in software, else it is shown at its own size.
+
+Sound goes through AHI, on unit 0 unless `AHIUnit` in the settings says
+another. If AHI can't be opened the preview plays without sound, the
+status line says so, and the log says why.
+
+Every window (the main window, the clip window and the preview window)
+opens where it was last time, at the same size (settings `MainWindow`,
+`ClipWindow`, `PreviewWindow`).
+
+ARexx `PREVIEW` still makes the older file preview: 10-second pieces in
+`T:formbrod-preview-000.mp4` and on, listed in `T:formbrod-preview.m3u`,
+rendered two pieces ahead of where a player started on the playlist would
+be. Set `PreviewPlayer` in the settings to a command (the playlist's path
+is added after it, e.g. `MPlayer -playlist`) to have that player started.
 
 ## Preview copies
 

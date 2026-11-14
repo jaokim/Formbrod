@@ -378,8 +378,32 @@
 #define MSG_STATUS_BAD_NUMBER_STR        "%s isn't a number"
 #define MSG_LABEL_FILE                   236
 #define MSG_LABEL_FILE_STR               "File"
+#define MSG_BTN_STOP_PREVIEW             237
+#define MSG_BTN_STOP_PREVIEW_STR         "_Stop"
+#define MSG_STATUS_PREVIEW_FROM          238
+#define MSG_STATUS_PREVIEW_FROM_STR      "Rendering a preview from %s..."
+#define MSG_STATUS_PREVIEW_AHEAD         239
+#define MSG_STATUS_PREVIEW_AHEAD_STR     "Preview ready to %s of %s (renders at %s x real time)"
+#define MSG_STATUS_PREVIEW_END           240
+#define MSG_STATUS_PREVIEW_END_STR       "Preview ready to the end: %s"
+#define MSG_STATUS_PREVIEW_STOPPED       241
+#define MSG_STATUS_PREVIEW_STOPPED_STR   "Preview stopped"
+#define MSG_PLAYWIN_TITLE                242
+#define MSG_PLAYWIN_TITLE_STR            "Preview"
+#define MSG_STATUS_PLAYING               243
+#define MSG_STATUS_PLAYING_STR           "Playing from %s"
+#define MSG_STATUS_PLAY_STOPPED          244
+#define MSG_STATUS_PLAY_STOPPED_STR      "Stopped at %s"
+#define MSG_STATUS_PLAY_END              245
+#define MSG_STATUS_PLAY_END_STR          "Played to the end"
+#define MSG_PLAY_TIME                    246
+#define MSG_PLAY_TIME_STR                "%s of %s"
+#define MSG_STATUS_NO_MEMORY             247
+#define MSG_STATUS_NO_MEMORY_STR         "Not enough memory"
+#define MSG_STATUS_PLAYING_SILENT        248
+#define MSG_STATUS_PLAYING_SILENT_STR    "Playing from %s, without sound (AHI can't be opened)"
 
-#define FB_NUM_STRINGS 183
+#define FB_NUM_STRINGS 195
 
 #ifdef FB_STRINGS_ARRAY
 static const struct FBBuiltinString {
@@ -569,6 +593,18 @@ static const struct FBBuiltinString {
     { MSG_MENU_CLIP_SETTINGS, MSG_MENU_CLIP_SETTINGS_STR },
     { MSG_STATUS_BAD_NUMBER, MSG_STATUS_BAD_NUMBER_STR },
     { MSG_LABEL_FILE, MSG_LABEL_FILE_STR },
+    { MSG_BTN_STOP_PREVIEW, MSG_BTN_STOP_PREVIEW_STR },
+    { MSG_STATUS_PREVIEW_FROM, MSG_STATUS_PREVIEW_FROM_STR },
+    { MSG_STATUS_PREVIEW_AHEAD, MSG_STATUS_PREVIEW_AHEAD_STR },
+    { MSG_STATUS_PREVIEW_END, MSG_STATUS_PREVIEW_END_STR },
+    { MSG_STATUS_PREVIEW_STOPPED, MSG_STATUS_PREVIEW_STOPPED_STR },
+    { MSG_PLAYWIN_TITLE, MSG_PLAYWIN_TITLE_STR },
+    { MSG_STATUS_PLAYING, MSG_STATUS_PLAYING_STR },
+    { MSG_STATUS_PLAY_STOPPED, MSG_STATUS_PLAY_STOPPED_STR },
+    { MSG_STATUS_PLAY_END, MSG_STATUS_PLAY_END_STR },
+    { MSG_PLAY_TIME, MSG_PLAY_TIME_STR },
+    { MSG_STATUS_NO_MEMORY, MSG_STATUS_NO_MEMORY_STR },
+    { MSG_STATUS_PLAYING_SILENT, MSG_STATUS_PLAYING_SILENT_STR },
 };
 #endif
 

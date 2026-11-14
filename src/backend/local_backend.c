@@ -48,6 +48,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include "formbrod/backend.h"
 #include "formbrod/log.h"
 
@@ -76,6 +77,7 @@
  * where one packet takes long (a 720p frame under emulation). At most
  * MAX_SLICE_PACKETS, so a fast machine still updates its progress. */
 #define SLICE_US          30000
+#define PLAY_SLICE_US     8000  /* shorter while playing: frames are due */
 #define MAX_SLICE_PACKETS 64
 #define MAX_PAD_USES      32    /* buffer sources fed by one stream */
 
@@ -110,6 +112,8 @@ typedef struct LocalPriv {
     FBJob      job;
     FBProgress progress;
     FBResult   result;
+    int         playing;          /* to a sink, not a file (Play) */
+    FBFrameSink sink;
 #ifdef HAVE_LIBAV
     Input            in[FB_MAX_SOURCES];
     AVFilterGraph   *graph;
@@ -118,6 +122,7 @@ typedef struct LocalPriv {
     int              file_opened;    /* the output file exists on disk */
     AVPacket        *pkt;
     AVFrame         *frame;
+    AVFrame         *held[NUM_KINDS]; /* refused by a full sink */
 #endif
 } LocalPriv;
 
@@ -174,6 +179,8 @@ static void release(LocalPriv *p, int keep_output)
     p->file_opened = 0;
     av_packet_free(&p->pkt);
     av_frame_free(&p->frame);
+    for (k = 0; k < NUM_KINDS; k++)
+        av_frame_free(&p->held[k]);
     memset(p->in, 0, sizeof(p->in));
     memset(p->os, 0, sizeof(p->os));
 }
@@ -414,6 +421,23 @@ static int open_inputs(LocalPriv *p)
         ret = avformat_find_stream_info(in->fmt, NULL);
         if (ret < 0)
             return fail(p, ret, "Can't read %s", p->job.inputs[i]);
+        if (p->job.seek[i] > 0) {
+            /* Jump to the keyframe at or before the first frame used;
+             * trim drops what's before it. Times are counted from the
+             * file's start, as everywhere else here. */
+            int64_t ts = (int64_t)p->job.seek[i] * 1000;
+
+            if (in->fmt->start_time != AV_NOPTS_VALUE)
+                ts += in->fmt->start_time;
+            ret = avformat_seek_file(in->fmt, -1, INT64_MIN, ts, ts, 0);
+            if (ret < 0)
+                FB_Log(FB_LOG_WARNING, "render",
+                       "Input %d: can't jump to %lld ms, reading from the "
+                       "start", i, (long long)p->job.seek[i]);
+            else
+                FB_Log(FB_LOG_INFO, "render", "Input %d: jumped to %lld ms",
+                       i, (long long)p->job.seek[i]);
+        }
     }
     return 0;
 }
@@ -602,21 +626,13 @@ static int encoder_tail(LocalPriv *p, int kind, const AVCodec *codec,
         if (!ok)
             pf = fmts[0];
         /* JPEG wants full-range colour (0-255, not video's 16-235), and
-         * the MJPEG encoder refuses ordinary yuv420p. Older ffmpeg has
-         * yuvj420p for that, and converting to it converts the range;
-         * where it's gone, convert the range with scale and tell the
-         * encoder (needs_full_range(), open_encoder()). */
-        if (needs_full_range(codec)) {
-            int j = 0;
-
-            for (i = 0; fmts && fmts[i] != AV_PIX_FMT_NONE; i++)
-                if (fmts[i] == AV_PIX_FMT_YUVJ420P)
-                    j = 1;
-            if (j)
-                pf = AV_PIX_FMT_YUVJ420P;
-            else
-                strcpy(range, "scale=out_range=full,");
-        }
+         * the MJPEG encoder refuses ordinary yuv420p unless it's told the
+         * colour is full range. So the range is converted with scale and
+         * the encoder told (open_encoder()); yuv420p marked full range is
+         * accepted from ffmpeg 4.4 on. (yuvj420p would do it too, but
+         * swscale warns that it's deprecated on every use.) */
+        if (needs_full_range(codec))
+            strcpy(range, "scale=out_range=full,");
         /* FB_JobBuild() already scales; this is for hand-written jobs. */
         if (p->job.output.width > 0)
             snprintf(scale, sizeof(scale), "scale=%d:%d,",
@@ -772,11 +788,196 @@ static int open_encoder(LocalPriv *p, int kind, const AVCodec *codec,
     return 0;
 }
 
+/* ---- Playing to a sink ---------------------------------------------------- */
+
+static int connect_outputs(LocalPriv *p, AVFilterInOut *ins,
+                           AVFilterInOut *outs, int kinds);
+
+/* The graph for playing: the job's graph with tails giving ARGB pictures
+ * and 16-bit stereo sound at FB_PLAY_RATE, no encoders, no file. */
+static int play_setup(LocalPriv *p)
+{
+    const FBJob *job = &p->job;
+    AVFilterInOut *ins = NULL, *outs = NULL;
+    int kinds = job->audio_out[0] ? 2 : 1;
+    char *graph_text;
+    size_t glen = strlen(job->filtergraph) + 256;
+    int k, ret;
+
+    graph_text = av_malloc(glen);
+    if (!graph_text)
+        return fail(p, AVERROR(ENOMEM), "Out of memory");
+    snprintf(graph_text, glen, "%s;[%s]format=pix_fmts=argb[_fb_v]",
+             job->filtergraph, job->video_out);
+    if (kinds > 1) {
+        size_t n = strlen(graph_text);
+
+        snprintf(graph_text + n, glen - n,
+                 ";[%s]aformat=sample_fmts=s16:sample_rates=%d:"
+                 "channel_layouts=stereo[_fb_a]", job->audio_out,
+                 FB_PLAY_RATE);
+    }
+    p->graph = avfilter_graph_alloc();
+    if (!p->graph) {
+        av_free(graph_text);
+        return fail(p, AVERROR(ENOMEM), "Out of memory");
+    }
+    p->graph->nb_threads = 1;
+    ret = avfilter_graph_parse2(p->graph, graph_text, &ins, &outs);
+    av_free(graph_text);
+    if (ret < 0)
+        return fail(p, ret, "Bad filtergraph");
+    ret = connect_outputs(p, ins, outs, kinds);
+    avfilter_inout_free(&ins);
+    avfilter_inout_free(&outs);
+    if (ret < 0)
+        return -1;
+    ret = avfilter_graph_config(p->graph, NULL);
+    if (ret < 0)
+        return fail(p, ret, "Can't set up the filtergraph");
+    for (k = kinds; k < NUM_KINDS; k++)
+        p->os[k].eof = 1;               /* no sound */
+    for (k = 0; k < job->num_inputs; k++)
+        if (!p->in[k].st[KIND_VIDEO].dec && !p->in[k].st[KIND_AUDIO].dec)
+            p->in[k].eof = 1;
+    p->progress.total = FB_JobEstimateLength(job);
+    return 0;
+}
+
+/* Offers a frame to the sink: 0 taken, 1 full. */
+static int give(LocalPriv *p, int kind, AVFrame *f)
+{
+    AVRational tb = av_buffersink_get_time_base(p->os[kind].sink);
+    fb_ms_t ms = f->pts == AV_NOPTS_VALUE ? p->progress.position :
+                 av_rescale_q(f->pts, tb, (AVRational){ 1, 1000 });
+    int full;
+
+    if (kind == KIND_VIDEO)
+        full = p->sink.Video(p->sink.ud, f->data[0], f->width, f->height,
+                             f->linesize[0], ms);
+    else
+        full = p->sink.Audio(p->sink.ud, (const short *)f->data[0],
+                             f->nb_samples, ms);
+    if (!full && ms > p->progress.position)
+        p->progress.position = ms;
+    return full;
+}
+
+/* Like drain_sinks, to the sink. Returns which kinds the sink is full for
+ * (1 << KIND_VIDEO, 1 << KIND_AUDIO), or -1 on failure. A full picture
+ * queue doesn't stop the sound already made from going on (and the other
+ * way round). */
+static int drain_to_sink(LocalPriv *p)
+{
+    int k, ret, full = 0;
+
+    for (k = 0; k < NUM_KINDS; k++) {
+        OutStream *os = &p->os[k];
+
+        if (p->held[k]) {
+            if (give(p, k, p->held[k])) {
+                full |= 1 << k;
+                continue;
+            }
+            av_frame_free(&p->held[k]);
+        }
+        while (!os->eof) {
+            ret = av_buffersink_get_frame(os->sink, p->frame);
+            if (ret == AVERROR(EAGAIN))
+                break;
+            if (ret == AVERROR_EOF) {
+                os->eof = 1;
+                break;
+            }
+            if (ret < 0)
+                return fail(p, ret, "Filtergraph error");
+            if (give(p, k, p->frame)) {
+                p->held[k] = av_frame_clone(p->frame);
+                av_frame_unref(p->frame);
+                if (!p->held[k])
+                    return fail(p, AVERROR(ENOMEM), "Out of memory");
+                full |= 1 << k;
+                break;
+            }
+            av_frame_unref(p->frame);
+        }
+    }
+    return full;
+}
+
+/* Decoders and sources for the graph's inputs, sinks for its outputs
+ * (our tails [_fb_v] and [_fb_a]; anything else is discarded). */
+static int connect_outputs(LocalPriv *p, AVFilterInOut *ins,
+                           AVFilterInOut *outs, int kinds)
+{
+    const FBJob *job = &p->job;
+    AVFilterInOut *io;
+    int k, ret;
+
+    /* Open input pads: one decoder per stream, one source per use. */
+    for (io = ins; io; io = io->next) {
+        int kind, nth;
+        int input = io->name ? parse_pad(io->name, &kind, &nth) : -1;
+
+        if (input < 0 || input >= job->num_inputs) {
+            ret = fail(p, 0, "Unknown filtergraph input [%s]",
+                       io->name ? io->name : "");
+            return ret;
+        }
+        if (open_decoder(p, input, kind, nth) < 0 ||
+            add_source(p, input, kind, io) < 0)
+            return -1;
+    }
+
+    /* Output pads: our two tails get sinks, anything else is discarded. */
+    for (io = outs; io; io = io->next) {
+        int kind = -1;
+        AVFilterContext *sink;
+        const char *fname;
+        enum AVMediaType type = avfilter_pad_get_type(
+            io->filter_ctx->output_pads, io->pad_idx);
+
+        if (io->name && strcmp(io->name, "_fb_v") == 0)
+            kind = KIND_VIDEO;
+        else if (io->name && strcmp(io->name, "_fb_a") == 0)
+            kind = KIND_AUDIO;
+
+        if (type == AVMEDIA_TYPE_VIDEO)
+            fname = kind >= 0 ? "buffersink" : "nullsink";
+        else
+            fname = kind >= 0 ? "abuffersink" : "anullsink";
+        ret = avfilter_graph_create_filter(&sink,
+                  avfilter_get_by_name(fname),
+                  kind == KIND_VIDEO ? "out_video" :
+                  kind == KIND_AUDIO ? "out_audio" : NULL,
+                  NULL, NULL, p->graph);
+        if (ret < 0) {
+            ret = fail(p, ret, "Can't create %s", fname);
+            return ret;
+        }
+        ret = avfilter_link(io->filter_ctx, io->pad_idx, sink, 0);
+        if (ret < 0) {
+            ret = fail(p, ret, "Can't connect [%s]", io->name ? io->name : "");
+            return ret;
+        }
+        if (kind >= 0)
+            p->os[kind].sink = sink;
+    }
+    for (k = 0; k < kinds; k++) {
+        if (!p->os[k].sink) {
+            ret = fail(p, 0, "The filtergraph has no [%s] output",
+                       k == KIND_VIDEO ? job->video_out : job->audio_out);
+            return ret;
+        }
+    }
+    return 0;
+}
+
 static int local_setup(LocalPriv *p)
 {
     const FBJob *job = &p->job;
     const AVCodec *codec[NUM_KINDS] = { NULL, NULL };
-    AVFilterInOut *ins = NULL, *outs = NULL, *io;
+    AVFilterInOut *ins = NULL, *outs = NULL;
     char *graph_text;
     size_t glen;
     int kinds = job->audio_out[0] ? 2 : 1;
@@ -784,7 +985,7 @@ static int local_setup(LocalPriv *p)
 
     if (job->num_inputs <= 0 || !job->filtergraph[0] || !job->video_out[0])
         return fail(p, 0, "The job is empty");
-    if (!job->output.path[0])
+    if (!job->output.path[0] && !p->playing)
         return fail(p, 0, "The job has no output file");
 
     p->pkt = av_packet_alloc();
@@ -792,9 +993,12 @@ static int local_setup(LocalPriv *p)
     if (!p->pkt || !p->frame)
         return fail(p, AVERROR(ENOMEM), "Out of memory");
 
-    FB_Log(FB_LOG_INFO, "render", "Rendering %s", job->output.path);
+    FB_Log(FB_LOG_INFO, "render", "%s %s", p->playing ? "Playing" :
+           "Rendering", p->playing ? "to the preview" : job->output.path);
     if (open_inputs(p) < 0)
         return -1;
+    if (p->playing)
+        return play_setup(p);
 
     /* Output context first: the encoders decide the conversion filters. */
     ret = avformat_alloc_output_context2(&p->out, NULL, NULL,
@@ -853,63 +1057,9 @@ static int local_setup(LocalPriv *p)
     if (ret < 0)
         return fail(p, ret, "Bad filtergraph");
 
-    /* Open input pads: one decoder per stream, one source per use. */
-    for (io = ins; io; io = io->next) {
-        int kind, nth;
-        int input = io->name ? parse_pad(io->name, &kind, &nth) : -1;
-
-        if (input < 0 || input >= job->num_inputs) {
-            ret = fail(p, 0, "Unknown filtergraph input [%s]",
-                       io->name ? io->name : "");
-            goto out;
-        }
-        if (open_decoder(p, input, kind, nth) < 0 ||
-            add_source(p, input, kind, io) < 0) {
-            ret = -1;
-            goto out;
-        }
-    }
-
-    /* Output pads: our two tails get sinks, anything else is discarded. */
-    for (io = outs; io; io = io->next) {
-        int kind = -1;
-        AVFilterContext *sink;
-        const char *fname;
-        enum AVMediaType type = avfilter_pad_get_type(
-            io->filter_ctx->output_pads, io->pad_idx);
-
-        if (io->name && strcmp(io->name, "_fb_v") == 0)
-            kind = KIND_VIDEO;
-        else if (io->name && strcmp(io->name, "_fb_a") == 0)
-            kind = KIND_AUDIO;
-
-        if (type == AVMEDIA_TYPE_VIDEO)
-            fname = kind >= 0 ? "buffersink" : "nullsink";
-        else
-            fname = kind >= 0 ? "abuffersink" : "anullsink";
-        ret = avfilter_graph_create_filter(&sink,
-                  avfilter_get_by_name(fname),
-                  kind == KIND_VIDEO ? "out_video" :
-                  kind == KIND_AUDIO ? "out_audio" : NULL,
-                  NULL, NULL, p->graph);
-        if (ret < 0) {
-            ret = fail(p, ret, "Can't create %s", fname);
-            goto out;
-        }
-        ret = avfilter_link(io->filter_ctx, io->pad_idx, sink, 0);
-        if (ret < 0) {
-            ret = fail(p, ret, "Can't connect [%s]", io->name ? io->name : "");
-            goto out;
-        }
-        if (kind >= 0)
-            p->os[kind].sink = sink;
-    }
-    for (k = 0; k < kinds; k++) {
-        if (!p->os[k].sink) {
-            ret = fail(p, 0, "The filtergraph has no [%s] output",
-                       k == KIND_VIDEO ? job->video_out : job->audio_out);
-            goto out;
-        }
+    if (connect_outputs(p, ins, outs, kinds) < 0) {
+        ret = -1;
+        goto out;
     }
 
     ret = avfilter_graph_config(p->graph, NULL);
@@ -1144,16 +1294,34 @@ static int read_input(LocalPriv *p, int i)
 
 static void local_slice(LocalPriv *p)
 {
-    int64_t until = av_gettime_relative() + SLICE_US;
+    int64_t until = av_gettime_relative() +
+                    (p->playing ? PLAY_SLICE_US : SLICE_US);
     int n, ret;
 
     for (n = 0; n < MAX_SLICE_PACKETS &&
                 (n == 0 || av_gettime_relative() < until); n++) {
         int i;
 
-        if (drain_sinks(p) < 0)
+        if (p->playing) {
+            ret = drain_to_sink(p);
+            if (ret < 0)
+                return;
+            /* Both full: playback catches up first. Only the pictures
+             * full: go on reading while the sound wants more, or sound
+             * from a file of its own (music) would fall behind. The
+             * graph asks for what it's waiting for (next_input), so this
+             * reads the sound's file, not more pictures. */
+            if ((ret & (1 << KIND_AUDIO)) ||
+                ((ret & (1 << KIND_VIDEO)) && p->os[KIND_AUDIO].eof))
+                return;
+            if (p->os[KIND_VIDEO].eof && p->os[KIND_AUDIO].eof) {
+                release(p, 1);
+                finish(p, FB_RENDER_DONE, "Played");
+                return;
+            }
+        } else if (drain_sinks(p) < 0)
             return;
-        if (p->os[KIND_VIDEO].eof && p->os[KIND_AUDIO].eof) {
+        if (!p->playing && p->os[KIND_VIDEO].eof && p->os[KIND_AUDIO].eof) {
             ret = av_write_trailer(p->out);
             if (ret < 0) {
                 fail(p, ret, "Can't finish %s", p->job.output.path);
@@ -1234,7 +1402,7 @@ void FB_BackendLogStart(void)
     FB_Log(FB_LOG_DEBUG, "app", "ffmpeg configuration: %s",
            avcodec_configuration());
     if (!FB_LogIsOpen())
-        return;     /* leave ffmpeg printing to the shell as before */
+        return;     /* FB_BackendQuiet keeps them out of the shell */
     av_log_set_level(av_level[FB_LogGetLevel()]);
     av_log_set_callback(log_callback);
 }
@@ -1244,7 +1412,16 @@ void FB_BackendLogStop(void)
     if (LinePartLen > 0)
         FB_Log(FB_LOG_INFO, "ffmpeg", "%s", LinePart);
     LinePartLen = 0;
-    av_log_set_callback(av_log_default_callback);
+    /* Without the log, nothing; not back to the shell. */
+    av_log_set_level(AV_LOG_QUIET);
+}
+
+void FB_BackendQuiet(void)
+{
+    if (FB_LogIsOpen())
+        return;     /* FB_BackendLogStart has sent them to the log */
+    av_log_set_level(AV_LOG_QUIET);
+    av_log_set_callback(log_callback);
 }
 
 #else
@@ -1259,16 +1436,23 @@ void FB_BackendLogStop(void)
 {
 }
 
+void FB_BackendQuiet(void)
+{
+}
+
 #endif /* HAVE_LIBAV */
 
 /* ---- Backend interface -------------------------------------------------- */
 
-static int local_submit(FBBackend *be, const FBJob *job)
+static int start(FBBackend *be, const FBJob *job, const FBFrameSink *sink)
 {
     LocalPriv *p = be->priv;
 
     if (p->progress.state == FB_RENDER_RUNNING)
         return -1;
+    p->playing = sink != NULL;
+    if (sink)
+        p->sink = *sink;
     memset(&p->progress, 0, sizeof(p->progress));
     memset(&p->result, 0, sizeof(p->result));
     p->job = *job;
@@ -1283,6 +1467,17 @@ static int local_submit(FBBackend *be, const FBJob *job)
     finish(p, FB_RENDER_FAILED, "Built without libav (HAVE_LIBAV not set)");
     return -1;
 #endif
+}
+
+static int local_submit(FBBackend *be, const FBJob *job)
+{
+    return start(be, job, NULL);
+}
+
+static int local_play(FBBackend *be, const FBJob *job,
+                      const FBFrameSink *sink)
+{
+    return sink ? start(be, job, sink) : -1;
 }
 
 static FBProgress local_progress(FBBackend *be)
@@ -1320,6 +1515,15 @@ static void local_dispose(FBBackend *be)
     free(be);
 }
 
+long long FB_BackendClockUs(void)
+{
+#ifdef HAVE_LIBAV
+    return (long long)av_gettime_relative();
+#else
+    return (long long)clock() * (1000000 / CLOCKS_PER_SEC);
+#endif
+}
+
 FBBackend *FB_CreateLocalBackend(void)
 {
     FBBackend *be = calloc(1, sizeof(*be));
@@ -1336,6 +1540,7 @@ FBBackend *FB_CreateLocalBackend(void)
     be->Cancel   = local_cancel;
     be->Result   = local_result;
     be->Dispose  = local_dispose;
+    be->Play     = local_play;
     be->priv     = p;
     return be;
 }

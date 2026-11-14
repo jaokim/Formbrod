@@ -2,6 +2,8 @@
  * mainwindow.c - the ReAction main window.
  *
  *   [Add file...] [Split] [Set in] [Set out] [Remove] [Fade] [Preview]
+ *   (Preview renders from the playhead in 10 s windows, and turns into
+ *   Stop while it does: App_PreviewStart())
  *   [Export...]
  *   | 0:00     | 0:05     | 0:10     | 0:15          ruler
  *   [#][#][#][#][#][#][#][#|#][#][#][#][#]          film strip
@@ -76,6 +78,8 @@
 #include "gui/track.h"
 #include "gui/xfadekinds.h"
 #include "gui/clipwindow.h"
+#include "gui/playwindow.h"
+#include "gui/winprefs.h"
 #include "prefs/prefs.h"
 #include "version.h"
 
@@ -1085,7 +1089,15 @@ void MainWindow_Refresh(void)
     IIntuition->SetGadgetAttrs(Gad[GID_REMOVE], Win, NULL, GA_Disabled, total <= 0, TAG_END);
     IIntuition->SetGadgetAttrs(Gad[GID_FADE], Win, NULL, GA_Disabled, total <= 0, TAG_END);
     IIntuition->SetGadgetAttrs(Gad[GID_CROSSFADE], Win, NULL, GA_Disabled, total <= 0, TAG_END);
-    IIntuition->SetGadgetAttrs(Gad[GID_PREVIEW], Win, NULL, GA_Disabled, total <= 0, TAG_END);
+    /* While playing, Preview turns into Stop. */
+    {
+        BOOL on = App_Playing() || App_Previewing();
+
+        IIntuition->SetGadgetAttrs(Gad[GID_PREVIEW], Win, NULL,
+            GA_Text,     FB_Str(on ? MSG_BTN_STOP_PREVIEW : MSG_BTN_PREVIEW),
+            GA_Disabled, total <= 0 && !on,
+            TAG_END);
+    }
     /* While rendering, Export turns into Cancel. */
     IIntuition->SetGadgetAttrs(Gad[GID_EXPORT], Win, NULL,
         GA_Text,     FB_Str(App.rendering ? MSG_BTN_CANCEL : MSG_BTN_EXPORT),
@@ -1349,7 +1361,13 @@ static void handle_gadget(uint32 id)
             App_SetStatus("%s", FB_Str(MSG_STATUS_SELECT_CLIP));
         break;
     case GID_PREVIEW:
-        App_Export("T:formbrod-preview.mp4", TRUE);
+        /* Plays from the playhead in the preview window, on until
+         * stopped; pressed again (or Space), stops. */
+        if (App_Playing() || App_Previewing()) {
+            App_PlayStop();
+            App_PreviewStop();
+        } else
+            App_PlayStart(FB_MS(TB.playhead));
         break;
     case GID_EXPORT:
         if (App.rendering)
@@ -1457,6 +1475,8 @@ int MainWindow_Open(void)
 {
     Object *buttons, *timeline, *viewrow, *cliprow, *root;
     struct Screen *scr;
+    struct TagItem place[5];
+    BOOL placed;
     int i;
 
     for (i = 0; i < C_COUNT; i++) {
@@ -1624,6 +1644,7 @@ int MainWindow_Open(void)
         return -1;
     if (!make_menus(scr))
         free_menus();
+    placed = WinPrefs_Tags("MainWindow", scr, place);
 
     WinObj = IIntuition->NewObject(CLS(C_WINDOW), NULL,
         WA_PubScreen,       scr,
@@ -1633,8 +1654,9 @@ int MainWindow_Open(void)
         WA_DragBar,         TRUE,
         WA_CloseGadget,     TRUE,
         WA_SizeGadget,      TRUE,
-        WA_InnerWidth,      640,
-        WA_InnerHeight,     420,
+        /* Where it was last time (winprefs.h), else centred. */
+        placed ? TAG_IGNORE : WA_InnerWidth,  640,
+        placed ? TAG_IGNORE : WA_InnerHeight, 420,
         WA_IDCMP,           IDCMP_GADGETUP | IDCMP_CLOSEWINDOW |
                             IDCMP_IDCMPUPDATE | IDCMP_NEWSIZE |
                             IDCMP_GADGETHELP | IDCMP_MENUPICK |
@@ -1644,12 +1666,12 @@ int MainWindow_Open(void)
         WINDOW_HintInfo,    Hints,
         WINDOW_IDCMPHook,   &IdcmpHook,
         WINDOW_IDCMPHookBits, IDCMP_IDCMPUPDATE,
-        WINDOW_Position,    WPOS_CENTERSCREEN,
+        placed ? TAG_IGNORE : WINDOW_Position, WPOS_CENTERSCREEN,
         WINDOW_AppPort,     AppPort,
         WINDOW_AppWindow,   TRUE,
         WINDOW_Layout,      root,
         WINDOW_MenuStrip,   Menus,
-        TAG_END);
+        TAG_MORE,           place);
     if (WinObj)
         Win = (struct Window *)IIntuition->IDoMethod(WinObj, WM_OPEN, NULL);
     IIntuition->UnlockPubScreen(NULL, scr);   /* the open window holds it */
@@ -1667,7 +1689,7 @@ uint32 MainWindow_SigMask(void)
         IIntuition->GetAttr(WINDOW_SigMask, WinObj, &mask);
     if (AppPort)
         mask |= 1UL << AppPort->mp_SigBit;
-    return mask | ClipWindow_SigMask();
+    return mask | ClipWindow_SigMask() | PlayWindow_SigMask();
 }
 
 void MainWindow_Handle(uint32 sigs)
@@ -1678,6 +1700,7 @@ void MainWindow_Handle(uint32 sigs)
     if (AppPort && (sigs & (1UL << AppPort->mp_SigBit)))
         handle_appmessages();
     ClipWindow_Handle(sigs);
+    PlayWindow_Handle(sigs);
 
     while ((result = IIntuition->IDoMethod(WinObj, WM_HANDLEINPUT, &code))
            != WMHI_LASTMSG) {
@@ -1690,8 +1713,12 @@ void MainWindow_Handle(uint32 sigs)
             handle_gadget(result & WMHI_GADGETMASK);
             break;
         case WMHI_VANILLAKEY:
-            /* I and O: Set in and Set out at the playhead. */
+            /* I and O: Set in and Set out at the playhead; Space plays
+             * from it, or stops. */
             switch (result & WMHI_KEYMASK) {
+            case ' ':
+                handle_gadget(GID_PREVIEW);
+                break;
             case 'i': case 'I':
                 handle_gadget(GID_SET_IN);
                 break;
@@ -1711,13 +1738,24 @@ void MainWindow_Handle(uint32 sigs)
     }
 }
 
+void MainWindow_SetPlayhead(fb_ms_t ms)
+{
+    if (!Win)
+        return;
+    Timebase_SetPlayhead(&TB, FB_US(ms));
+    FB_ViewEnsureVisible(&TB.view, TB.playhead);
+    timebase_changed(NULL);
+}
+
 void MainWindow_Close(void)
 {
     int i;
 
+    PlayWindow_Close();
     ClipWindow_Close();
 
     if (WinObj) {
+        WinPrefs_Save("MainWindow", Win);
         IIntuition->DisposeObject(WinObj);   /* disposes all children */
         WinObj = NULL;
         Win = NULL;

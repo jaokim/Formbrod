@@ -553,3 +553,40 @@ MSG_STATUS_BAD_NUMBER
 ;
 MSG_LABEL_FILE
 Fil
+;
+MSG_BTN_STOP_PREVIEW
+_Stoppa
+;
+MSG_STATUS_PREVIEW_FROM
+Gör en förhandsvisning från %s...
+;
+MSG_STATUS_PREVIEW_AHEAD
+Förhandsvisningen är klar till %s av %s (går %s gånger realtid)
+;
+MSG_STATUS_PREVIEW_END
+Förhandsvisningen är klar till slutet: %s
+;
+MSG_STATUS_PREVIEW_STOPPED
+Förhandsvisningen stoppad
+;
+MSG_PLAYWIN_TITLE
+Förhandsvisning
+;
+MSG_STATUS_PLAYING
+Spelar från %s
+;
+MSG_STATUS_PLAY_STOPPED
+Stoppad vid %s
+;
+MSG_STATUS_PLAY_END
+Spelat till slutet
+;
+MSG_PLAY_TIME
+%s av %s
+;
+MSG_STATUS_NO_MEMORY
+Inte tillräckligt med minne
+;
+MSG_STATUS_PLAYING_SILENT
+Spelar från %s, utan ljud (AHI går inte att öppna)
+;

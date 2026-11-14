@@ -11,6 +11,7 @@
 #include "formbrod/log.h"
 #include "formbrod/project.h"
 #include "formbrod/cache.h"
+#include "formbrod/player.h"
 
 static int failures;
 
@@ -862,14 +863,33 @@ static void test_still(void)
 
     CHECK(FB_JobBuild(&job, &tl, &out) == FB_JOB_OK);
     printf("still: %s\n", job.filtergraph);
-    CHECK(strstr(job.filtergraph, "[0:v]loop=loop=-1:size=1:start=0,"
+    /* Fitted and converted once, then repeated (not scaled for every
+     * frame). Here it's the frame's size already. */
+    CHECK(strstr(job.filtergraph, "[0:v]null,setsar=1,format=yuv420p,"
+                                  "loop=loop=-1:size=1:start=0,"
                                   "setpts=N*1/(30*TB),trim=start=0.000:"
-                                  "end=3.000,setpts=PTS-STARTPTS") != NULL);
+                                  "end=3.000,setpts=PTS-STARTPTS,fps=30/1[v0]")
+          != NULL);
     CHECK(strstr(job.filtergraph, "[1:v]trim=start=0.000:end=4.000") != NULL);
     /* The picture has no sound: silence while it's shown. */
     CHECK(strstr(job.filtergraph, "anullsrc=r=48000:cl=stereo,atrim="
                                   "duration=3.000") != NULL);
     CHECK(job.length == 7000);
+
+    /* A picture of another size: scaled before it's repeated, and not
+     * again after. */
+    FB_SourceSetVideo(&tl.sources[pic], 621, 610, 1, 1, 25, 1);
+    CHECK(FB_JobBuild(&job, &tl, &out) == FB_JOB_OK);
+    {
+        const char *loop = strstr(job.filtergraph, "loop=loop=-1:size=1");
+        const char *scale = strstr(job.filtergraph, "[0:v]null,scale=");
+        const char *end = strstr(job.filtergraph, "[v0];");
+
+        const char *again = loop ? strstr(loop, "scale=") : NULL;
+
+        CHECK(scale && loop && end && scale < loop);
+        CHECK(!again || again > end);     /* no scaling after the loop */
+    }
 }
 
 static void test_time_text(void)
@@ -1256,6 +1276,218 @@ static void test_view_room(void)
     CHECK(!FB_ViewEdgeScroll(&v, 0, FB_VIEW_EDGE_PX));   /* at the start */
 }
 
+/* A stretch of the edit for previews from the playhead, and jumps into
+ * inputs instead of decoding up to the first frame used. */
+static void test_window_and_seek(void)
+{
+    static FBTimeline tl, w;
+    static FBJob job, back;
+    static char text[FB_FILTERGRAPH_LEN + 4096];
+    FBOutput out;
+    int k, s, m;
+
+    FB_TimelineInit(&tl);
+    k = FB_TimelineAddSource(&tl, "k.jpg", 0, 1, 0);
+    FB_SourceSetVideo(&tl.sources[k], 800, 600, 1, 1, 0, 0);
+    tl.sources[k].still = 1;
+    s = FB_TimelineAddSource(&tl, "s.mp4", 20000, 1, 1);
+    FB_SourceSetVideo(&tl.sources[s], 640, 360, 1, 1, 25, 1);
+    m = FB_TimelineAddSource(&tl, "m.mpg", 20000, 1, 1);
+    FB_SourceSetVideo(&tl.sources[m], 640, 360, 1, 1, 25, 1);
+    FB_TimelineAppendToTrack(&tl, 0, k, 0, 15600);    /* 0 - 15.6 s */
+    FB_TimelineAppendToTrack(&tl, 1, s, 2000, 11895); /* 0 - 9.895 s */
+    FB_TimelineAppendToTrack(&tl, 2, m, 1000, 7000);  /* 0 - 6 s */
+    FB_TimelineAppendToTrack(&tl, 2, s, 500, 3500);   /* 6 - 9 s */
+
+    /* 4 s to 9 s: the still and the first video cut at both ends, the
+     * second track's two clips cut and kept whole. */
+    CHECK(FB_TimelineWindow(&w, &tl, 4000, 5000) == 4);
+    CHECK(w.clips[0].start == 0 && w.clips[0].in == 4000 &&
+          w.clips[0].out == 9000);
+    CHECK(w.clips[1].start == 0 && w.clips[1].in == 6000 &&
+          w.clips[1].out == 11000);
+    CHECK(w.clips[2].start == 0 && w.clips[2].in == 5000 &&
+          w.clips[2].out == 7000);
+    CHECK(w.clips[3].start == 2000 && w.clips[3].in == 500 &&
+          w.clips[3].out == 3500);
+    CHECK(FB_TimelineDuration(&w) == 5000);
+
+    /* Past every clip but the still; past everything; nothing long. */
+    CHECK(FB_TimelineWindow(&w, &tl, 12000, 10000) == 1);
+    CHECK(FB_TimelineDuration(&w) == 3600);
+    CHECK(FB_TimelineWindow(&w, &tl, 16000, 10000) == 0);
+    CHECK(FB_TimelineWindow(&w, &tl, 0, 0) == 0);
+    /* In place works too. */
+    w = tl;
+    CHECK(FB_TimelineWindow(&w, &w, 9000, 1000) == 2);
+
+    /* Seeks: each input's earliest in point; none for a still. */
+    memset(&out, 0, sizeof(out));
+    strcpy(out.path, "out.mp4");
+    out.quality = FB_QUALITY_PREVIEW;
+    CHECK(FB_TimelineWindow(&w, &tl, 4000, 5000) == 4);
+    CHECK(FB_JobBuild(&job, &w, &out) == FB_JOB_OK);
+    CHECK(job.num_inputs == 3);
+    CHECK(job.seek[0] == 0);       /* k.jpg */
+    CHECK(job.seek[1] == 500);     /* s.mp4: min(6000, 500) */
+    CHECK(job.seek[2] == 5000);    /* m.mpg */
+    CHECK(FB_JobWrite(&job, text, sizeof(text)) > 0);
+    CHECK(strstr(text, "SEEK 1 500\n") && strstr(text, "SEEK 2 5000\n"));
+    CHECK(!strstr(text, "SEEK 0"));
+    CHECK(FB_JobParse(&back, text) == 0);
+    CHECK(back.seek[0] == 0 && back.seek[1] == 500 && back.seek[2] == 5000);
+    CHECK(FB_JobToCommandLine(&job, text, sizeof(text)) > 0);
+    CHECK(strstr(text, "ffmpeg -y -copyts -start_at_zero -i \"k.jpg\" "
+                       "-ss 0.500 -i \"s.mp4\" -ss 5.000 -i \"m.mpg\"") != NULL);
+
+    /* A whole edit from the files' starts: no seeks, same command. */
+    FB_TimelineInit(&w);
+    s = FB_TimelineAddSource(&w, "s.mp4", 20000, 1, 1);
+    FB_TimelineAppendToTrack(&w, 0, s, 0, 3000);
+    CHECK(FB_JobBuild(&job, &w, &out) == FB_JOB_OK);
+    CHECK(FB_JobToCommandLine(&job, text, sizeof(text)) > 0);
+    CHECK(strncmp(text, "ffmpeg -y -i ", 13) == 0);
+}
+
+/* Windows cutting into crossfades. */
+static void test_window_crossfade(void)
+{
+    static FBTimeline tl, w;
+    static FBJob job;
+    FBOutput out;
+    int s;
+
+    FB_TimelineInit(&tl);
+    s = FB_TimelineAddSource(&tl, "s.mp4", 20000, 1, 1);
+    FB_SourceSetVideo(&tl.sources[s], 640, 360, 1, 1, 25, 1);
+    FB_TimelineAppendToTrack(&tl, 0, s, 0, 6000);      /* A: 0 - 6 s */
+    FB_TimelineAppendToTrack(&tl, 0, s, 8000, 14000);  /* B: 6 - 12 s */
+    /* B fades in over A's last 2 s: B now starts at 4 s. */
+    CHECK(FB_TimelineSetCrossfade(&tl, 1, 2000, "wipeleft") == 2000);
+    CHECK(tl.clips[1].start == 4000 && tl.clips[1].xfade == 2000);
+
+    /* Around the whole crossfade: kept as it is. */
+    CHECK(FB_TimelineWindow(&w, &tl, 3000, 5000) == 2);
+    CHECK(w.clips[1].start == 1000 && w.clips[1].xfade == 2000);
+
+    /* From the middle of it: 1 s of overlap is left. */
+    CHECK(FB_TimelineWindow(&w, &tl, 5000, 5000) == 2);
+    CHECK(w.clips[0].start == 0 && w.clips[0].out - w.clips[0].in == 1000);
+    CHECK(w.clips[1].start == 0 && w.clips[1].xfade == 1000);
+
+    /* Ending in the middle of it: 0.5 s of overlap is left. */
+    CHECK(FB_TimelineWindow(&w, &tl, 0, 4500) == 2);
+    CHECK(w.clips[1].start == 4000 && w.clips[1].xfade == 500);
+
+    /* After A: nothing to fade from. */
+    CHECK(FB_TimelineWindow(&w, &tl, 6000, 3000) == 1);
+    CHECK(w.clips[0].xfade == 0);
+
+    /* Every one of them builds. */
+    memset(&out, 0, sizeof(out));
+    strcpy(out.path, "out.mp4");
+    out.quality = FB_QUALITY_PREVIEW;
+    {
+        static const fb_ms_t froms[] = { 0, 3000, 4000, 4500, 5000, 5999,
+                                         6000, 9000 };
+        size_t i;
+
+        for (i = 0; i < sizeof(froms) / sizeof(froms[0]); i++) {
+            CHECK(FB_TimelineWindow(&w, &tl, froms[i], 2500) > 0);
+            CHECK(FB_JobBuild(&job, &w, &out) == FB_JOB_OK);
+            CHECK(job.length == FB_TimelineDuration(&w));
+        }
+    }
+}
+
+/* The preview player's queues and clock. */
+static void test_player(void)
+{
+    static FBPlayer pl;
+    static unsigned char pic[16 * 8 * 4 + 64];
+    static short snd[FB_PLAY_RATE * 2 * 2], out[FB_PLAY_RATE * 2];
+    const FBPlayFrame *f;
+    long long t0 = 5000000;   /* the clock in us */
+    int i;
+
+    for (i = 0; i < (int)sizeof(pic); i++)
+        pic[i] = (unsigned char)i;
+    for (i = 0; i < FB_PLAY_RATE * 2 * 2; i++)
+        snd[i] = 1000;
+
+    /* Pictures only. */
+    CHECK(FB_PlayerInit(&pl, 0) == 0);
+    CHECK(!FB_PlayerReady(&pl));
+    for (i = 0; i < FB_PLAY_FRAMES; i++)
+        CHECK(FB_PlayerPushVideo(&pl, pic, 16, 8, 16 * 4 + 8, i * 40) == 0);
+    CHECK(FB_PlayerPushVideo(&pl, pic, 16, 8, 72, 999) == 1);   /* full */
+    CHECK(FB_PlayerReady(&pl));
+    CHECK(FB_PlayerFrame(&pl, t0) == NULL);                    /* no clock */
+    FB_PlayerStart(&pl, t0);
+    f = FB_PlayerFrame(&pl, t0);
+    CHECK(f && f->pts == 0 && f->width == 16 && f->stride == 64);
+    CHECK(f && f->pixels[64] == pic[72]);   /* row 1, stride removed */
+    CHECK(FB_PlayerFrame(&pl, t0 + 10000) == NULL);    /* same picture */
+    CHECK(FB_PlayerNextDue(&pl, t0 + 10000) == 30);
+    /* 130 ms: 40, 80 and 120 are due; 120 is shown, two dropped. */
+    f = FB_PlayerFrame(&pl, t0 + 130000);
+    CHECK(f && f->pts == 120);
+    CHECK(pl.num_dropped == 2 && pl.num_shown == 2);
+    CHECK(pl.count == FB_PLAY_FRAMES - 4);
+    CHECK(FB_PlayerPushVideo(&pl, pic, 16, 8, 64, 480) == 0);   /* room */
+    CHECK(!FB_PlayerFinished(&pl, t0 + 10000000));
+    FB_PlayerSetEnded(&pl);
+    CHECK(!FB_PlayerFinished(&pl, t0 + 300000));      /* still queued */
+    while (FB_PlayerFrame(&pl, t0 + 10000000))
+        ;
+    CHECK(FB_PlayerFinished(&pl, t0 + 10000000));
+    CHECK(!FB_PlayerFinished(&pl, t0 + 500000));    /* 480 still on show */
+    /* No sound output: sound is taken and thrown away, never full. */
+    for (i = 0; i < 100; i++)
+        CHECK(FB_PlayerPushAudio(&pl, snd, FB_PLAY_RATE, i * 1000) == 0);
+    CHECK(pl.audio_count == 0);
+    FB_PlayerFree(&pl);
+
+    /* Sound: in step with its times. */
+    CHECK(FB_PlayerInit(&pl, 1) == 0);
+    CHECK(FB_PlayerPushVideo(&pl, pic, 16, 8, 64, 0) == 0);
+    CHECK(FB_PlayerPushVideo(&pl, pic, 16, 8, 64, 40) == 0);
+    CHECK(FB_PlayerPushVideo(&pl, pic, 16, 8, 64, 80) == 0);
+    CHECK(!FB_PlayerReady(&pl));                     /* no sound yet */
+    /* 10 ms at 0, then 10 ms at 20 ms: 10 ms of silence between. */
+    CHECK(FB_PlayerPushAudio(&pl, snd, 441, 0) == 0);
+    CHECK(FB_PlayerPushAudio(&pl, snd, 441, 20) == 0);
+    CHECK(pl.audio_count == 3 * 441);
+    /* Overlapping by 5 ms: only the new part is added. */
+    CHECK(FB_PlayerPushAudio(&pl, snd, 441, 25) == 0);
+    CHECK(pl.audio_count == 3 * 441 + 220 || pl.audio_count == 3 * 441 + 221);
+    CHECK(FB_PlayerTakeAudio(&pl, out, 441) == 441);
+    CHECK(out[0] == 1000 && out[881] == 1000);
+    FB_PlayerTakeAudio(&pl, out, 441);               /* the gap: */
+    CHECK(out[0] == 0 && out[881] == 0);              /* silent */
+    CHECK(FB_PlayerTakeAudio(&pl, out, 4410) > 441);  /* the rest, then */
+    CHECK(out[4410 * 2 - 1] == 0);                    /* silence */
+    CHECK(pl.audio_count == 0);
+    /* Sound that comes too late is dropped, not played late. */
+    CHECK(FB_PlayerPushAudio(&pl, snd, 441, 10) == 0);
+    CHECK(pl.audio_count == 0);
+    /* Sound later than where the output is: silence until it. */
+    CHECK(FB_PlayerPushAudio(&pl, snd, 441, 200) == 0);
+    CHECK(pl.audio_start == 200LL * FB_PLAY_RATE / 1000);
+    /* Read so far: 441 * 2 + 4410 = 5292. The next 4410 are silence up
+     * to 8820 (200 ms), then the 441 queued. */
+    CHECK(FB_PlayerTakeAudio(&pl, out, 4410) == 441);
+    CHECK(out[(8820 - 5292 - 1) * 2] == 0 && out[(8820 - 5292) * 2] == 1000);
+    /* Full: two seconds at most. */
+    FB_PlayerFree(&pl);
+    CHECK(FB_PlayerInit(&pl, 1) == 0);
+    CHECK(FB_PlayerPushAudio(&pl, snd, FB_PLAY_RATE, 0) == 0);
+    CHECK(FB_PlayerPushAudio(&pl, snd, FB_PLAY_RATE, 1000) == 0);
+    CHECK(FB_PlayerPushAudio(&pl, snd, 10, 2000) == 1);
+    CHECK(!FB_PlayerReady(&pl));     /* waits for pictures too */
+    FB_PlayerFree(&pl);
+}
+
 /* Three picture tracks: each overlay reads what the one before wrote. */
 static void test_job_three_tracks(void)
 {
@@ -1553,6 +1785,9 @@ int main(void)
     test_job_build_and_roundtrip();
     test_job_tracks();
     test_job_three_tracks();
+    test_window_and_seek();
+    test_window_crossfade();
+    test_player();
     test_still();
     test_job_errors();
     test_fit();

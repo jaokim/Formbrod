@@ -676,3 +676,54 @@ MSG_STATUS_BAD_NUMBER (235//)
 ;
 MSG_LABEL_FILE (236//)
 File
+;
+; The Preview button while a preview is being rendered: stops it.
+MSG_BTN_STOP_PREVIEW (237//)
+_Stop
+;
+; %s is a time in the edit, where the preview starts (the playhead).
+MSG_STATUS_PREVIEW_FROM (238//)
+Rendering a preview from %s...
+;
+; A preview is rendered in short pieces as it plays. %1 is how far it has
+; been rendered, %2 the length of the edit (both times), %3 how many times
+; faster than real time it renders, e.g. "1.6" (below 1 = slower).
+MSG_STATUS_PREVIEW_AHEAD (239//)
+Preview ready to %s of %s (renders at %s x real time)
+;
+; The preview has been rendered to the end of the edit; %s is the
+; playlist to play it with.
+MSG_STATUS_PREVIEW_END (240//)
+Preview ready to the end: %s
+;
+MSG_STATUS_PREVIEW_STOPPED (241//)
+Preview stopped
+;
+; ---- The preview window ---------------------------------------------------
+;
+; Title of the window the edit plays in.
+MSG_PLAYWIN_TITLE (242//)
+Preview
+;
+; %s is a time in the edit, where playing starts (the playhead).
+MSG_STATUS_PLAYING (243//)
+Playing from %s
+;
+; %s is the time in the edit where it was stopped.
+MSG_STATUS_PLAY_STOPPED (244//)
+Stopped at %s
+;
+MSG_STATUS_PLAY_END (245//)
+Played to the end
+;
+; Under the picture: where playback is, and the edit's length.
+MSG_PLAY_TIME (246//)
+%s of %s
+;
+MSG_STATUS_NO_MEMORY (247//)
+Not enough memory
+;
+; Playing, but AHI (the sound system) couldn't be opened; %s is where it
+; starts. The log says why.
+MSG_STATUS_PLAYING_SILENT (248//)
+Playing from %s, without sound (AHI can't be opened)

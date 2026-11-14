@@ -851,3 +851,52 @@ int FB_FitFromName(const char *name)
     }
     return -1;
 }
+
+int FB_TimelineWindow(FBTimeline *dst, const FBTimeline *src, fb_ms_t from,
+                      fb_ms_t len)
+{
+    fb_ms_t to = from + len;
+    int i, n = 0;
+
+    if (dst != src)
+        *dst = *src;
+    for (i = 0; i < dst->num_clips; i++) {
+        FBClip c = dst->clips[i];
+        fb_ms_t a = c.start, b = FB_ClipEnd(&c);
+
+        if (b <= from || a >= to || len <= 0)
+            continue;               /* outside the window */
+        if (a < from) {
+            c.in += from - a;
+            a = from;
+        }
+        if (b > to)
+            b = to;
+        c.out = c.in + (b - a);
+        c.start = a - from;
+        dst->clips[n++] = c;
+    }
+    dst->num_clips = n;
+
+    /* A crossfade is the overlap with the clip before it on its track.
+     * The window can cut into that overlap, or leave the clip with
+     * nothing before it: the crossfade becomes what's left of the
+     * overlap (a shorter one, or none). The array is sorted by track and
+     * time, so the clip before is the previous one on the same track. */
+    for (i = 0; i < n; i++) {
+        FBClip *c = &dst->clips[i];
+        fb_ms_t overlap = 0;
+
+        if (c->xfade <= 0)
+            continue;
+        if (i > 0 && dst->clips[i - 1].track == c->track) {
+            fb_ms_t prev_end = FB_ClipEnd(&dst->clips[i - 1]);
+            fb_ms_t end = FB_ClipEnd(c);
+
+            overlap = (prev_end < end ? prev_end : end) - c->start;
+        }
+        if (overlap < c->xfade)
+            c->xfade = overlap > 0 ? overlap : 0;
+    }
+    return n;
+}
