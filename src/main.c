@@ -92,8 +92,9 @@ int main(int argc, char **argv)
             sigs = IExec->Wait(mask);
         }
 
-        /* The arrow with an hourglass while work goes on behind. */
-        MainWindow_SetWorking(App.rendering || App_CacheBusy());
+        /* The arrow with an hourglass while an export runs. Not for
+         * proxies: they're made quietly whenever the window is idle. */
+        MainWindow_SetWorking(App.rendering);
 
         if (sigs & SIGBREAKF_CTRL_C)
             App.quit = 1;

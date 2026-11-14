@@ -13,8 +13,8 @@
 #define FB_WORKING_POINTER POINTERTYPE_BUSY
 #endif
 
-/* Shows the arrow-with-hourglass pointer over both windows while proxies
- * are made or an export runs (and the normal one again after). */
+/* Shows the arrow-with-hourglass pointer over both windows while an
+ * export runs (and the normal one again after). */
 void MainWindow_SetWorking(BOOL working);
 
 int    MainWindow_Open(void);
