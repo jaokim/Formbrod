@@ -42,14 +42,10 @@ Early skeleton. Working so far:
       (PNG, JPEG...) as clips of any length
 - [x] Track editor under the film strip: clips you select and trim by
       dragging their ends, track names and a Track menu, drops onto tracks
-<<<<<<< HEAD
-- [x] Preview copies (proxies): each video gets a small MJPEG copy in
-      the background, once per file, and previews are rendered from them
-- [ ] Moving clips by dragging them, within a track or to another
-=======
 - [x] Moving clips by dragging them, within a track, to another track or
       to a new one
->>>>>>> origin/tracks
+- [x] Preview copies (proxies): each video gets a small MJPEG copy in
+      the background, once per file, and previews are rendered from them
 - [ ] Real thumbnails, waveforms
 - [ ] Remote rendering on a render server
 
@@ -212,12 +208,8 @@ The port is called `FORMBROD`.
 | `TRACKS` | | number of tracks |
 | `SPLIT` | `AT/N/A` (ms), `TRACK/N` (default: all tracks) | |
 | `TRIM` | `CLIP/N/A,IN/N,OUT/N` (ms in the clip's file; left out = unchanged) | |
-<<<<<<< HEAD
-| `MOVE` | `CLIP/N/A,AT/N/A` (ms in the edit; the clips after it move along) | |
-| `CACHE` | `ON/S,OFF/S,WIDTH/N,AUTO/S` (preview copies) | `ON\|OFF <width> <waiting>` |
-=======
 | `MOVE` | `CLIP/N/A,AT/N/A,TRACK/N`: without `TRACK`, start the clip at `AT` ms (the clips after it move along); with `TRACK`, move it there like a drag: at `AT` if there's room, else in between that track's clips (`TRACK` = the number of tracks makes a new one) | the clip's new number, with `TRACK` |
->>>>>>> origin/tracks
+| `CACHE` | `ON/S,OFF/S,WIDTH/N,AUTO/S` (preview copies) | `ON\|OFF <width> <waiting>` |
 | `REMOVE` | `CLIP/N/A` | |
 | `EFFECT` | `CLIP/N/A,MODULE/A` | effect index |
 | `SETPARAM` | `CLIP/N/A,EFFECT/N/A,NAME/A,VALUE/A` | |
