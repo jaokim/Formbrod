@@ -1290,12 +1290,203 @@ static void test_job_three_tracks(void)
     printf("three tracks: %s\n", job.filtergraph);
 }
 
+/* Three clips of 4 s on one track: 0-4, 4-8, 8-12. */
+static void three_clips(FBTimeline *tl)
+{
+    int a;
+
+    FB_TimelineInit(tl);
+    a = FB_TimelineAddSource(tl, "a.mp4", 20000, 1, 1);
+    FB_SourceSetVideo(&tl->sources[a], 320, 240, 1, 1, 25, 1);
+    FB_TimelineAppendToTrack(tl, 0, a, 0, 4000);
+    FB_TimelineAppendToTrack(tl, 0, a, 4000, 8000);
+    FB_TimelineAppendToTrack(tl, 0, a, 8000, 12000);
+}
+
+static void test_crossfades(void)
+{
+    static FBTimeline tl;
+    int inserted;
+
+    three_clips(&tl);
+    /* The first clip has nothing to fade from. */
+    CHECK(FB_TimelineMaxCrossfade(&tl, 0) == 0);
+    CHECK(FB_TimelineSetCrossfade(&tl, 0, 1000, NULL) == -1);
+    CHECK(FB_TimelineMaxCrossfade(&tl, 1) == 4000);
+
+    /* 1 s into clip 1: it and clip 2 move 1 s earlier. */
+    CHECK(FB_TimelineSetCrossfade(&tl, 1, 1000, NULL) == 1000);
+    CHECK(tl.clips[1].start == 3000 && tl.clips[2].start == 7000);
+    CHECK(FB_TimelineDuration(&tl) == 11000);
+    CHECK(strcmp(FB_ClipCrossfadeKind(&tl.clips[1]), "fade") == 0);
+    /* Clip 1 has 3 s left after its own crossfade. */
+    CHECK(FB_TimelineMaxCrossfade(&tl, 2) == 3000);
+    CHECK(FB_TimelineSetCrossfade(&tl, 2, 9000, "wipeleft") == 3000);
+    CHECK(tl.clips[2].start == 4000);
+    CHECK(strcmp(FB_ClipCrossfadeKind(&tl.clips[2]), "wipeleft") == 0);
+    CHECK(FB_TimelineSetCrossfade(&tl, 2, 500, NULL) == 500);
+    CHECK(tl.clips[2].start == 6500);
+    CHECK(strcmp(tl.clips[2].xfade_kind, "wipeleft") == 0);
+    /* Only names go into the filtergraph. */
+    CHECK(FB_TimelineSetCrossfade(&tl, 2, 500, "fade:x=1") == -1);
+    CHECK(!FB_CrossfadeKindValid("Fade") && FB_CrossfadeKindValid(""));
+
+    /* Removing it puts the clips back. */
+    CHECK(FB_TimelineSetCrossfade(&tl, 2, 0, NULL) == 0);
+    CHECK(tl.clips[2].start == 7000 && tl.clips[2].xfade_kind[0] == '\0');
+
+    /* Trimming the clip before keeps the overlap. */
+    CHECK(FB_TimelineTrimClip(&tl, 0, 0, 3000) == 0);
+    CHECK(tl.clips[1].start == 2000 && tl.clips[1].xfade == 1000);
+    CHECK(tl.clips[2].start == 6000);
+    /* ...and shortens it when it no longer fits. */
+    CHECK(FB_TimelineTrimClip(&tl, 0, 0, 500) == 0);
+    CHECK(tl.clips[1].xfade == 500 && tl.clips[1].start == 0);
+    CHECK(tl.clips[2].start == 4000);
+
+    /* A gap: no crossfade. Typing a Starts later than the cut removes it. */
+    three_clips(&tl);
+    FB_TimelineSetCrossfade(&tl, 1, 1000, NULL);
+    CHECK(FB_TimelineMoveClip(&tl, 1, 5000) == 0);
+    CHECK(tl.clips[1].xfade == 0 && tl.clips[2].start == 9000);
+    CHECK(FB_TimelineMaxCrossfade(&tl, 1) == 0);
+    CHECK(FB_TimelineSetCrossfade(&tl, 1, 1000, NULL) == -1);
+    /* Typing an earlier one makes the crossfade longer; without one it
+     * can't overlap. */
+    CHECK(FB_TimelineMoveClip(&tl, 1, 4000) == 0);
+    CHECK(FB_TimelineMoveClip(&tl, 1, 3000) == -1);
+    FB_TimelineSetCrossfade(&tl, 1, 1000, NULL);
+    CHECK(FB_TimelineEarliestStart(&tl, 1) == 0);
+    CHECK(FB_TimelineMoveClip(&tl, 1, 2000) == 0);
+    CHECK(tl.clips[1].xfade == 2000 && tl.clips[2].start == 6000);
+
+    /* Removing the clip before: the next one simply follows. */
+    three_clips(&tl);
+    FB_TimelineSetCrossfade(&tl, 1, 1000, NULL);
+    FB_TimelineSetCrossfade(&tl, 2, 1000, NULL);    /* 0-4, 3-7, 6-10 */
+    CHECK(FB_TimelineStartWithout(&tl, 2, 1) == 4000);
+    CHECK(FB_TimelineRemoveClip(&tl, 1) == 0);
+    CHECK(tl.num_clips == 2 && tl.clips[1].start == 4000);
+    CHECK(tl.clips[1].xfade == 0);
+    /* Removing the first: the second loses its crossfade, starts at 0. */
+    three_clips(&tl);
+    FB_TimelineSetCrossfade(&tl, 1, 1000, NULL);
+    CHECK(FB_TimelineRemoveClip(&tl, 0) == 0);
+    CHECK(tl.clips[0].start == 0 && tl.clips[0].xfade == 0);
+    CHECK(tl.clips[1].start == 4000);
+    /* Removing one with a crossfade: the next closes up to the cut. */
+    three_clips(&tl);
+    FB_TimelineSetCrossfade(&tl, 1, 1000, NULL);    /* 0-4, 3-7, 7-11 */
+    CHECK(FB_TimelineRemoveClip(&tl, 1) == 0);
+    CHECK(tl.clips[1].start == 4000 && tl.clips[1].xfade == 0);
+
+    /* Splitting: the right half follows with a cut. */
+    three_clips(&tl);
+    FB_TimelineSetCrossfade(&tl, 1, 1000, NULL);
+    CHECK(FB_TimelineSplit(&tl, 0, 5000) == 2);
+    CHECK(tl.clips[1].xfade == 1000 && tl.clips[2].xfade == 0);
+    CHECK(tl.clips[2].start == 5000 && tl.clips[3].start == 7000);
+
+    /* Dropping a clip in at a crossfade: it goes at the cut, and the clip
+     * that faded in follows it with a cut. */
+    three_clips(&tl);
+    FB_TimelineSetCrossfade(&tl, 1, 1000, NULL);    /* 0-4, 3-7, 7-11 */
+    CHECK(FB_TimelineDropPoint(&tl, 0, 2500, 2000, 2, &inserted) == 4000
+          && inserted);
+    CHECK(FB_TimelineMoveClipTo(&tl, 2, 0, 2500) == 1);
+    CHECK(tl.clips[1].start == 4000 && tl.clips[1].xfade == 0);
+    CHECK(tl.clips[2].start == 8000 && tl.clips[2].xfade == 0);
+    CHECK(tl.clips[2].in == 4000);
+}
+
+static void test_job_crossfade(void)
+{
+    static FBTimeline tl;
+    static FBJob job;
+    FBOutput out;
+    int m;
+
+    memset(&out, 0, sizeof(out));
+    strcpy(out.path, "out.mp4");
+    out.quality = FB_QUALITY_FINAL;
+
+    three_clips(&tl);
+    FB_TimelineSetCrossfade(&tl, 1, 1000, NULL);
+    FB_TimelineSetCrossfade(&tl, 2, 500, "wipeleft");
+    CHECK(FB_JobBuild(&job, &tl, &out) == FB_JOB_OK);
+    printf("crossfade: %s\n", job.filtergraph);
+    CHECK(job.length == 10500);
+    CHECK(strstr(job.filtergraph, "[v0][v1]xfade=transition=fade:"
+                 "duration=1.000:offset=3.000[xv1];") != NULL);
+    CHECK(strstr(job.filtergraph, "[a0][a1]acrossfade=d=1.000[xa1];") != NULL);
+    /* The second mixes into the first result, 7 s long by then. */
+    CHECK(strstr(job.filtergraph, "[xv1][v2]xfade=transition=wipeleft:"
+                 "duration=0.500:offset=6.500[xv2];") != NULL);
+    CHECK(strstr(job.filtergraph, "[xv2][xa2]concat=n=1:v=1:a=1[outv][outa]")
+          != NULL);
+
+    /* With a gap before and after, and music faded on a track of its own. */
+    three_clips(&tl);
+    FB_TimelineMoveClip(&tl, 0, 1000);              /* 1-5, 5-9, 9-13 */
+    FB_TimelineSetCrossfade(&tl, 2, 2000, NULL);    /* 1-5, 5-9, 7-11 */
+    m = FB_TimelineAddSource(&tl, "music.mp3", 60000, 0, 1);
+    FB_TimelineAppendToTrack(&tl, 1, m, 0, 6000);
+    FB_TimelineAppendToTrack(&tl, 1, m, 20000, 26000);
+    FB_TimelineSetCrossfade(&tl, 4, 3000, NULL);    /* 0-6, 3-9 */
+    CHECK(FB_JobBuild(&job, &tl, &out) == FB_JOB_OK);
+    printf("crossfade with gaps: %s\n", job.filtergraph);
+    CHECK(job.length == 11000);
+    CHECK(strstr(job.filtergraph, "[v2][v3]xfade=transition=fade:"
+                 "duration=2.000:offset=2.000[xv3];") != NULL);
+    CHECK(strstr(job.filtergraph, "[v0][a0][v1][a1][xv3][xa3]concat=n=3")
+          != NULL);
+    CHECK(strstr(job.filtergraph, "[a4][a5]acrossfade=d=3.000[xa5];") != NULL);
+    CHECK(strstr(job.filtergraph, "[xa5][a6]concat=n=2:v=0:a=1[t1a]") != NULL);
+
+    /* A kind that isn't a name never reaches the filtergraph. */
+    strcpy(tl.clips[2].xfade_kind, "fade[x]");
+    CHECK(FB_JobBuild(&job, &tl, &out) != FB_JOB_OK);
+}
+
+static void test_project_crossfade(void)
+{
+    static FBTimeline tl, back;
+    static char text[8192];
+    int line;
+
+    three_clips(&tl);
+    FB_TimelineSetCrossfade(&tl, 1, 1000, NULL);
+    FB_TimelineSetCrossfade(&tl, 2, 500, "circleopen");
+    CHECK(FB_ProjectWrite(&tl, "", text, sizeof(text)) > 0);
+    CHECK(strstr(text, "CLIP 1 4000 8000\n    CROSSFADE 1000\n"
+                       "CLIP 1 8000 12000\n    CROSSFADE 500 circleopen\n"));
+    CHECK(strstr(text, "    AT ") == NULL);
+    CHECK(FB_ProjectParse(&back, text, "", &line) == FB_PROJECT_OK);
+    CHECK(back.num_clips == 3);
+    CHECK(back.clips[1].start == 3000 && back.clips[1].xfade == 1000);
+    CHECK(back.clips[2].start == 6500 &&
+          strcmp(back.clips[2].xfade_kind, "circleopen") == 0);
+
+    /* Not after a gap, and only a name as kind. */
+    CHECK(FB_ProjectParse(&back, "FORMBROD-PROJECT 2\nSOURCE 1 a.mp4\n"
+                          "TRACK video\nCLIP 1 0 1000\nCLIP 1 0 1000\n"
+                          "    AT 2000\n    CROSSFADE 500\n", "", &line)
+          == FB_PROJECT_BAD_LINE);
+    CHECK(FB_ProjectParse(&back, "FORMBROD-PROJECT 2\nSOURCE 1 a.mp4\n"
+                          "TRACK video\nCLIP 1 0 1000\nCLIP 1 0 1000\n"
+                          "    CROSSFADE 500 a;b\n", "", &line)
+          == FB_PROJECT_BAD_LINE);
+}
+
 int main(void)
 {
     FB_RegisterBuiltinModules();
     test_timeline();
     test_tracks();
     test_move_clips();
+    test_crossfades();
+    test_job_crossfade();
+    test_project_crossfade();
     test_log();
     test_job_build_and_roundtrip();
     test_job_tracks();

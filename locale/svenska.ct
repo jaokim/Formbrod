@@ -424,3 +424,51 @@ Automatisk
 MSG_MENU_PROXY_WIDTH
 %d bildpunkter breda
 ;
+;
+MSG_BTN_CROSSFADE
+Ö_vertoning
+;
+MSG_LABEL_CROSSFADE
+Övertoning
+;
+MSG_HINT_CROSSFADE
+Hur länge den tonar över från klippet före. 0 för ett rakt klipp
+;
+MSG_STATUS_CROSSFADE
+%s tonar nu in under %s
+;
+MSG_STATUS_NO_CROSSFADE
+%s följer nu med ett rakt klipp
+;
+MSG_STATUS_CANT_CROSSFADE
+En övertoning behöver ett klipp direkt före på samma spår, utan glapp
+;
+MSG_MENU_CROSSFADE
+Övertoning
+;
+MSG_MENU_CROSSFADE_KIND
+Sorts övertoning
+;
+MSG_XFADE_FADE
+Toning
+;
+MSG_XFADE_FADEBLACK
+Via svart
+;
+MSG_XFADE_DISSOLVE
+Upplösning
+;
+MSG_XFADE_WIPELEFT
+Ridå åt vänster
+;
+MSG_XFADE_WIPERIGHT
+Ridå åt höger
+;
+MSG_XFADE_SLIDELEFT
+Glid åt vänster
+;
+MSG_XFADE_CIRCLEOPEN
+Cirkel
+;
+MSG_XFADE_PIXELIZE
+Pixlar

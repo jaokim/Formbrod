@@ -128,6 +128,78 @@ static void shift_track(FBTimeline *tl, int track, fb_ms_t from,
             tl->clips[i].start += delta;
 }
 
+static fb_ms_t clip_len(const FBClip *c)
+{
+    return c->out - c->in;
+}
+
+/* Moves clip `first` and the clips after it on its track by `delta`
+ * (sorted by track and start, they follow it in the array). */
+static void shift_from(FBTimeline *tl, int first, fb_ms_t delta)
+{
+    int i, track;
+
+    if (first < 0 || first >= tl->num_clips || delta == 0)
+        return;
+    track = tl->clips[first].track;
+    for (i = first; i < tl->num_clips && tl->clips[i].track == track; i++)
+        tl->clips[i].start += delta;
+}
+
+/* The clip before / after `i` on its track, or -1. */
+static int prev_on_track(const FBTimeline *tl, int i)
+{
+    return (i > 0 && tl->clips[i - 1].track == tl->clips[i].track) ? i - 1
+                                                                   : -1;
+}
+
+static int next_on_track(const FBTimeline *tl, int i)
+{
+    return (i + 1 < tl->num_clips &&
+            tl->clips[i + 1].track == tl->clips[i].track) ? i + 1 : -1;
+}
+
+/* How long clip `i`'s crossfade can be: what the clip before it leaves
+ * after its own crossfade, and what `i` leaves before the next one's. */
+static fb_ms_t xfade_room(const FBTimeline *tl, int i)
+{
+    int p = prev_on_track(tl, i), n = next_on_track(tl, i);
+    fb_ms_t a, b;
+
+    if (p < 0)
+        return 0;
+    a = clip_len(&tl->clips[p]) - tl->clips[p].xfade;
+    b = clip_len(&tl->clips[i]) - (n >= 0 ? tl->clips[n].xfade : 0);
+    return a < b ? a : b;
+}
+
+/* After an edit: crossfades that no longer fit are shortened (moving the
+ * clip and those after it later), and the first clip of a track has none. */
+static void fit_crossfades(FBTimeline *tl, int track)
+{
+    int i;
+
+    for (i = 0; i < tl->num_clips; i++) {
+        FBClip *c = &tl->clips[i];
+        fb_ms_t room;
+
+        if (c->track != track || c->xfade <= 0) {
+            if (c->xfade < 0)
+                c->xfade = 0;
+            continue;
+        }
+        room = xfade_room(tl, i);
+        if (room < 0)
+            room = 0;
+        if (c->xfade > room) {
+            fb_ms_t cut = c->xfade - room;
+
+            c->xfade = room;
+            shift_from(tl, i, cut);
+        }
+    }
+}
+
 int FB_TimelineAddClip(FBTimeline *tl, int track, int source,
                        fb_ms_t in, fb_ms_t out, fb_ms_t start)
 {
@@ -218,8 +290,11 @@ int FB_TimelineSplit(FBTimeline *tl, int track, fb_ms_t at)
             tl->clips[i + 1] = *clip;      /* right half keeps the effects */
             tl->clips[i + 1].in = cut;
             tl->clips[i + 1].start = at;
+            tl->clips[i + 1].xfade = 0;    /* it follows the left half */
+            tl->clips[i + 1].xfade_kind[0] = '\0';
             clip->out = cut;
             tl->num_clips++;
+            fit_crossfades(tl, clip->track);
             last = ++i;                    /* don't look at the new half */
         }
     }
@@ -229,14 +304,28 @@ int FB_TimelineSplit(FBTimeline *tl, int track, fb_ms_t at)
 int FB_TimelineRemoveClip(FBTimeline *tl, int clip)
 {
     FBClip gone;
+    fb_ms_t delta;
+    int next;
 
     if (clip < 0 || clip >= tl->num_clips)
         return -1;
     gone = tl->clips[clip];
+    next = next_on_track(tl, clip);
+    /* The clips after it close up to where it took over from the one
+     * before it. A crossfade into it goes with it, and so does one out of
+     * it: the next clip then simply follows. */
+    delta = -(clip_len(&gone) - gone.xfade);
+    if (next >= 0) {
+        delta += tl->clips[next].xfade;
+        tl->clips[next].xfade = 0;
+        tl->clips[next].xfade_kind[0] = '\0';
+    }
     memmove(&tl->clips[clip], &tl->clips[clip + 1],
             (size_t)(tl->num_clips - clip - 1) * sizeof(FBClip));
     tl->num_clips--;
-    shift_track(tl, gone.track, FB_ClipEnd(&gone), -(gone.out - gone.in), -1);
+    if (next >= 0)
+        shift_from(tl, clip, delta);
+    fit_crossfades(tl, gone.track);
     return 0;
 }
 
@@ -254,7 +343,9 @@ int FB_TimelineTrimClip(FBTimeline *tl, int clip, fb_ms_t in, fb_ms_t out)
     old_end = FB_ClipEnd(c);
     c->in = in;
     c->out = out;
-    shift_track(tl, c->track, old_end, FB_ClipEnd(c) - old_end, clip);
+    if (next_on_track(tl, clip) >= 0)
+        shift_from(tl, clip + 1, FB_ClipEnd(c) - old_end);
+    fit_crossfades(tl, c->track);
     return 0;
 }
 
@@ -271,9 +362,23 @@ fb_ms_t FB_TimelineStartWithout(const FBTimeline *tl, int i, int skip)
     const FBClip *c = &tl->clips[i];
 
     if (skip >= 0 && skip < tl->num_clips && i > skip &&
-        c->track == tl->clips[skip].track)
-        return c->start - (tl->clips[skip].out - tl->clips[skip].in);
+        c->track == tl->clips[skip].track) {
+        const FBClip *k = &tl->clips[skip];
+        fb_ms_t s = c->start - (clip_len(k) - k->xfade);
+
+        if (i == skip + 1)
+            s += c->xfade;     /* its crossfade goes (see RemoveClip) */
+        return s;
+    }
     return c->start;
+}
+
+/* Clip `i`'s crossfade once clip `skip` is out of its place. */
+static fb_ms_t xfade_without(const FBTimeline *tl, int i, int skip)
+{
+    if (skip >= 0 && i == skip + 1 && tl->clips[i].track == tl->clips[skip].track)
+        return 0;
+    return tl->clips[i].xfade;
 }
 
 fb_ms_t FB_TimelineDropPoint(const FBTimeline *tl, int track, fb_ms_t at,
@@ -309,7 +414,8 @@ fb_ms_t FB_TimelineDropPoint(const FBTimeline *tl, int track, fb_ms_t at,
             continue;
         s = FB_TimelineStartWithout(tl, i, skip);
         if (s + (c->out - c->in) / 2 > middle)
-            return s;
+            return s + xfade_without(tl, i, skip);  /* after its crossfade's
+                                                       partner: at the cut */
         end = s + (c->out - c->in);
     }
     *inserted = 0;          /* after the last clip: nothing moves */
@@ -338,8 +444,26 @@ int FB_TimelineMoveClipTo(FBTimeline *tl, int clip, int track, fb_ms_t at)
     /* Out of its old place, which closes up; then where it goes. */
     FB_TimelineRemoveClip(tl, clip);
     start = FB_TimelineDropPoint(tl, track, at, len, -1, &inserted);
-    if (inserted)
+    if (inserted) {
+        int i;
+
+        /* Going in at a crossfade: the clip it led into now follows the
+         * moved one, with a plain cut. */
+        for (i = 0; i < tl->num_clips; i++) {
+            FBClip *c = &tl->clips[i];
+
+            if (c->track == track && c->xfade > 0 &&
+                c->start + c->xfade == start) {
+                fb_ms_t xf = c->xfade;
+
+                c->xfade = 0;
+                c->xfade_kind[0] = '\0';
+                shift_from(tl, i, xf);
+                break;
+            }
+        }
         shift_track(tl, track, start, len, -1);
+    }
 
     idx = FB_TimelineAddClip(tl, track, moved.source, moved.in, moved.out,
                              start);
@@ -347,33 +471,120 @@ int FB_TimelineMoveClipTo(FBTimeline *tl, int clip, int track, fb_ms_t at)
         return -1;
     moved.track = track;
     moved.start = start;
+    moved.xfade = 0;             /* a cut, until the user adds one */
+    moved.xfade_kind[0] = '\0';
     tl->clips[idx] = moved;      /* with its effects, fit and volume */
     return idx;
 }
 
+/* Where the clip before `clip` on its track ends, or 0. */
+static fb_ms_t prev_end(const FBTimeline *tl, int clip)
+{
+    int p = prev_on_track(tl, clip);
+
+    return p >= 0 ? FB_ClipEnd(&tl->clips[p]) : 0;
+}
+
 fb_ms_t FB_TimelineEarliestStart(const FBTimeline *tl, int clip)
 {
-    if (clip > 0 && clip < tl->num_clips &&
-        tl->clips[clip - 1].track == tl->clips[clip].track)
-        return FB_ClipEnd(&tl->clips[clip - 1]);
-    return 0;
+    if (clip < 0 || clip >= tl->num_clips)
+        return 0;
+    if (tl->clips[clip].xfade > 0)
+        return prev_end(tl, clip) - xfade_room(tl, clip);
+    return prev_end(tl, clip);
 }
 
 int FB_TimelineMoveClip(FBTimeline *tl, int clip, fb_ms_t start)
 {
-    fb_ms_t delta;
-    int i;
+    FBClip *c;
+    fb_ms_t pe;
 
-    if (clip < 0 || clip >= tl->num_clips ||
-        start < FB_TimelineEarliestStart(tl, clip))
+    if (clip < 0 || clip >= tl->num_clips)
         return -1;
+    c = &tl->clips[clip];
+    pe = prev_end(tl, clip);
+    if (start == c->start)
+        return 0;
+    /* Into the clip before: only a crossfade may overlap it. */
+    if (start < pe) {
+        if (c->xfade <= 0 || start < FB_TimelineEarliestStart(tl, clip))
+            return -1;
+        return FB_TimelineSetCrossfade(tl, clip, pe - start, NULL) < 0 ? -1
+                                                                       : 0;
+    }
+    c->xfade = 0;
+    c->xfade_kind[0] = '\0';
     /* Sorted by track and start: the clips after it on its track follow
      * it in the array. */
-    delta = start - tl->clips[clip].start;
-    for (i = clip; i < tl->num_clips &&
-                   tl->clips[i].track == tl->clips[clip].track; i++)
-        tl->clips[i].start += delta;
+    shift_from(tl, clip, start - c->start);
     return 0;
+}
+
+/* ---- Crossfades ------------------------------------------------------- */
+
+fb_ms_t FB_TimelineMaxCrossfade(const FBTimeline *tl, int clip)
+{
+    const FBClip *c;
+    fb_ms_t room;
+
+    if (clip < 0 || clip >= tl->num_clips)
+        return 0;
+    c = &tl->clips[clip];
+    if (prev_on_track(tl, clip) < 0)
+        return 0;
+    /* Straight after the clip before it, or overlapping it already. */
+    if (c->xfade <= 0 && c->start != prev_end(tl, clip))
+        return 0;
+    room = xfade_room(tl, clip);
+    return room > 0 ? room : 0;
+}
+
+int FB_CrossfadeKindValid(const char *kind)
+{
+    size_t n = 0;
+
+    for (; kind[n]; n++) {
+        char ch = kind[n];
+
+        if (!((ch >= 'a' && ch <= 'z') || (ch >= '0' && ch <= '9') ||
+              ch == '_'))
+            return 0;
+    }
+    return n < FB_NAME_LEN;
+}
+
+const char *FB_ClipCrossfadeKind(const FBClip *clip)
+{
+    return clip->xfade_kind[0] ? clip->xfade_kind : "fade";
+}
+
+fb_ms_t FB_TimelineSetCrossfade(FBTimeline *tl, int clip, fb_ms_t len,
+                                const char *kind)
+{
+    FBClip *c;
+    fb_ms_t room;
+
+    if (clip < 0 || clip >= tl->num_clips || len < 0)
+        return -1;
+    if (kind && !FB_CrossfadeKindValid(kind))
+        return -1;
+    c = &tl->clips[clip];
+    if (len > 0) {
+        room = FB_TimelineMaxCrossfade(tl, clip);
+        if (room <= 0)
+            return -1;
+        if (len > room)
+            len = room;
+    }
+    /* Longer pulls it and the clips after it earlier, shorter pushes. */
+    shift_from(tl, clip, c->xfade - len);
+    c->xfade = len;
+    if (len == 0)
+        c->xfade_kind[0] = '\0';
+    else if (kind)
+        copy_str(c->xfade_kind, strcmp(kind, "fade") == 0 ? "" : kind,
+                 sizeof(c->xfade_kind));
+    return len;
 }
 
 int FB_TimelineClipAt(const FBTimeline *tl, fb_ms_t t, fb_ms_t *source_t)

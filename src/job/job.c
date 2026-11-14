@@ -21,6 +21,14 @@
  *   [t0v][t2v]overlay=format=auto:eof_action=pass[outv];
  *   [t0a][t1a]amix=inputs=2:duration=longest:dropout_transition=0,volume=2[outa]
  *
+ * A clip with a crossfade is mixed into the one before it before the
+ * track is joined: xfade for the picture (its offset counts from the start
+ * of what it mixes into), acrossfade for the sound:
+ *
+ *   [v0][v1]xfade=transition=fade:duration=1.000:offset=3.000[xv1];
+ *   [a0][a1]acrossfade=d=1.000[xa1];
+ *   [xv1][xa1][v2][a2]concat=n=2:v=1:a=1[outv][outa]
+ *
  * <fit> is one of (W x H is the frame):
  *   fit      scale=W:H:force_original_aspect_ratio=decrease,pad=W:H:...
  *   fill     scale=W:H:force_original_aspect_ratio=increase,crop=W:H
@@ -233,8 +241,27 @@ static void gap(Buf *b, const FBTimeline *tl, const Frame *f, fb_ms_t len,
                    FB_AUDIO_RATE, secs(len), FB_AUDIO_RATE, seg);
 }
 
+/* The pieces a track is joined from: a clip, a gap, or clips mixed by
+ * crossfades. Labels of their picture and sound, and how long they are. */
+typedef struct TrackPart {
+    char    v[12], a[12];
+    fb_ms_t len;
+} TrackPart;
+
+typedef struct TrackParts {
+    TrackPart part[FB_MAX_CLIPS * 2 + 1];   /* clips and the gaps between */
+} TrackParts;
+
+static void part_set(TrackParts *tp, int n, int seg, fb_ms_t len)
+{
+    snprintf(tp->part[n].v, sizeof(tp->part[n].v), "v%d", seg);
+    snprintf(tp->part[n].a, sizeof(tp->part[n].a), "a%d", seg);
+    tp->part[n].len = len;
+}
+
 FBJobError FB_JobBuild(FBJob *job, const FBTimeline *tl, const FBOutput *out)
 {
+    static TrackParts tp;
     int input_of[FB_MAX_SOURCES];
     TrackUse use[FB_MAX_TRACKS];
     int vtracks = 0, atracks = 0, bottom = -1;
@@ -244,6 +271,7 @@ FBJobError FB_JobBuild(FBJob *job, const FBTimeline *tl, const FBOutput *out)
     Frame f;
     Buf b;
     int i, t, seg = 0, vdone = 0, adone = 0;
+
 
     memset(job, 0, sizeof(*job));
     job->version = FB_JOB_VERSION;
@@ -265,6 +293,9 @@ FBJobError FB_JobBuild(FBJob *job, const FBTimeline *tl, const FBOutput *out)
             return FB_JOB_BAD_SOURCE;
         if (s < 0 || s >= tl->num_sources)
             return FB_JOB_BAD_SOURCE;
+        /* It goes into the filtergraph as it is. */
+        if (!FB_CrossfadeKindValid(c->xfade_kind))
+            return FB_JOB_UNKNOWN_MODULE;
         tr = &tl->tracks[c->track];
         if (tr->kind == FB_TRACK_VIDEO && !tr->hidden)
             use[c->track].video = 1;
@@ -301,9 +332,13 @@ FBJobError FB_JobBuild(FBJob *job, const FBTimeline *tl, const FBOutput *out)
         }
     }
 
-    /* Black, silence or a second picture track all need the frame size. */
+    /* Black, silence, a second picture track or a crossfade (both pictures
+     * must be one size) all need the frame size. */
     if (vtracks > 1)
         need_size = 1;
+    for (i = 0; i < tl->num_clips; i++)
+        if (tl->clips[i].xfade > 0 && use[tl->clips[i].track].video)
+            need_size = 1;
     for (t = 0; t < tl->num_tracks && !need_size; t++) {
         fb_ms_t cursor = 0;
 
@@ -360,7 +395,7 @@ FBJobError FB_JobBuild(FBJob *job, const FBTimeline *tl, const FBOutput *out)
     for (t = 0; t < tl->num_tracks; t++) {
         int pv = use[t].video, pa = use[t].audio;
         int upper = pv && t != bottom;
-        int first = seg;
+        int parts = 0;
         fb_ms_t cursor = 0;
         FBJobError err;
 
@@ -368,11 +403,14 @@ FBJobError FB_JobBuild(FBJob *job, const FBTimeline *tl, const FBOutput *out)
             continue;
         for (i = 0; i < tl->num_clips; i++) {
             const FBClip *c = &tl->clips[i];
+            int xf = c->xfade > 0 && parts > 0;
 
             if (c->track != t)
                 continue;
-            if (c->start > cursor)
-                gap(&b, tl, &f, c->start - cursor, pv, pa, upper, seg++);
+            if (c->start > cursor) {
+                gap(&b, tl, &f, c->start - cursor, pv, pa, upper, seg);
+                part_set(&tp, parts++, seg++, c->start - cursor);
+            }
             if (pv &&
                 (err = clip_video(&b, tl, c, input_of[c->source], &f, upper,
                                   seg)) != FB_JOB_OK)
@@ -381,19 +419,41 @@ FBJobError FB_JobBuild(FBJob *job, const FBTimeline *tl, const FBOutput *out)
                 (err = clip_audio(&b, tl, c, input_of[c->source], seg))
                 != FB_JOB_OK)
                 return err;
-            seg++;
+            if (xf) {
+                /* Mixed into what came before it: the result replaces
+                 * the last part. */
+                TrackPart *last = &tp.part[parts - 1];
+                fb_ms_t d = c->xfade;
+
+                if (pv)
+                    buf_printf(&b, "[%s][v%d]xfade=transition=%s:"
+                               "duration=%.3f:offset=%.3f[xv%d];",
+                               last->v, seg, FB_ClipCrossfadeKind(c),
+                               secs(d), secs(last->len - d), seg);
+                if (pa)
+                    buf_printf(&b, "[%s][a%d]acrossfade=d=%.3f[xa%d];",
+                               last->a, seg, secs(d), seg);
+                snprintf(last->v, sizeof(last->v), "xv%d", seg);
+                snprintf(last->a, sizeof(last->a), "xa%d", seg);
+                last->len += (c->out - c->in) - d;
+                seg++;
+            } else {
+                part_set(&tp, parts++, seg++, c->out - c->in);
+            }
             cursor = FB_ClipEnd(c);
         }
-        if (cursor < length)
-            gap(&b, tl, &f, length - cursor, pv, pa, upper, seg++);
-
-        for (i = first; i < seg; i++) {
-            if (pv)
-                buf_printf(&b, "[v%d]", i);
-            if (pa)
-                buf_printf(&b, "[a%d]", i);
+        if (cursor < length) {
+            gap(&b, tl, &f, length - cursor, pv, pa, upper, seg);
+            part_set(&tp, parts++, seg++, length - cursor);
         }
-        buf_printf(&b, "concat=n=%d:v=%d:a=%d", seg - first, pv, pa);
+
+        for (i = 0; i < parts; i++) {
+            if (pv)
+                buf_printf(&b, "[%s]", tp.part[i].v);
+            if (pa)
+                buf_printf(&b, "[%s]", tp.part[i].a);
+        }
+        buf_printf(&b, "concat=n=%d:v=%d:a=%d", parts, pv, pa);
         if (pv) {
             if (vtracks == 1)
                 buf_printf(&b, "[outv]");

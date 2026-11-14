@@ -292,8 +292,40 @@
 #define MSG_MENU_PROXY_AUTO_STR          "Automatic"
 #define MSG_MENU_PROXY_WIDTH             193
 #define MSG_MENU_PROXY_WIDTH_STR         "%d pixels wide"
+#define MSG_BTN_CROSSFADE                194
+#define MSG_BTN_CROSSFADE_STR            "Cr_ossfade"
+#define MSG_LABEL_CROSSFADE              195
+#define MSG_LABEL_CROSSFADE_STR          "Crossfade"
+#define MSG_HINT_CROSSFADE               196
+#define MSG_HINT_CROSSFADE_STR           "How long it fades over from the clip before it. 0 for a plain cut"
+#define MSG_STATUS_CROSSFADE             197
+#define MSG_STATUS_CROSSFADE_STR         "%s now fades in over %s"
+#define MSG_STATUS_NO_CROSSFADE          198
+#define MSG_STATUS_NO_CROSSFADE_STR      "%s now follows with a plain cut"
+#define MSG_STATUS_CANT_CROSSFADE        199
+#define MSG_STATUS_CANT_CROSSFADE_STR    "A crossfade needs a clip right before it on the same track, with no gap"
+#define MSG_MENU_CROSSFADE               200
+#define MSG_MENU_CROSSFADE_STR           "Crossfade"
+#define MSG_MENU_CROSSFADE_KIND          201
+#define MSG_MENU_CROSSFADE_KIND_STR      "Crossfade kind"
+#define MSG_XFADE_FADE                   202
+#define MSG_XFADE_FADE_STR               "Fade"
+#define MSG_XFADE_FADEBLACK              203
+#define MSG_XFADE_FADEBLACK_STR          "Through black"
+#define MSG_XFADE_DISSOLVE               204
+#define MSG_XFADE_DISSOLVE_STR           "Dissolve"
+#define MSG_XFADE_WIPELEFT               205
+#define MSG_XFADE_WIPELEFT_STR           "Wipe left"
+#define MSG_XFADE_WIPERIGHT              206
+#define MSG_XFADE_WIPERIGHT_STR          "Wipe right"
+#define MSG_XFADE_SLIDELEFT              207
+#define MSG_XFADE_SLIDELEFT_STR          "Slide left"
+#define MSG_XFADE_CIRCLEOPEN             208
+#define MSG_XFADE_CIRCLEOPEN_STR         "Circle"
+#define MSG_XFADE_PIXELIZE               209
+#define MSG_XFADE_PIXELIZE_STR           "Pixelate"
 
-#define FB_NUM_STRINGS 140
+#define FB_NUM_STRINGS 156
 
 #ifdef FB_STRINGS_ARRAY
 static const struct FBBuiltinString {
@@ -440,6 +472,22 @@ static const struct FBBuiltinString {
     { MSG_MENU_PROXY_SIZE, MSG_MENU_PROXY_SIZE_STR },
     { MSG_MENU_PROXY_AUTO, MSG_MENU_PROXY_AUTO_STR },
     { MSG_MENU_PROXY_WIDTH, MSG_MENU_PROXY_WIDTH_STR },
+    { MSG_BTN_CROSSFADE, MSG_BTN_CROSSFADE_STR },
+    { MSG_LABEL_CROSSFADE, MSG_LABEL_CROSSFADE_STR },
+    { MSG_HINT_CROSSFADE, MSG_HINT_CROSSFADE_STR },
+    { MSG_STATUS_CROSSFADE, MSG_STATUS_CROSSFADE_STR },
+    { MSG_STATUS_NO_CROSSFADE, MSG_STATUS_NO_CROSSFADE_STR },
+    { MSG_STATUS_CANT_CROSSFADE, MSG_STATUS_CANT_CROSSFADE_STR },
+    { MSG_MENU_CROSSFADE, MSG_MENU_CROSSFADE_STR },
+    { MSG_MENU_CROSSFADE_KIND, MSG_MENU_CROSSFADE_KIND_STR },
+    { MSG_XFADE_FADE, MSG_XFADE_FADE_STR },
+    { MSG_XFADE_FADEBLACK, MSG_XFADE_FADEBLACK_STR },
+    { MSG_XFADE_DISSOLVE, MSG_XFADE_DISSOLVE_STR },
+    { MSG_XFADE_WIPELEFT, MSG_XFADE_WIPELEFT_STR },
+    { MSG_XFADE_WIPERIGHT, MSG_XFADE_WIPERIGHT_STR },
+    { MSG_XFADE_SLIDELEFT, MSG_XFADE_SLIDELEFT_STR },
+    { MSG_XFADE_CIRCLEOPEN, MSG_XFADE_CIRCLEOPEN_STR },
+    { MSG_XFADE_PIXELIZE, MSG_XFADE_PIXELIZE_STR },
 };
 #endif
 
