@@ -33,6 +33,9 @@ int App_Init(void)
     memset(&App, 0, sizeof(App));
     FB_TimelineInit(&App.timeline);
     FB_RegisterBuiltinModules();
+    /* ffmpeg's messages go to the log file, or nowhere: never the shell.
+     * What matters reaches the user through the status line. */
+    FB_BackendQuiet();
     App.backend = FB_CreateLocalBackend();
     if (!App.backend)
         return -1;

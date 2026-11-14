@@ -39,3 +39,25 @@ for f in out_join.mp4 out_reversed.mp4 out_video_only.mkv out_h264.mkv \
     ffmpeg -v error -xerror -i "$dir/$f" -f null - || { echo "FAIL: $f decode"; exit 1; }
 done
 echo "ffprobe checks passed"
+
+# The pictures themselves, not just the lengths: an ffmpeg build that
+# writes garbage still makes files of the right length.
+psnr() {
+    ffmpeg -i "$dir/$1" -i "$dir/$2" -lavfi "$3" -f null - 2>&1 |
+        sed -n 's/.*PSNR.*average:\([0-9.]*\).*/\1/p' | tail -1
+}
+need() {
+    echo "picture: $1 is $2 dB like its source (want $3 or more)"
+    awk -v p="$2" -v w="$3" 'BEGIN { exit !(p + 0 >= w) }' ||
+        { echo "FAIL: $1 picture"; exit 1; }
+}
+# The proxy copy of a.mp4: 160 wide, scaled the same way, full range.
+proxy=$(ls "$dir"/*.proxy1-160.mov | head -1)
+p=$(psnr a.mp4 "$(basename "$proxy")" \
+    "[0:v]scale=160:120:flags=fast_bilinear,format=yuv420p[a];[1:v]format=yuv420p[b];[a][b]psnr")
+need "the proxy copy" "$p" 35
+# The window from 3.5 s: its first 1.5 s are a.mp4 from 3.5 s.
+p=$(psnr a.mp4 out_window.mp4 \
+    "[0:v]trim=start=3.5:duration=1.4,setpts=PTS-STARTPTS,format=yuv420p[a];[1:v]trim=duration=1.4,setpts=PTS-STARTPTS,format=yuv420p[b];[a][b]psnr")
+need "the window" "$p" 25
+echo "picture checks passed"

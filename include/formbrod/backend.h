@@ -75,9 +75,12 @@ FBBackend *FB_CreateLocalBackend(void);
 long long FB_BackendClockUs(void);
 
 /* Logs the libav versions and, if the log (formbrod/log.h) is open, sends
- * ffmpeg's own messages there instead of to the shell. Stop puts them
- * back. Call after FB_LogOpen() and before FB_LogClose(). */
+ * ffmpeg's own messages there. Stop makes them quiet again (they never go
+ * to the shell). Call after FB_LogOpen() and before FB_LogClose(). */
 void FB_BackendLogStart(void);
 void FB_BackendLogStop(void);
+/* Keeps ffmpeg's messages out of the shell while there is no log: they
+ * are only of use in the log file. Call once at start. */
+void FB_BackendQuiet(void);
 
 #endif

@@ -626,21 +626,13 @@ static int encoder_tail(LocalPriv *p, int kind, const AVCodec *codec,
         if (!ok)
             pf = fmts[0];
         /* JPEG wants full-range colour (0-255, not video's 16-235), and
-         * the MJPEG encoder refuses ordinary yuv420p. Older ffmpeg has
-         * yuvj420p for that, and converting to it converts the range;
-         * where it's gone, convert the range with scale and tell the
-         * encoder (needs_full_range(), open_encoder()). */
-        if (needs_full_range(codec)) {
-            int j = 0;
-
-            for (i = 0; fmts && fmts[i] != AV_PIX_FMT_NONE; i++)
-                if (fmts[i] == AV_PIX_FMT_YUVJ420P)
-                    j = 1;
-            if (j)
-                pf = AV_PIX_FMT_YUVJ420P;
-            else
-                strcpy(range, "scale=out_range=full,");
-        }
+         * the MJPEG encoder refuses ordinary yuv420p unless it's told the
+         * colour is full range. So the range is converted with scale and
+         * the encoder told (open_encoder()); yuv420p marked full range is
+         * accepted from ffmpeg 4.4 on. (yuvj420p would do it too, but
+         * swscale warns that it's deprecated on every use.) */
+        if (needs_full_range(codec))
+            strcpy(range, "scale=out_range=full,");
         /* FB_JobBuild() already scales; this is for hand-written jobs. */
         if (p->job.output.width > 0)
             snprintf(scale, sizeof(scale), "scale=%d:%d,",
@@ -1401,7 +1393,7 @@ void FB_BackendLogStart(void)
     FB_Log(FB_LOG_DEBUG, "app", "ffmpeg configuration: %s",
            avcodec_configuration());
     if (!FB_LogIsOpen())
-        return;     /* leave ffmpeg printing to the shell as before */
+        return;     /* FB_BackendQuiet keeps them out of the shell */
     av_log_set_level(av_level[FB_LogGetLevel()]);
     av_log_set_callback(log_callback);
 }
@@ -1411,7 +1403,16 @@ void FB_BackendLogStop(void)
     if (LinePartLen > 0)
         FB_Log(FB_LOG_INFO, "ffmpeg", "%s", LinePart);
     LinePartLen = 0;
-    av_log_set_callback(av_log_default_callback);
+    /* Without the log, nothing; not back to the shell. */
+    av_log_set_level(AV_LOG_QUIET);
+}
+
+void FB_BackendQuiet(void)
+{
+    if (FB_LogIsOpen())
+        return;     /* FB_BackendLogStart has sent them to the log */
+    av_log_set_level(AV_LOG_QUIET);
+    av_log_set_callback(log_callback);
 }
 
 #else
@@ -1423,6 +1424,10 @@ void FB_BackendLogStart(void)
 }
 
 void FB_BackendLogStop(void)
+{
+}
+
+void FB_BackendQuiet(void)
 {
 }
 
