@@ -529,17 +529,13 @@ int FB_TimelineMoveClip(FBTimeline *tl, int clip, fb_ms_t start)
 
 fb_ms_t FB_TimelineMaxCrossfade(const FBTimeline *tl, int clip)
 {
-    const FBClip *c;
     fb_ms_t room;
 
     if (clip < 0 || clip >= tl->num_clips)
         return 0;
-    c = &tl->clips[clip];
     if (prev_on_track(tl, clip) < 0)
         return 0;
-    /* Straight after the clip before it, or overlapping it already. */
-    if (c->xfade <= 0 && c->start != prev_end(tl, clip))
-        return 0;
+    /* After a gap too: adding one closes it (FB_TimelineSetCrossfade). */
     room = xfade_room(tl, clip);
     return room > 0 ? room : 0;
 }
@@ -575,11 +571,18 @@ fb_ms_t FB_TimelineSetCrossfade(FBTimeline *tl, int clip, fb_ms_t len,
         return -1;
     c = &tl->clips[clip];
     if (len > 0) {
+        fb_ms_t gap;
+
         room = FB_TimelineMaxCrossfade(tl, clip);
         if (room <= 0)
             return -1;
         if (len > room)
             len = room;
+        /* A gap before it closes first: it fades from the clip before,
+         * so it moves up to meet it (the clips after it move along). */
+        gap = c->xfade > 0 ? 0 : c->start - prev_end(tl, clip);
+        if (gap > 0)
+            shift_from(tl, clip, -gap);
     }
     /* Longer pulls it and the clips after it earlier, shorter pushes. */
     shift_from(tl, clip, c->xfade - len);

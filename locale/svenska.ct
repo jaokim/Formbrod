@@ -441,7 +441,7 @@ MSG_STATUS_NO_CROSSFADE
 %s följer nu med ett rakt klipp
 ;
 MSG_STATUS_CANT_CROSSFADE
-En övertoning behöver ett klipp direkt före på samma spår, utan glapp
+En övertoning behöver ett klipp före sig på samma spår
 ;
 MSG_MENU_CROSSFADE
 Övertoning

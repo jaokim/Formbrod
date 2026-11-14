@@ -540,7 +540,7 @@ MSG_STATUS_NO_CROSSFADE (198//)
 %s now follows with a plain cut
 ;
 MSG_STATUS_CANT_CROSSFADE (199//)
-A crossfade needs a clip right before it on the same track, with no gap
+A crossfade needs a clip before it on the same track
 ;
 ; Edit menu: a submenu choosing how the selected clip's crossfade looks.
 MSG_MENU_CROSSFADE (200//)

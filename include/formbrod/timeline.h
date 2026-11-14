@@ -241,16 +241,17 @@ fb_ms_t FB_TimelineEarliestStart(const FBTimeline *tl, int clip);
 /* ---- Crossfades ---- */
 
 /* Gives a clip a crossfade `len` ms long from the clip before it on its
- * track (0 removes it). The clip must follow that one directly, without a
- * gap, or already have a crossfade. It and the clips after it move earlier
- * by the overlap (later again when it's shortened or removed). A crossfade
- * can't be longer than either clip leaves room for; a longer `len` is cut
- * to fit. `kind` NULL keeps the kind. Returns the length set, or -1. */
+ * track (0 removes it). A gap between them closes first: the clip moves up
+ * to meet that one. It and the clips after it then move earlier by the
+ * overlap (later again when it's shortened or removed). A crossfade can't
+ * be longer than either clip leaves room for; a longer `len` is cut to
+ * fit. `kind` NULL keeps the kind. Returns the length set, or -1 (the
+ * first clip on a track has nothing to fade from). */
 fb_ms_t FB_TimelineSetCrossfade(FBTimeline *tl, int clip, fb_ms_t len,
                                 const char *kind);
 
 /* The longest crossfade a clip can have, or 0 if it can't have one (the
- * first clip on its track, or one after a gap). */
+ * first clip on its track). */
 fb_ms_t FB_TimelineMaxCrossfade(const FBTimeline *tl, int clip);
 
 /* Whether `kind` can be a crossfade kind: a name of lower-case letters,

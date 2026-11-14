@@ -77,7 +77,7 @@
 #define COL_GHOST_NO   0x888780      /* ...where it can't go */
 #define COL_INSERT     0xEF9F27      /* where it will go in */
 #define DRAG_PX        3             /* move this far before it's a drag */
-#define SNAP_PX        6             /* ends this near something snap to it */
+#define SNAP_PX        8             /* ends this near something snap to it */
 
 enum { ROW_PICTURE, ROW_LINKED, ROW_SOUND };
 
@@ -845,6 +845,8 @@ static void snap_near(fb_ms_t t, fb_ms_t to, fb_ms_t range, fb_ms_t *best,
 static void snap(struct LanesData *ld, fb_ms_t len)
 {
     const FBTimeline *tl = ld->tl;
+    fb_us_t frame = ld->tb->frame_us > 0 ? ld->tb->frame_us
+                                         : FB_DEFAULT_FRAME_US;
     fb_ms_t range = FB_MS((fb_us_t)SNAP_PX * ld->tb->view.per_px);
     fb_ms_t start = ld->to_start, end = start + len;
     fb_ms_t best_s = start, dist_s = range + 1;
@@ -852,6 +854,12 @@ static void snap(struct LanesData *ld, fb_ms_t len)
     fb_ms_t playhead = FB_MS(ld->tb->playhead);
     int i;
 
+    /* At least a frame and a bit: zoomed far in, the pointer moves a
+     * frame at a time, more than SNAP_PX, and could jump past an end. */
+    if (range < FB_MS(frame) + 1)
+        range = FB_MS(frame) + 1;
+    best_s = start; dist_s = range + 1;
+    best_e = end;   dist_e = range + 1;
     snap_near(start, 0, range, &best_s, &dist_s);
     snap_near(start, playhead, range, &best_s, &dist_s);
     snap_near(end, playhead, range, &best_e, &dist_e);

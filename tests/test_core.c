@@ -1344,13 +1344,16 @@ static void test_crossfades(void)
     CHECK(tl.clips[1].xfade == 500 && tl.clips[1].start == 0);
     CHECK(tl.clips[2].start == 4000);
 
-    /* A gap: no crossfade. Typing a Starts later than the cut removes it. */
+    /* Typing a Starts later than the cut removes it, leaving a gap. */
     three_clips(&tl);
     FB_TimelineSetCrossfade(&tl, 1, 1000, NULL);
     CHECK(FB_TimelineMoveClip(&tl, 1, 5000) == 0);
     CHECK(tl.clips[1].xfade == 0 && tl.clips[2].start == 9000);
-    CHECK(FB_TimelineMaxCrossfade(&tl, 1) == 0);
-    CHECK(FB_TimelineSetCrossfade(&tl, 1, 1000, NULL) == -1);
+    /* A crossfade closes the gap first; the clip after keeps its own. */
+    CHECK(FB_TimelineMaxCrossfade(&tl, 1) == 4000);
+    CHECK(FB_TimelineSetCrossfade(&tl, 1, 1000, NULL) == 1000);
+    CHECK(tl.clips[1].start == 3000 && tl.clips[2].start == 7000);
+    FB_TimelineSetCrossfade(&tl, 1, 0, NULL);
     /* Typing an earlier one makes the crossfade longer; without one it
      * can't overlap. */
     CHECK(FB_TimelineMoveClip(&tl, 1, 4000) == 0);
@@ -1467,11 +1470,15 @@ static void test_project_crossfade(void)
     CHECK(back.clips[2].start == 6500 &&
           strcmp(back.clips[2].xfade_kind, "circleopen") == 0);
 
-    /* Not after a gap, and only a name as kind. */
+    /* After a gap, it closes; only a name as kind. */
     CHECK(FB_ProjectParse(&back, "FORMBROD-PROJECT 2\nSOURCE 1 a.mp4\n"
                           "TRACK video\nCLIP 1 0 1000\nCLIP 1 0 1000\n"
                           "    AT 2000\n    CROSSFADE 500\n", "", &line)
-          == FB_PROJECT_BAD_LINE);
+          == FB_PROJECT_OK);
+    CHECK(back.clips[1].start == 500);
+    CHECK(FB_ProjectParse(&back, "FORMBROD-PROJECT 2\nSOURCE 1 a.mp4\n"
+                          "TRACK video\nCLIP 1 0 1000\n    CROSSFADE 500\n",
+                          "", &line) == FB_PROJECT_BAD_LINE);
     CHECK(FB_ProjectParse(&back, "FORMBROD-PROJECT 2\nSOURCE 1 a.mp4\n"
                           "TRACK video\nCLIP 1 0 1000\nCLIP 1 0 1000\n"
                           "    CROSSFADE 500 a;b\n", "", &line)

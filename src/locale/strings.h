@@ -303,7 +303,7 @@
 #define MSG_STATUS_NO_CROSSFADE          198
 #define MSG_STATUS_NO_CROSSFADE_STR      "%s now follows with a plain cut"
 #define MSG_STATUS_CANT_CROSSFADE        199
-#define MSG_STATUS_CANT_CROSSFADE_STR    "A crossfade needs a clip right before it on the same track, with no gap"
+#define MSG_STATUS_CANT_CROSSFADE_STR    "A crossfade needs a clip before it on the same track"
 #define MSG_MENU_CROSSFADE               200
 #define MSG_MENU_CROSSFADE_STR           "Crossfade"
 #define MSG_MENU_CROSSFADE_KIND          201

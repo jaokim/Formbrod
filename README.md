@@ -217,7 +217,7 @@ The port is called `FORMBROD`.
 | `SPLIT` | `AT/N/A` (ms), `TRACK/N` (default: all tracks) | |
 | `TRIM` | `CLIP/N/A,IN/N,OUT/N` (ms in the clip's file; left out = unchanged) | |
 | `MOVE` | `CLIP/N/A,AT/N/A,TRACK/N`: without `TRACK`, start the clip at `AT` ms (the clips after it move along); with `TRACK`, move it there like a drag: at `AT` if there's room, else in between that track's clips (`TRACK` = the number of tracks makes a new one) | the clip's new number, with `TRACK` |
-| `CROSSFADE` | `CLIP/N/A,LENGTH/N/A,KIND/K`: crossfade `LENGTH` ms from the clip before it on its track (0 = a plain cut); the clips overlap, so it and the ones after it move earlier. `KIND` is an ffmpeg `xfade` transition (`fade`, `fadeblack`, `wipeleft`, `slideleft`, `circleopen`, ...) | the length set (shortened if it didn't fit) |
+| `CROSSFADE` | `CLIP/N/A,LENGTH/N/A,KIND/K`: crossfade `LENGTH` ms from the clip before it on its track (0 = a plain cut); a gap between them closes first, then the clips overlap, so it and the ones after it move earlier. `KIND` is an ffmpeg `xfade` transition (`fade`, `fadeblack`, `wipeleft`, `slideleft`, `circleopen`, ...) | the length set (shortened if it didn't fit) |
 | `CACHE` | `ON/S,OFF/S,WIDTH/N,AUTO/S` (preview copies) | `ON\|OFF <width> <waiting>` |
 | `REMOVE` | `CLIP/N/A` | |
 | `EFFECT` | `CLIP/N/A,MODULE/A` | effect index |
