@@ -517,6 +517,34 @@ int App_MoveClip(int clip, fb_ms_t start)
     return 0;
 }
 
+int App_MoveClipTo(int clip, int track, fb_ms_t at)
+{
+    FBTimeline *tl = &App.timeline;
+    const char *name;
+    char when[24];
+    int idx;
+
+    if (clip < 0 || clip >= tl->num_clips) {
+        App_SetStatus("%s", FB_Str(MSG_STATUS_NO_SUCH_CLIP));
+        return -1;
+    }
+    if (track < 0 || track > tl->num_tracks) {
+        App_SetStatus("%s", FB_Str(MSG_STATUS_NO_SUCH_TRACK));
+        return -1;
+    }
+    name = file_part(tl->sources[tl->clips[clip].source].path);
+    idx = FB_TimelineMoveClipTo(tl, clip, track, at);
+    if (idx < 0) {
+        App_SetStatus(FB_Str(MSG_STATUS_WRONG_TRACK), name);
+        return -1;
+    }
+    App.modified = 1;
+    FB_FormatTimecode(when, sizeof(when), FB_US(tl->clips[idx].start),
+                      FB_US(100), 0, Locale_DecimalPoint());
+    App_SetStatus(FB_Str(MSG_STATUS_MOVED), name, when);
+    return idx;
+}
+
 int App_TrimClip(int clip, fb_ms_t in, fb_ms_t out)
 {
     if (clip < 0 || clip >= App.timeline.num_clips) {

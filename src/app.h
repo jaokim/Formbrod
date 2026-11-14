@@ -65,6 +65,11 @@ int  App_TrimClip(int clip, fb_ms_t in, fb_ms_t out);
 /* Moves a clip to start at `start` in the edit; the clips after it on its
  * track move along. Moving it later leaves a gap in front of it. */
 int  App_MoveClip(int clip, fb_ms_t start);
+/* Moves a clip in between the clips of a track (its own, another, or a
+ * new one if `track` is the number of tracks), where a clip starting at
+ * `at` has its middle; see FB_TimelineMoveClipTo(). Its old place closes
+ * up. Returns its new index, or -1. */
+int  App_MoveClipTo(int clip, int track, fb_ms_t at);
 int  App_SetIn(int clip, fb_ms_t at);
 int  App_SetOut(int clip, fb_ms_t at);
 int  App_RemoveClip(int clip);

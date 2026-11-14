@@ -11,11 +11,19 @@
  *   SPLIT AT/N/A,TRACK/N                split at AT ms, on TRACK or on all
  *   TRIM CLIP/N/A,IN/N,OUT/N            set a clip's in/out points (ms in
  *                                       its file); left out = unchanged
+<<<<<<< HEAD
  *   MOVE CLIP/N/A,AT/N/A                start a clip at AT ms in the edit;
  *                                       the clips after it move along
  *   CACHE ON/S,OFF/S,WIDTH/N,AUTO/S     preview copies: turn them on or
  *                                       off, set their width (or AUTO);
  *                                       returns "ON|OFF <width> <waiting>"
+=======
+ *   MOVE CLIP/N/A,AT/N/A,TRACK/N        without TRACK: start a clip at AT
+ *                                       ms, the clips after it move along;
+ *                                       with TRACK: move it in between the
+ *                                       clips of that track (TRACKS = new
+ *                                       track) near AT; returns its number
+>>>>>>> origin/tracks
  *   TRACKS                              number of tracks
  *   REMOVE CLIP/N/A
  *   EFFECT CLIP/N/A,MODULE/A            add an effect, returns its index
@@ -102,6 +110,16 @@ static void cmd_move(struct ARexxCmd *cmd, struct RexxMsg *rm)
 {
     (void)rm;
     result[0] = '\0';
+    if (cmd->ac_ArgList[2]) {
+        int idx = App_MoveClipTo(*(int32 *)cmd->ac_ArgList[0],
+                                 *(int32 *)cmd->ac_ArgList[2],
+                                 *(int32 *)cmd->ac_ArgList[1]);
+
+        if (idx >= 0)
+            snprintf(result, sizeof(result), "%d", idx);
+        set_result(cmd, idx < 0 ? RC_ERROR : 0);
+        return;
+    }
     set_result(cmd, App_MoveClip(*(int32 *)cmd->ac_ArgList[0],
                                  *(int32 *)cmd->ac_ArgList[1]) ? RC_ERROR : 0);
 }
@@ -340,8 +358,12 @@ static struct ARexxCmd commands[] = {
     { "APPEND",       17, cmd_append,       "TRACK/N/A,FILE/A",  0, NULL, 0, 0, NULL },
     { "TRACKS",       18, cmd_tracks,       NULL,                0, NULL, 0, 0, NULL },
     { "TRIM",         19, cmd_trim,         "CLIP/N/A,IN/N,OUT/N", 0, NULL, 0, 0, NULL },
+<<<<<<< HEAD
     { "MOVE",         20, cmd_move,         "CLIP/N/A,AT/N/A",   0, NULL, 0, 0, NULL },
     { "CACHE",        21, cmd_cache,        "ON/S,OFF/S,WIDTH/N,AUTO/S", 0, NULL, 0, 0, NULL },
+=======
+    { "MOVE",         20, cmd_move,         "CLIP/N/A,AT/N/A,TRACK/N", 0, NULL, 0, 0, NULL },
+>>>>>>> origin/tracks
     { NULL,           0,  NULL,             NULL,                0, NULL, 0, 0, NULL }
 };
 

@@ -250,10 +250,25 @@ static void update_clip_fields(int clip);
 static void sync_menus(void);
 static int selected_clip(void);
 
-/* The track editor reports a selection, a dragged edge, or (like the
- * ruler) a moved playhead. */
+/* The track editor reports a selection, a dragged edge, a dragged clip,
+ * or (like the ruler) a moved playhead. */
 static void lanes_changed(struct TagItem *tags)
 {
+    if (IUtility->FindTagItem(LANES_MoveClip, tags)) {
+        int32 track = (int32)IUtility->GetTagData(LANES_MoveTrack, -1, tags);
+        int idx = App_MoveClipTo(
+            (int32)IUtility->GetTagData(LANES_MoveClip, 0, tags),
+            track < 0 ? App.timeline.num_tracks : track,
+            (int32)IUtility->GetTagData(LANES_MoveAt, 0, tags));
+
+        if (idx >= 0) {
+            /* It stays selected, where it went. */
+            Selected = idx;
+            SelectedTrack = App.timeline.clips[idx].track;
+        }
+        MainWindow_Refresh();
+        return;
+    }
     if (IUtility->FindTagItem(LANES_EditClip, tags)) {
         App_TrimClip((int32)IUtility->GetTagData(LANES_EditClip, 0, tags),
                      (int32)IUtility->GetTagData(LANES_EditIn, 0, tags),
