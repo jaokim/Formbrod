@@ -354,9 +354,11 @@ that. Exports still read the original files.
   A1222, 320 for a Sam460 or a G3/G4 machine. The width is part of the
   file name (`<key>.proxy1-640.mov`), so changing it keeps the old copies,
   and two Amigas can share one cache drawer.
-- **In the background.** Copies are made a slice at a time between
-  window events, one file at a time, and wait while an export runs. A
-  file that fails is not tried again until Formbrod is restarted.
+- **In the background.** Copies are made a slice at a time (about 30 ms
+  of work, at least one packet), one file at a time, and only once the
+  window has been left alone for 1.5 s, so editing never waits for them.
+  They wait while an export runs. A file that fails is not tried again
+  until Formbrod is restarted.
 - Files that are already quick (MJPEG, DV and the like up to 1024 pixels
   wide), still pictures and sound files get no copy.
 - Each copy has a `<key>.info` text file next to it saying which file it
