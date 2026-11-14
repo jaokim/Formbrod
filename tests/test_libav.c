@@ -21,6 +21,7 @@
 #include "formbrod/module.h"
 #include "formbrod/backend.h"
 #include "formbrod/cache.h"
+#include "formbrod/player.h"
 
 static int failures;
 static char dir[400];
@@ -598,6 +599,72 @@ static void test_play(void)
     be->Dispose(be);
 }
 
+/* The backend into the player, on a made-up clock: 10 ms a turn, like the
+ * app's loop, the sound output taking 10 ms each turn. */
+static void test_play_player(void)
+{
+    static FBTimeline tl, w;
+    static FBJob job;
+    static FBPlayer pl;
+    static short out[441 * 2];
+    FBBackend *be = FB_CreateLocalBackend();
+    FBFrameSink sink;
+    FBOutput o;
+    char a[FB_PATH_LEN], b[FB_PATH_LEN];
+    long long now = 1000000;
+    long real = 0, turns = 0;
+    int ended = 0;
+
+    printf("play into the player, on a clock\n");
+    in_path(a, "a.mp4");
+    in_path(b, "b.mkv");
+    FB_TimelineInit(&tl);
+    FB_TimelineAddSource(&tl, a, 5000, 1, 1);
+    FB_TimelineAddSource(&tl, b, 4000, 1, 1);
+    FB_SourceSetVideo(&tl.sources[0], 320, 240, 1, 1, 25, 1);
+    FB_SourceSetVideo(&tl.sources[1], 640, 360, 1, 1, 30, 1);
+    FB_TimelineAppendClip(&tl, 0, 0, 5000);
+    FB_TimelineAppendClip(&tl, 1, 0, 4000);
+    CHECK(FB_TimelineWindow(&w, &tl, 2000, 7000) == 2);   /* 2 s to the end */
+    memset(&o, 0, sizeof(o));
+    o.quality = FB_QUALITY_PREVIEW;
+    CHECK(FB_JobBuild(&job, &w, &o) == FB_JOB_OK);
+    CHECK(FB_PlayerInit(&pl, job.audio_out[0] != 0) == 0);
+    sink = FB_PlayerSink(&pl);
+    CHECK(be->Play(be, &job, &sink) == 0);
+
+    while (!FB_PlayerFinished(&pl, now) && turns < 5000) {
+        if (!ended) {
+            FBProgress p = be->Progress(be);
+
+            if (p.state != FB_RENDER_RUNNING) {
+                CHECK(p.state == FB_RENDER_DONE);
+                FB_PlayerSetEnded(&pl);
+                ended = 1;
+            }
+        }
+        if (!FB_PlayerStarted(&pl) && FB_PlayerReady(&pl))
+            FB_PlayerStart(&pl, now);
+        if (FB_PlayerStarted(&pl)) {
+            FB_PlayerFrame(&pl, now);
+            real += FB_PlayerTakeAudio(&pl, out, 441);
+        }
+        now += 10000;
+        turns++;
+    }
+    printf("  %ld turns: %ld shown, %ld dropped, %ld ms of sound\n", turns,
+           pl.num_shown, pl.num_dropped, real * 1000 / FB_PLAY_RATE);
+    CHECK(FB_PlayerFinished(&pl, now));
+    /* 7 s of preview at 25 fps (the first clip's rate). */
+    CHECK(pl.num_shown + pl.num_dropped >= 174 &&
+          pl.num_shown + pl.num_dropped <= 176);
+    CHECK(pl.num_dropped == 0);      /* the made-up machine keeps up */
+    CHECK(real * 1000 / FB_PLAY_RATE > 6900);
+    CHECK(turns < 760);              /* about 7 s of turns, not more */
+    FB_PlayerFree(&pl);
+    be->Dispose(be);
+}
+
 int main(int argc, char **argv)
 {
     if (argc != 2) {
@@ -619,6 +686,7 @@ int main(int argc, char **argv)
     test_proxy();
     test_window_seek();
     test_play();
+    test_play_player();
 
     if (failures) {
         printf("%d check(s) failed\n", failures);

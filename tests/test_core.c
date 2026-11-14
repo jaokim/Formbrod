@@ -11,6 +11,7 @@
 #include "formbrod/log.h"
 #include "formbrod/project.h"
 #include "formbrod/cache.h"
+#include "formbrod/player.h"
 
 static int failures;
 
@@ -1380,6 +1381,90 @@ static void test_window_crossfade(void)
     }
 }
 
+/* The preview player's queues and clock. */
+static void test_player(void)
+{
+    static FBPlayer pl;
+    static unsigned char pic[16 * 8 * 4 + 64];
+    static short snd[FB_PLAY_RATE * 2 * 2], out[FB_PLAY_RATE * 2];
+    const FBPlayFrame *f;
+    long long t0 = 5000000;   /* the clock in us */
+    int i;
+
+    for (i = 0; i < (int)sizeof(pic); i++)
+        pic[i] = (unsigned char)i;
+    for (i = 0; i < FB_PLAY_RATE * 2 * 2; i++)
+        snd[i] = 1000;
+
+    /* Pictures only. */
+    CHECK(FB_PlayerInit(&pl, 0) == 0);
+    CHECK(!FB_PlayerReady(&pl));
+    for (i = 0; i < FB_PLAY_FRAMES; i++)
+        CHECK(FB_PlayerPushVideo(&pl, pic, 16, 8, 16 * 4 + 8, i * 40) == 0);
+    CHECK(FB_PlayerPushVideo(&pl, pic, 16, 8, 72, 999) == 1);   /* full */
+    CHECK(FB_PlayerReady(&pl));
+    CHECK(FB_PlayerFrame(&pl, t0) == NULL);                    /* no clock */
+    FB_PlayerStart(&pl, t0);
+    f = FB_PlayerFrame(&pl, t0);
+    CHECK(f && f->pts == 0 && f->width == 16 && f->stride == 64);
+    CHECK(f && f->pixels[64] == pic[72]);   /* row 1, stride removed */
+    CHECK(FB_PlayerFrame(&pl, t0 + 10000) == NULL);    /* same picture */
+    CHECK(FB_PlayerNextDue(&pl, t0 + 10000) == 30);
+    /* 130 ms: 40, 80 and 120 are due; 120 is shown, two dropped. */
+    f = FB_PlayerFrame(&pl, t0 + 130000);
+    CHECK(f && f->pts == 120);
+    CHECK(pl.num_dropped == 2 && pl.num_shown == 2);
+    CHECK(pl.count == FB_PLAY_FRAMES - 4);
+    CHECK(FB_PlayerPushVideo(&pl, pic, 16, 8, 64, 480) == 0);   /* room */
+    CHECK(!FB_PlayerFinished(&pl, t0 + 10000000));
+    FB_PlayerSetEnded(&pl);
+    CHECK(!FB_PlayerFinished(&pl, t0 + 300000));      /* still queued */
+    while (FB_PlayerFrame(&pl, t0 + 10000000))
+        ;
+    CHECK(FB_PlayerFinished(&pl, t0 + 10000000));
+    CHECK(!FB_PlayerFinished(&pl, t0 + 500000));    /* 480 still on show */
+    FB_PlayerFree(&pl);
+
+    /* Sound: in step with its times. */
+    CHECK(FB_PlayerInit(&pl, 1) == 0);
+    CHECK(FB_PlayerPushVideo(&pl, pic, 16, 8, 64, 0) == 0);
+    CHECK(FB_PlayerPushVideo(&pl, pic, 16, 8, 64, 40) == 0);
+    CHECK(FB_PlayerPushVideo(&pl, pic, 16, 8, 64, 80) == 0);
+    CHECK(!FB_PlayerReady(&pl));                     /* no sound yet */
+    /* 10 ms at 0, then 10 ms at 20 ms: 10 ms of silence between. */
+    CHECK(FB_PlayerPushAudio(&pl, snd, 441, 0) == 0);
+    CHECK(FB_PlayerPushAudio(&pl, snd, 441, 20) == 0);
+    CHECK(pl.audio_count == 3 * 441);
+    /* Overlapping by 5 ms: only the new part is added. */
+    CHECK(FB_PlayerPushAudio(&pl, snd, 441, 25) == 0);
+    CHECK(pl.audio_count == 3 * 441 + 220 || pl.audio_count == 3 * 441 + 221);
+    CHECK(FB_PlayerTakeAudio(&pl, out, 441) == 441);
+    CHECK(out[0] == 1000 && out[881] == 1000);
+    FB_PlayerTakeAudio(&pl, out, 441);               /* the gap: */
+    CHECK(out[0] == 0 && out[881] == 0);              /* silent */
+    CHECK(FB_PlayerTakeAudio(&pl, out, 4410) > 441);  /* the rest, then */
+    CHECK(out[4410 * 2 - 1] == 0);                    /* silence */
+    CHECK(pl.audio_count == 0);
+    /* Sound that comes too late is dropped, not played late. */
+    CHECK(FB_PlayerPushAudio(&pl, snd, 441, 10) == 0);
+    CHECK(pl.audio_count == 0);
+    /* Sound later than where the output is: silence until it. */
+    CHECK(FB_PlayerPushAudio(&pl, snd, 441, 200) == 0);
+    CHECK(pl.audio_start == 200LL * FB_PLAY_RATE / 1000);
+    /* Read so far: 441 * 2 + 4410 = 5292. The next 4410 are silence up
+     * to 8820 (200 ms), then the 441 queued. */
+    CHECK(FB_PlayerTakeAudio(&pl, out, 4410) == 441);
+    CHECK(out[(8820 - 5292 - 1) * 2] == 0 && out[(8820 - 5292) * 2] == 1000);
+    /* Full: two seconds at most. */
+    FB_PlayerFree(&pl);
+    CHECK(FB_PlayerInit(&pl, 1) == 0);
+    CHECK(FB_PlayerPushAudio(&pl, snd, FB_PLAY_RATE, 0) == 0);
+    CHECK(FB_PlayerPushAudio(&pl, snd, FB_PLAY_RATE, 1000) == 0);
+    CHECK(FB_PlayerPushAudio(&pl, snd, 10, 2000) == 1);
+    CHECK(!FB_PlayerReady(&pl));     /* waits for pictures too */
+    FB_PlayerFree(&pl);
+}
+
 /* Three picture tracks: each overlay reads what the one before wrote. */
 static void test_job_three_tracks(void)
 {
@@ -1679,6 +1764,7 @@ int main(void)
     test_job_three_tracks();
     test_window_and_seek();
     test_window_crossfade();
+    test_player();
     test_still();
     test_job_errors();
     test_fit();
