@@ -47,7 +47,7 @@ Early skeleton. Working so far:
 - [x] Preview copies (proxies): each video gets a small MJPEG copy in
       the background, once per file, and previews are rendered from them
 - [x] Crossfades between clips on a track: the clips overlap, drawn with
-      a see-through blend of the two clips; picture with ffmpeg's `xfade` (fade, wipes, slides, circle...),
+      an X over them; picture with ffmpeg's `xfade` (fade, wipes, slides, circle...),
       sound with `acrossfade`. Not yet tried on AmigaOS
 - [x] Clip window: double-click a clip (or Edit > Clip settings) for
       all its settings: timing, crossfade, fades, fit, volume, the file's

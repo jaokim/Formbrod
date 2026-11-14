@@ -18,9 +18,9 @@
  *   - a track's name selects the track (for the Track menu);
  *   - a clip selects it; double-clicking it reports LANES_Open (the
  *     window opens the clip's settings). Where two clips overlap in a crossfade, the
- *     overlap goes over from the one clip's colour to the other's, with a
- *     line rising across it, and belongs to the clip fading in (except
- *     the very end, which is the earlier clip's end);
+ *     overlap is marked with an X over the clip underneath (no fill), and
+ *     belongs to the clip fading in (except the very end, which is the
+ *     earlier clip's end);
  *   - a clip's edge, dragged, trims it: the clip is drawn at its new
  *     length while dragging, and on release the window is told the new in
  *     and out points (LANES_EditClip/In/Out);
@@ -81,11 +81,6 @@
 #define COL_GHOST      0xFFFFFF      /* a dragged clip's outline */
 #define COL_GHOST_NO   0x888780      /* ...where it can't go */
 #define COL_INSERT     0xEF9F27      /* where it will go in */
-/* A crossfade's overlap is drawn in at most this many steps of colour,
- * each at least XFADE_STEP_PX wide: few enough pens for a 256-colour
- * screen. */
-#define XFADE_STEPS    8
-#define XFADE_STEP_PX  4
 #define DRAG_PX        3             /* move this far before it's a drag */
 #define SNAP_PX        6             /* ends this near something snap to it */
 
@@ -400,21 +395,31 @@ static void draw_clip(const struct LanesData *ld, struct trackDraw *d,
     }
 }
 
-/* A crossfade: the overlap of a clip and the one before it. It goes over
- * from the earlier clip's colour to the later one's, lighter in the
- * middle, as if seen through glass. It's drawn in a few steps, so a
- * 256-colour screen has the pens.
- * A line rises across it: the later clip coming up. The colours are mixed
- * here, so it needs no compositing; when clips show pictures, real
- * blending (CompositeTags) can take over on deep screens. */
+/* A line from (xa, ya) to (xb, yb) in the gadget's coordinates, cut to
+ * the columns of `box` (which holds the whole height of the row). */
+static void line_in_box(struct RastPort *rp, const struct Rectangle *box,
+                        long left, long xa, long ya, long xb, long yb)
+{
+    long c0 = box->MinX - left, c1 = box->MaxX - left;
+    long ca = xa < c0 ? c0 : xa, cb = xb > c1 ? c1 : xb;
+
+    if (xb <= xa || cb < ca)
+        return;
+    IGraphics->Move(rp, left + ca, ya + (yb - ya) * (ca - xa) / (xb - xa));
+    IGraphics->Draw(rp, left + cb, ya + (yb - ya) * (cb - xa) / (xb - xa));
+}
+
+/* A crossfade: the overlap of a clip and the one before it, marked with
+ * an X and a line at each end, and nothing else: the clip underneath shows
+ * through. A few lines, so it's quick on any screen. */
 static void draw_crossfade(const struct LanesData *ld, struct trackDraw *d,
                            const Row *row, int clip)
 {
     struct RastPort *rp = d->trd_RPort;
     long left = d->trd_Box.Left, w = d->trd_Box.Width;
     long top = d->trd_Box.Top + row->y, bottom = top + row->h - 1;
-    long x0, x1, p0, p1, x, span, steps, k;
-    uint32 fa, ea, ta, fb, eb, tb, edge;
+    long x0, x1, p0, p1;
+    uint32 fa, ea, ta, fb, eb, tb;
     struct Rectangle box;
 
     if (clip <= 0 || ld->tl->clips[clip - 1].track != row->track)
@@ -426,7 +431,7 @@ static void draw_crossfade(const struct LanesData *ld, struct trackDraw *d,
     clip_span(ld, clip - 1, &p0, &p1);
     if (p1 > x1)
         p1 = x1;
-    if (p1 < x0 || p1 < 0 || x0 >= w)
+    if (p1 <= x0 || p1 < 0 || x0 >= w)
         return;
     box.MinX = left + (x0 > 0 ? x0 : 0);
     box.MaxX = left + (p1 < w ? p1 : w - 1);
@@ -435,41 +440,15 @@ static void draw_crossfade(const struct LanesData *ld, struct trackDraw *d,
 
     clip_colours(ld, row, clip - 1, &fa, &ea, &ta);
     clip_colours(ld, row, clip, &fb, &eb, &tb);
-    (void)ta;
-    (void)tb;
-    edge = mix_rgb(ea, eb, 1, 2);
+    (void)fa; (void)ta; (void)fb; (void)tb;
+    Track_SetRGB(rp, mix_rgb(ea, eb, 1, 2));
 
-    Track_SetRGB(rp, edge);
-    IGraphics->RectFill(rp, box.MinX, box.MinY, box.MaxX, box.MaxY);
+    /* Where it starts and ends, and the X between. */
+    Track_FillClipped(rp, &box, left + x0, top, left + x0, bottom);
+    Track_FillClipped(rp, &box, left + p1, top, left + p1, bottom);
+    line_in_box(rp, &box, left, x0, top, p1, bottom);
+    line_in_box(rp, &box, left, x0, bottom, p1, top);
 
-    /* The steps, each the colour of its middle. */
-    span = p1 - x0 - 1;
-    steps = span / XFADE_STEP_PX;
-    if (steps > XFADE_STEPS)
-        steps = XFADE_STEPS;
-    if (steps < 1)
-        steps = 1;
-    for (k = 0; k < steps; k++) {
-        long s0 = x0 + 1 + span * k / steps;
-        long s1 = x0 + 1 + span * (k + 1) / steps - 1;
-
-        long mid = steps - labs(2 * k + 1 - steps);  /* most at the middle */
-
-        /* Lighter towards the middle, like glass: that shows the overlap
-         * even between two clips of one colour. */
-        Track_SetRGB(rp, mix_rgb(mix_rgb(fa, fb, 2 * k + 1, 2 * steps),
-                                 0xFFFFFF, 2 * mid, 5 * steps));
-        Track_FillClipped(rp, &box, left + s0, top + 1, left + s1, bottom - 1);
-    }
-
-    /* The rising line, a pixel column at a time so it stays inside. */
-    Track_SetRGB(rp, edge);
-    span = p1 - x0 > 0 ? p1 - x0 : 1;
-    for (x = x0; x <= p1; x++) {
-        long y = bottom - (x - x0) * (row->h - 1) / span;
-
-        Track_FillClipped(rp, &box, left + x, y, left + x, y);
-    }
     if (clip == ld->selected) {
         Track_SetRGB(rp, COL_SELECTED);
         Track_FillClipped(rp, &box, left + x0, top, left + p1, top + 1);
