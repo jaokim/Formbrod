@@ -156,11 +156,14 @@ static void update_title(void);
 
 static Object *button(uint32 id, const char *text)
 {
-    return Gad[id] = (struct Gadget *)IIntuition->NewObject(CLS(C_BUTTON), NULL,
+    Object *obj = IIntuition->NewObject(CLS(C_BUTTON), NULL,
         GA_ID,        id,
         GA_RelVerify, TRUE,
         GA_Text,      text,
         TAG_END);
+
+    Gad[id] = (struct Gadget *)obj;
+    return obj;
 }
 
 static Object *label(const char *text)
