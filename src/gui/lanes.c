@@ -374,7 +374,6 @@ static void draw_clip(const struct LanesData *ld, struct trackDraw *d,
                       const Row *row, int clip)
 {
     struct RastPort *rp = d->trd_RPort;
-    struct TextFont *font = d->trd_DrInfo->dri_Font;
     const FBTimeline *tl = ld->tl;
     const FBClip *c = &tl->clips[clip];
     const FBSource *src = &tl->sources[c->source];
@@ -415,19 +414,7 @@ static void draw_clip(const struct LanesData *ld, struct trackDraw *d,
                               left + x1 - 2, top + row->h / 2);
         }
     }
-    /* The name in its own part, between the crossfades at its ends; if
-     * that's too narrow, over the whole clip. */
-    if (row->kind != ROW_LINKED) {
-        long e1 = body_x1(ld, clip, x1);
-        struct Rectangle own = box;
-
-        if (e1 - b0 >= NAME_MIN_PX) {
-            own.MaxX = left + (e1 < w ? e1 : w - 1);
-            draw_name(d, row, &own, b0, text, src);
-        } else {
-            draw_name(d, row, &box, x0, text, src);
-        }
-    }
+    (void)text;                 /* the name comes last (draw_clip_name) */
 
     if (clip == ld->selected) {
         /* A white frame, and grips at the ends to show they can be
@@ -509,6 +496,44 @@ static void draw_crossfade(const struct LanesData *ld, struct trackDraw *d,
         Track_FillClipped(rp, &box, left + x0, top, left + p1, top + 1);
         Track_FillClipped(rp, &box, left + x0, bottom - 1, left + p1, bottom);
         Track_FillClipped(rp, &box, left + x0, top, left + x0 + 2, bottom);
+    }
+}
+
+/* A clip's name, after the boxes and crossfades so nothing covers it: in
+ * its own part, between the crossfades at its ends, or over the whole
+ * clip if that's too narrow (a short clip that is all crossfade). */
+static void draw_clip_name(const struct LanesData *ld, struct trackDraw *d,
+                           const Row *row, int clip)
+{
+    const FBClip *c = &ld->tl->clips[clip];
+    const FBSource *src = &ld->tl->sources[c->source];
+    long left = d->trd_Box.Left, w = d->trd_Box.Width;
+    long x0, x1, b0, e1;
+    uint32 fill, edge, text;
+    struct Rectangle box;
+
+    if (row->kind == ROW_LINKED)
+        return;
+    clip_span(ld, clip, &x0, &x1);
+    if (x1 < 0 || x0 >= w)
+        return;
+    box.MinX = left + (x0 > 0 ? x0 : 0);
+    box.MaxX = left + (x1 < w ? x1 : w - 1);
+    box.MinY = d->trd_Box.Top + row->y;
+    box.MaxY = box.MinY + row->h - 1;
+    clip_colours(ld, row, clip, &fill, &edge, &text);
+    (void)fill;
+    (void)edge;
+
+    b0 = body_x0(ld, clip, x0);
+    e1 = body_x1(ld, clip, x1);
+    if (e1 - b0 >= NAME_MIN_PX) {
+        struct Rectangle own = box;
+
+        own.MaxX = left + (e1 < w ? e1 : w - 1);
+        draw_name(d, row, &own, b0, text, src);
+    } else {
+        draw_name(d, row, &box, x0, text, src);
     }
 }
 
@@ -618,6 +643,11 @@ static void lanes_draw(struct LanesData *ld, struct trackDraw *d)
                 !(ld->mode == MODE_MOVE &&
                   (i == ld->drag_clip || i == ld->drag_clip + 1)))
                 draw_crossfade(ld, d, row, i);
+        /* Names last, over everything. */
+        for (i = 0; i < tl->num_clips; i++)
+            if (tl->clips[i].track == row->track &&
+                !(ld->mode == MODE_MOVE && i == ld->drag_clip))
+                draw_clip_name(ld, d, row, i);
     }
 
     if (ld->mode == MODE_MOVE)
