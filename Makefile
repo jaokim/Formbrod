@@ -60,6 +60,7 @@ SRC = src/main.c \
       src/gui/lanes.c \
       src/gui/clipwindow.c \
       src/gui/playwindow.c \
+      src/gui/winprefs.c \
       src/locale/catalog.c \
       src/arexx/arexx.c \
       src/prefs/prefs.c \

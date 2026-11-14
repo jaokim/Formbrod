@@ -24,10 +24,11 @@ static short             *Buf[2];
 static BOOL               Busy[2];
 static BOOL               DeviceOpen;
 static int                Next;        /* the request to send next */
+static BOOL               Reported;    /* an AHI error was logged */
 
-int Audio_Open(void)
+int Audio_Open(int unit)
 {
-    int i;
+    int i, err;
 
     if (DeviceOpen)
         return 0;
@@ -41,9 +42,12 @@ int Audio_Open(void)
     if (!Req[0])
         goto fail;
     Req[0]->ahir_Version = 4;
-    if (IExec->OpenDevice(AHINAME, AHI_DEFAULT_UNIT,
-                          (struct IORequest *)Req[0], 0) != 0) {
-        FB_Log(FB_LOG_WARNING, "audio", "Can't open %s: no sound", AHINAME);
+    err = IExec->OpenDevice(AHINAME, unit, (struct IORequest *)Req[0], 0);
+    if (err != 0) {
+        /* Error codes from devices/ahi.h (AHIE_...) or exec's IOERR_. */
+        FB_Log(FB_LOG_WARNING, "audio",
+               "Can't open %s unit %d (error %d): no sound", AHINAME, unit,
+               err);
         goto fail;
     }
     DeviceOpen = TRUE;
@@ -60,8 +64,9 @@ int Audio_Open(void)
         Busy[i] = FALSE;
     }
     Next = 0;
-    FB_Log(FB_LOG_INFO, "audio", "Sound through %s, %d Hz", AHINAME,
-           FB_PLAY_RATE);
+    Reported = FALSE;
+    FB_Log(FB_LOG_INFO, "audio", "Sound through %s unit %d, %d Hz", AHINAME,
+           unit, FB_PLAY_RATE);
     return 0;
 
 fail:
@@ -78,6 +83,13 @@ static void collect(void)
         if (Busy[i] && IExec->CheckIO((struct IORequest *)Req[i])) {
             IExec->WaitIO((struct IORequest *)Req[i]);
             Busy[i] = FALSE;
+            /* A request AHI refused (a sample type or rate it won't
+             * play, say) is silence; say why, once. */
+            if (Req[i]->ahir_Std.io_Error != 0 && !Reported) {
+                FB_Log(FB_LOG_WARNING, "audio", "AHI refused the sound "
+                       "(error %d)", Req[i]->ahir_Std.io_Error);
+                Reported = TRUE;
+            }
         }
     }
 }

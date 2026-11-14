@@ -587,3 +587,6 @@ MSG_PLAY_TIME
 MSG_STATUS_NO_MEMORY
 Inte tillräckligt med minne
 ;
+MSG_STATUS_PLAYING_SILENT
+Spelar från %s, utan ljud (AHI går inte att öppna)
+;

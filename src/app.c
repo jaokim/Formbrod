@@ -1441,7 +1441,10 @@ int App_PlayStart(fb_ms_t from)
     }
     log_job(&job);
 
-    App.play.sound = job.audio_out[0] && Audio_Open() == 0;
+    /* Sound through AHI, on the unit in the settings (AHIUnit). If it
+     * can't be had, it plays silently and says so. */
+    App.play.sound = job.audio_out[0] &&
+                     Audio_Open(atoi(Prefs_GetString("AHIUnit", "0"))) == 0;
     if (FB_PlayerInit(&App.play.pl, App.play.sound) != 0) {
         App_SetStatus("%s", FB_Str(MSG_STATUS_NO_MEMORY));
         return -1;
@@ -1457,7 +1460,10 @@ int App_PlayStart(fb_ms_t from)
     App.play.ended = 0;
     App.play.shown_at = 0;
     FB_FormatTimeMs(at, sizeof(at), from, Locale_DecimalPoint());
-    App_SetStatus(FB_Str(MSG_STATUS_PLAYING), at);
+    if (job.audio_out[0] && !App.play.sound)
+        App_SetStatus(FB_Str(MSG_STATUS_PLAYING_SILENT), at);
+    else
+        App_SetStatus(FB_Str(MSG_STATUS_PLAYING), at);
     return 0;
 }
 

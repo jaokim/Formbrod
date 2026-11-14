@@ -79,6 +79,7 @@
 #include "gui/xfadekinds.h"
 #include "gui/clipwindow.h"
 #include "gui/playwindow.h"
+#include "gui/winprefs.h"
 #include "prefs/prefs.h"
 #include "version.h"
 
@@ -1474,6 +1475,8 @@ int MainWindow_Open(void)
 {
     Object *buttons, *timeline, *viewrow, *cliprow, *root;
     struct Screen *scr;
+    struct TagItem place[5];
+    BOOL placed;
     int i;
 
     for (i = 0; i < C_COUNT; i++) {
@@ -1641,6 +1644,7 @@ int MainWindow_Open(void)
         return -1;
     if (!make_menus(scr))
         free_menus();
+    placed = WinPrefs_Tags("MainWindow", scr, place);
 
     WinObj = IIntuition->NewObject(CLS(C_WINDOW), NULL,
         WA_PubScreen,       scr,
@@ -1650,8 +1654,9 @@ int MainWindow_Open(void)
         WA_DragBar,         TRUE,
         WA_CloseGadget,     TRUE,
         WA_SizeGadget,      TRUE,
-        WA_InnerWidth,      640,
-        WA_InnerHeight,     420,
+        /* Where it was last time (winprefs.h), else centred. */
+        placed ? TAG_IGNORE : WA_InnerWidth,  640,
+        placed ? TAG_IGNORE : WA_InnerHeight, 420,
         WA_IDCMP,           IDCMP_GADGETUP | IDCMP_CLOSEWINDOW |
                             IDCMP_IDCMPUPDATE | IDCMP_NEWSIZE |
                             IDCMP_GADGETHELP | IDCMP_MENUPICK |
@@ -1661,12 +1666,12 @@ int MainWindow_Open(void)
         WINDOW_HintInfo,    Hints,
         WINDOW_IDCMPHook,   &IdcmpHook,
         WINDOW_IDCMPHookBits, IDCMP_IDCMPUPDATE,
-        WINDOW_Position,    WPOS_CENTERSCREEN,
+        placed ? TAG_IGNORE : WINDOW_Position, WPOS_CENTERSCREEN,
         WINDOW_AppPort,     AppPort,
         WINDOW_AppWindow,   TRUE,
         WINDOW_Layout,      root,
         WINDOW_MenuStrip,   Menus,
-        TAG_END);
+        TAG_MORE,           place);
     if (WinObj)
         Win = (struct Window *)IIntuition->IDoMethod(WinObj, WM_OPEN, NULL);
     IIntuition->UnlockPubScreen(NULL, scr);   /* the open window holds it */
@@ -1750,6 +1755,7 @@ void MainWindow_Close(void)
     ClipWindow_Close();
 
     if (WinObj) {
+        WinPrefs_Save("MainWindow", Win);
         IIntuition->DisposeObject(WinObj);   /* disposes all children */
         WinObj = NULL;
         Win = NULL;

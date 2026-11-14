@@ -400,8 +400,10 @@
 #define MSG_PLAY_TIME_STR                "%s of %s"
 #define MSG_STATUS_NO_MEMORY             247
 #define MSG_STATUS_NO_MEMORY_STR         "Not enough memory"
+#define MSG_STATUS_PLAYING_SILENT        248
+#define MSG_STATUS_PLAYING_SILENT_STR    "Playing from %s, without sound (AHI can't be opened)"
 
-#define FB_NUM_STRINGS 194
+#define FB_NUM_STRINGS 195
 
 #ifdef FB_STRINGS_ARRAY
 static const struct FBBuiltinString {
@@ -602,6 +604,7 @@ static const struct FBBuiltinString {
     { MSG_STATUS_PLAY_END, MSG_STATUS_PLAY_END_STR },
     { MSG_PLAY_TIME, MSG_PLAY_TIME_STR },
     { MSG_STATUS_NO_MEMORY, MSG_STATUS_NO_MEMORY_STR },
+    { MSG_STATUS_PLAYING_SILENT, MSG_STATUS_PLAYING_SILENT_STR },
 };
 #endif
 

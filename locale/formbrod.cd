@@ -722,3 +722,8 @@ MSG_PLAY_TIME (246//)
 ;
 MSG_STATUS_NO_MEMORY (247//)
 Not enough memory
+;
+; Playing, but AHI (the sound system) couldn't be opened; %s is where it
+; starts. The log says why.
+MSG_STATUS_PLAYING_SILENT (248//)
+Playing from %s, without sound (AHI can't be opened)
