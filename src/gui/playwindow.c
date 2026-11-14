@@ -4,7 +4,7 @@
  * A space.gadget holds the picture. Its render hook draws the last
  * picture shown, so the window refreshes itself; new pictures are drawn
  * straight into the window's RastPort. Pictures are ARGB and drawn with
- * WritePixelArray, which converts to the screen's format.
+ * WritePixelArray (PIXF_A8R8G8B8), which converts to the screen's format.
  *
  * Not compiled against the SDK in the environment it was written in.
  */
@@ -15,6 +15,7 @@
 #include <proto/exec.h>
 #include <proto/intuition.h>
 #include <proto/graphics.h>
+#include <graphics/gfx.h>        /* PIXF_A8R8G8B8 */
 
 #include <classes/window.h>
 #include <gadgets/layout.h>
@@ -29,10 +30,10 @@
 #include "gui/playwindow.h"
 #include "gui/mainwindow.h"
 
-/* Picasso96's and graphics.library's pixel order for WritePixelArray. */
-#ifndef RECTFMT_ARGB
-#define RECTFMT_ARGB 2
-#endif
+/* OS4's graphics.library (v54) WritePixelArray takes a PIXF_ pixel format
+ * (graphics/gfx.h), not CyberGraphX's RECTFMT_ values: RECTFMT_ARGB's
+ * number, 2, is PIXF_R8G8B8 there, which read our 4-byte pixels as 3-byte
+ * ones (stripes, wrong colours). Our pictures are A, R, G, B in memory. */
 
 enum { PG_PICTURE = 1, PG_TIME, PG_LAST };
 enum { K_WINDOW, K_LAYOUT, K_SPACE, K_BUTTON, K_COUNT };
@@ -79,7 +80,7 @@ static void draw(struct RastPort *rp)
     if (y < box->Top)
         y = box->Top;
     IGraphics->WritePixelArray(Last->pixels, 0, 0, Last->stride,
-                               RECTFMT_ARGB, rp, x, y,
+                               PIXF_A8R8G8B8, rp, x, y,
                                Last->width < box->Width ? Last->width
                                                         : box->Width,
                                Last->height < box->Height ? Last->height
