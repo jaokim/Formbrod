@@ -26,4 +26,8 @@ void   MainWindow_Refresh(void);
 void   MainWindow_SetProgress(const FBProgress *p);
 void   MainWindow_Close(void);
 
+/* Moves the playhead (and the view, to keep it in sight): while playing,
+ * it follows playback. */
+void MainWindow_SetPlayhead(fb_ms_t ms);
+
 #endif

@@ -871,17 +871,21 @@ static int give(LocalPriv *p, int kind, AVFrame *f)
     return full;
 }
 
-/* Like drain_sinks, to the sink. Returns 1 when the sink is full. */
+/* Like drain_sinks, to the sink. Returns 1 when the sink is full for
+ * either kind, -1 on failure. A full picture queue doesn't stop the sound
+ * already made from going on (and the other way round). */
 static int drain_to_sink(LocalPriv *p)
 {
-    int k, ret;
+    int k, ret, full = 0;
 
     for (k = 0; k < NUM_KINDS; k++) {
         OutStream *os = &p->os[k];
 
         if (p->held[k]) {
-            if (give(p, k, p->held[k]))
-                return 1;
+            if (give(p, k, p->held[k])) {
+                full = 1;
+                continue;
+            }
             av_frame_free(&p->held[k]);
         }
         while (!os->eof) {
@@ -899,12 +903,13 @@ static int drain_to_sink(LocalPriv *p)
                 av_frame_unref(p->frame);
                 if (!p->held[k])
                     return fail(p, AVERROR(ENOMEM), "Out of memory");
-                return 1;
+                full = 1;
+                break;
             }
             av_frame_unref(p->frame);
         }
     }
-    return 0;
+    return full;
 }
 
 /* Decoders and sources for the graph's inputs, sinks for its outputs

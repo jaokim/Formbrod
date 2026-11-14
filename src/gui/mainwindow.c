@@ -78,6 +78,7 @@
 #include "gui/track.h"
 #include "gui/xfadekinds.h"
 #include "gui/clipwindow.h"
+#include "gui/playwindow.h"
 #include "prefs/prefs.h"
 #include "version.h"
 
@@ -1087,12 +1088,15 @@ void MainWindow_Refresh(void)
     IIntuition->SetGadgetAttrs(Gad[GID_REMOVE], Win, NULL, GA_Disabled, total <= 0, TAG_END);
     IIntuition->SetGadgetAttrs(Gad[GID_FADE], Win, NULL, GA_Disabled, total <= 0, TAG_END);
     IIntuition->SetGadgetAttrs(Gad[GID_CROSSFADE], Win, NULL, GA_Disabled, total <= 0, TAG_END);
-    /* While previewing, Preview turns into Stop. */
-    IIntuition->SetGadgetAttrs(Gad[GID_PREVIEW], Win, NULL,
-        GA_Text,     FB_Str(App_Previewing() ? MSG_BTN_STOP_PREVIEW
-                                             : MSG_BTN_PREVIEW),
-        GA_Disabled, total <= 0 && !App_Previewing(),
-        TAG_END);
+    /* While playing, Preview turns into Stop. */
+    {
+        BOOL on = App_Playing() || App_Previewing();
+
+        IIntuition->SetGadgetAttrs(Gad[GID_PREVIEW], Win, NULL,
+            GA_Text,     FB_Str(on ? MSG_BTN_STOP_PREVIEW : MSG_BTN_PREVIEW),
+            GA_Disabled, total <= 0 && !on,
+            TAG_END);
+    }
     /* While rendering, Export turns into Cancel. */
     IIntuition->SetGadgetAttrs(Gad[GID_EXPORT], Win, NULL,
         GA_Text,     FB_Str(App.rendering ? MSG_BTN_CANCEL : MSG_BTN_EXPORT),
@@ -1356,11 +1360,13 @@ static void handle_gadget(uint32 id)
             App_SetStatus("%s", FB_Str(MSG_STATUS_SELECT_CLIP));
         break;
     case GID_PREVIEW:
-        /* From the playhead, on until stopped; pressed again, stops. */
-        if (App_Previewing())
+        /* Plays from the playhead in the preview window, on until
+         * stopped; pressed again (or Space), stops. */
+        if (App_Playing() || App_Previewing()) {
+            App_PlayStop();
             App_PreviewStop();
-        else
-            App_PreviewStart(FB_MS(TB.playhead));
+        } else
+            App_PlayStart(FB_MS(TB.playhead));
         break;
     case GID_EXPORT:
         if (App.rendering)
@@ -1678,7 +1684,7 @@ uint32 MainWindow_SigMask(void)
         IIntuition->GetAttr(WINDOW_SigMask, WinObj, &mask);
     if (AppPort)
         mask |= 1UL << AppPort->mp_SigBit;
-    return mask | ClipWindow_SigMask();
+    return mask | ClipWindow_SigMask() | PlayWindow_SigMask();
 }
 
 void MainWindow_Handle(uint32 sigs)
@@ -1689,6 +1695,7 @@ void MainWindow_Handle(uint32 sigs)
     if (AppPort && (sigs & (1UL << AppPort->mp_SigBit)))
         handle_appmessages();
     ClipWindow_Handle(sigs);
+    PlayWindow_Handle(sigs);
 
     while ((result = IIntuition->IDoMethod(WinObj, WM_HANDLEINPUT, &code))
            != WMHI_LASTMSG) {
@@ -1701,8 +1708,12 @@ void MainWindow_Handle(uint32 sigs)
             handle_gadget(result & WMHI_GADGETMASK);
             break;
         case WMHI_VANILLAKEY:
-            /* I and O: Set in and Set out at the playhead. */
+            /* I and O: Set in and Set out at the playhead; Space plays
+             * from it, or stops. */
             switch (result & WMHI_KEYMASK) {
+            case ' ':
+                handle_gadget(GID_PREVIEW);
+                break;
             case 'i': case 'I':
                 handle_gadget(GID_SET_IN);
                 break;
@@ -1722,10 +1733,20 @@ void MainWindow_Handle(uint32 sigs)
     }
 }
 
+void MainWindow_SetPlayhead(fb_ms_t ms)
+{
+    if (!Win)
+        return;
+    Timebase_SetPlayhead(&TB, FB_US(ms));
+    FB_ViewEnsureVisible(&TB.view, TB.playhead);
+    timebase_changed(NULL);
+}
+
 void MainWindow_Close(void)
 {
     int i;
 
+    PlayWindow_Close();
     ClipWindow_Close();
 
     if (WinObj) {

@@ -1423,6 +1423,10 @@ static void test_player(void)
         ;
     CHECK(FB_PlayerFinished(&pl, t0 + 10000000));
     CHECK(!FB_PlayerFinished(&pl, t0 + 500000));    /* 480 still on show */
+    /* No sound output: sound is taken and thrown away, never full. */
+    for (i = 0; i < 100; i++)
+        CHECK(FB_PlayerPushAudio(&pl, snd, FB_PLAY_RATE, i * 1000) == 0);
+    CHECK(pl.audio_count == 0);
     FB_PlayerFree(&pl);
 
     /* Sound: in step with its times. */

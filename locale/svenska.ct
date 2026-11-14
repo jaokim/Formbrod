@@ -569,3 +569,21 @@ Förhandsvisningen är klar till slutet: %s
 MSG_STATUS_PREVIEW_STOPPED
 Förhandsvisningen stoppad
 ;
+MSG_PLAYWIN_TITLE
+Förhandsvisning
+;
+MSG_STATUS_PLAYING
+Spelar från %s
+;
+MSG_STATUS_PLAY_STOPPED
+Stoppad vid %s
+;
+MSG_STATUS_PLAY_END
+Spelat till slutet
+;
+MSG_PLAY_TIME
+%s av %s
+;
+MSG_STATUS_NO_MEMORY
+Inte tillräckligt med minne
+;

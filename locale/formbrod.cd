@@ -698,3 +698,27 @@ Preview ready to the end: %s
 ;
 MSG_STATUS_PREVIEW_STOPPED (241//)
 Preview stopped
+;
+; ---- The preview window ---------------------------------------------------
+;
+; Title of the window the edit plays in.
+MSG_PLAYWIN_TITLE (242//)
+Preview
+;
+; %s is a time in the edit, where playing starts (the playhead).
+MSG_STATUS_PLAYING (243//)
+Playing from %s
+;
+; %s is the time in the edit where it was stopped.
+MSG_STATUS_PLAY_STOPPED (244//)
+Stopped at %s
+;
+MSG_STATUS_PLAY_END (245//)
+Played to the end
+;
+; Under the picture: where playback is, and the edit's length.
+MSG_PLAY_TIME (246//)
+%s of %s
+;
+MSG_STATUS_NO_MEMORY (247//)
+Not enough memory

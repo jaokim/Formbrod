@@ -388,8 +388,20 @@
 #define MSG_STATUS_PREVIEW_END_STR       "Preview ready to the end: %s"
 #define MSG_STATUS_PREVIEW_STOPPED       241
 #define MSG_STATUS_PREVIEW_STOPPED_STR   "Preview stopped"
+#define MSG_PLAYWIN_TITLE                242
+#define MSG_PLAYWIN_TITLE_STR            "Preview"
+#define MSG_STATUS_PLAYING               243
+#define MSG_STATUS_PLAYING_STR           "Playing from %s"
+#define MSG_STATUS_PLAY_STOPPED          244
+#define MSG_STATUS_PLAY_STOPPED_STR      "Stopped at %s"
+#define MSG_STATUS_PLAY_END              245
+#define MSG_STATUS_PLAY_END_STR          "Played to the end"
+#define MSG_PLAY_TIME                    246
+#define MSG_PLAY_TIME_STR                "%s of %s"
+#define MSG_STATUS_NO_MEMORY             247
+#define MSG_STATUS_NO_MEMORY_STR         "Not enough memory"
 
-#define FB_NUM_STRINGS 188
+#define FB_NUM_STRINGS 194
 
 #ifdef FB_STRINGS_ARRAY
 static const struct FBBuiltinString {
@@ -584,6 +596,12 @@ static const struct FBBuiltinString {
     { MSG_STATUS_PREVIEW_AHEAD, MSG_STATUS_PREVIEW_AHEAD_STR },
     { MSG_STATUS_PREVIEW_END, MSG_STATUS_PREVIEW_END_STR },
     { MSG_STATUS_PREVIEW_STOPPED, MSG_STATUS_PREVIEW_STOPPED_STR },
+    { MSG_PLAYWIN_TITLE, MSG_PLAYWIN_TITLE_STR },
+    { MSG_STATUS_PLAYING, MSG_STATUS_PLAYING_STR },
+    { MSG_STATUS_PLAY_STOPPED, MSG_STATUS_PLAY_STOPPED_STR },
+    { MSG_STATUS_PLAY_END, MSG_STATUS_PLAY_END_STR },
+    { MSG_PLAY_TIME, MSG_PLAY_TIME_STR },
+    { MSG_STATUS_NO_MEMORY, MSG_STATUS_NO_MEMORY_STR },
 };
 #endif
 

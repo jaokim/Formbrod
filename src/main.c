@@ -10,6 +10,7 @@
 
 #include "app.h"
 #include "gui/mainwindow.h"
+#include "gui/playwindow.h"
 #include "arexx/arexx.h"
 #include "prefs/prefs.h"
 #include "locale/catalog.h"
@@ -68,7 +69,36 @@ int main(int argc, char **argv)
         uint32 sigs;
         static uint32 last_input;
 
-        if (App.rendering) {
+        if (App_Playing()) {
+            /* Playing in the preview window: a turn of backend work, the
+             * picture that's due, sound for AHI. The playhead and the time
+             * under the picture follow four times a second (redrawing
+             * the tracks is too much to do for every picture). */
+            static long long last_ui;
+            const FBPlayFrame *f;
+            long sleep_ms;
+
+            sigs = IExec->SetSignal(0, mask) & mask;
+            f = App_PollPlay(&sleep_ms);
+            if (f)
+                PlayWindow_Show(f);
+            if (!App_Playing()) {
+                MainWindow_Refresh();           /* ended, or failed */
+            } else {
+                long long now = FB_BackendClockUs();
+
+                if (now - last_ui >= 250000) {
+                    char text[64];
+
+                    last_ui = now;
+                    App_PlayTimeText(text, sizeof(text));
+                    PlayWindow_SetText(text);
+                    MainWindow_SetPlayhead(App_PlayPosition());
+                }
+                if (!sigs && sleep_ms >= 20)
+                    IDOS->Delay(1);             /* nothing due for a while */
+            }
+        } else if (App.rendering) {
             FBProgress p;
 
             sigs = IExec->SetSignal(0, mask) & mask;

@@ -46,6 +46,7 @@ Early skeleton. Working so far:
       to a new one
 - [x] Preview copies (proxies): each video gets a small MJPEG copy in
       the background, once per file, and previews are rendered from them
+- [x] Playing from the playhead in a preview window, with sound (AHI)
 - [x] Crossfades between clips on a track: the clips overlap, drawn with
       an X over them; picture with ffmpeg's `xfade` (fade, wipes, slides, circle...),
       sound with `acrossfade`. Not yet tried on AmigaOS
@@ -218,6 +219,7 @@ The port is called `FORMBROD`.
 | `TRIM` | `CLIP/N/A,IN/N,OUT/N` (ms in the clip's file; left out = unchanged) | |
 | `MOVE` | `CLIP/N/A,AT/N/A,TRACK/N`: without `TRACK`, start the clip at `AT` ms (the clips after it move along); with `TRACK`, move it there like a drag: at `AT` if there's room, else in between that track's clips (`TRACK` = the number of tracks makes a new one) | the clip's new number, with `TRACK` |
 | `CROSSFADE` | `CLIP/N/A,LENGTH/N/A,KIND/K`: crossfade `LENGTH` ms from the clip before it on its track (0 = a plain cut); a gap between them closes first, then the clips overlap, so it and the ones after it move earlier. `KIND` is an ffmpeg `xfade` transition (`fade`, `fadeblack`, `wipeleft`, `slideleft`, `circleopen`, ...) | the length set (shortened if it didn't fit) |
+| `PLAY` | `AT/N,STOP/S`: play in the preview window from `AT` ms to the end, or stop | |
 | `PREVIEW` | `AT/N,STOP/S`: preview from `AT` ms in 10 s windows until stopped | the playlist's path |
 | `CACHE` | `ON/S,OFF/S,WIDTH/N,AUTO/S` (preview copies) | `ON\|OFF <width> <waiting>` |
 | `REMOVE` | `CLIP/N/A` | |
@@ -339,23 +341,24 @@ size*: `auto` or a width in pixels) and `CacheDir` (default
 
 ## Previews
 
-*Preview* plays the edit from the playhead, for as long as you like:
-it renders 10-second pieces one after another until you press *Stop*
-(the same button) or the edit ends. Each piece is a file of its own,
-`T:formbrod-preview-000.mp4` and on, and `T:formbrod-preview.m3u` lists
-all of them from the start, so a player can be started on the playlist as
-soon as the first piece is ready. Rendering keeps two pieces ahead of
-where that player would be, and deletes pieces it has played.
+*Preview* (or Space) plays the edit from the playhead in a small preview
+window, with sound, until you press it again or the edit ends. Nothing is
+written to disk: the pictures go straight to the window and the sound to
+AHI. If the machine can't keep up, pictures are skipped so it stays in
+time with the sound. The playhead follows along. Close the window, or
+press Space or Esc in it, to stop.
 
-To have Formbrod start the player itself, set `PreviewPlayer` in the
-settings to a command; the playlist's path is added after it, e.g.
-`MPlayer -playlist`. The status line says how fast the preview renders
-compared with playing it ("1,6 x real time"); below 1 the player will
-catch up with the rendering.
+Only the part being played is read: each file jumps straight to the first
+frame used (to the keyframe before it). With preview copies that jump is
+instant, and playing is cheaper too.
 
-Only the part being previewed is read: each file jumps straight to the
-first frame used (to the keyframe before it). With preview copies that
-jump is instant.
+Without AHI the preview plays without sound.
+
+ARexx `PREVIEW` still makes the older file preview: 10-second pieces in
+`T:formbrod-preview-000.mp4` and on, listed in `T:formbrod-preview.m3u`,
+rendered two pieces ahead of where a player started on the playlist would
+be. Set `PreviewPlayer` in the settings to a command (the playlist's path
+is added after it, e.g. `MPlayer -playlist`) to have that player started.
 
 ## Preview copies
 

@@ -599,14 +599,16 @@ static void test_play(void)
     be->Dispose(be);
 }
 
-/* The backend into the player, on a made-up clock: 10 ms a turn, like the
- * app's loop, the sound output taking 10 ms each turn. */
-static void test_play_player(void)
+/* The backend into the player, on a made-up clock: `step_ms` a turn,
+ * the sound output taking that much sound each turn. 10 ms is a machine
+ * that keeps up; 100 ms one that manages ten turns a second. */
+static void test_play_player(int step_ms)
 {
     static FBTimeline tl, w;
     static FBJob job;
     static FBPlayer pl;
-    static short out[441 * 2];
+    static short out[FB_PLAY_RATE / 10 * 2];
+    long chunk = (long)FB_PLAY_RATE * step_ms / 1000;
     FBBackend *be = FB_CreateLocalBackend();
     FBFrameSink sink;
     FBOutput o;
@@ -615,7 +617,7 @@ static void test_play_player(void)
     long real = 0, turns = 0;
     int ended = 0;
 
-    printf("play into the player, on a clock\n");
+    printf("play into the player, %d ms a turn\n", step_ms);
     in_path(a, "a.mp4");
     in_path(b, "b.mkv");
     FB_TimelineInit(&tl);
@@ -647,9 +649,9 @@ static void test_play_player(void)
             FB_PlayerStart(&pl, now);
         if (FB_PlayerStarted(&pl)) {
             FB_PlayerFrame(&pl, now);
-            real += FB_PlayerTakeAudio(&pl, out, 441);
+            real += FB_PlayerTakeAudio(&pl, out, chunk);
         }
-        now += 10000;
+        now += step_ms * 1000LL;
         turns++;
     }
     printf("  %ld turns: %ld shown, %ld dropped, %ld ms of sound\n", turns,
@@ -658,9 +660,13 @@ static void test_play_player(void)
     /* 7 s of preview at 25 fps (the first clip's rate). */
     CHECK(pl.num_shown + pl.num_dropped >= 174 &&
           pl.num_shown + pl.num_dropped <= 176);
-    CHECK(pl.num_dropped == 0);      /* the made-up machine keeps up */
+    if (step_ms <= 40)
+        CHECK(pl.num_dropped == 0);  /* a picture every turn or more */
+    else
+        CHECK(pl.num_dropped > 0 && pl.num_shown < 100);   /* skips */
     CHECK(real * 1000 / FB_PLAY_RATE > 6900);
-    CHECK(turns < 760);              /* about 7 s of turns, not more */
+    /* About 7 s of clock either way: it keeps time. */
+    CHECK(turns * step_ms < 7600);
     FB_PlayerFree(&pl);
     be->Dispose(be);
 }
@@ -686,7 +692,8 @@ int main(int argc, char **argv)
     test_proxy();
     test_window_seek();
     test_play();
-    test_play_player();
+    test_play_player(10);
+    test_play_player(100);
 
     if (failures) {
         printf("%d check(s) failed\n", failures);

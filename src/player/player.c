@@ -69,7 +69,9 @@ int FB_PlayerPushAudio(FBPlayer *pl, const short *samples, int frames,
     long long idx = (long long)pts * FB_PLAY_RATE / 1000, end;
     long skip = 0, gap = 0, n, i;
 
-    if (frames <= 0 || !pl->audio)
+    /* Without sound output it's taken and forgotten, so a job's sound
+     * never stalls the pictures. */
+    if (frames <= 0 || !pl->audio || !pl->has_audio)
         return 0;
     if (pl->audio_count == 0) {
         /* Nothing queued: start at this sound, or at where the output

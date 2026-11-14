@@ -11,6 +11,7 @@
 #include "prefs/prefs.h"
 #include "version.h"
 #include "locale/catalog.h"
+#include "player/audio.h"
 
 #include <time.h>
 
@@ -45,6 +46,8 @@ int App_Init(void)
 
 void App_Cleanup(void)
 {
+    App_PlayStop();
+    Audio_Close();
     App_PreviewStop();
     if (App.cache_backend) {
         cache_stop();   /* no half-made proxies left behind */
@@ -870,6 +873,7 @@ int App_Export(const char *path, int preview)
     FBOutput out;
     FBJobError err;
 
+    App_PlayStop();     /* the backend can do one thing at a time */
     if (App.rendering) {
         App_SetStatus("%s", FB_Str(MSG_STATUS_ALREADY_RENDERING));
         return -1;
@@ -1072,7 +1076,7 @@ int App_PollCache(void)
     FBProgress p;
 
     /* An export has the machine to itself; the cache job waits. */
-    if (!App.cache_backend || App.rendering)
+    if (!App.cache_backend || App.rendering || App.play.on)
         return 0;
 
     if (!App.caching) {
@@ -1269,6 +1273,7 @@ int App_PreviewStart(fb_ms_t from)
     char at[32];
 
     App_PreviewStop();
+    App_PlayStop();
     if (App.rendering) {
         App_SetStatus("%s", FB_Str(MSG_STATUS_ALREADY_RENDERING));
         return -1;
@@ -1383,4 +1388,173 @@ void App_PollPreview(void)
         return;
     if (preview_render(App.preview.next) != 0)
         App.preview.on = 0;
+}
+
+/* ---- Playing in the preview window ------------------------------------- */
+
+int App_Playing(void)
+{
+    return App.play.on;
+}
+
+static long take_audio(void *ud, short *out, long frames)
+{
+    return FB_PlayerTakeAudio(ud, out, frames);
+}
+
+int App_PlayStart(fb_ms_t from)
+{
+    static FBTimeline win;   /* large; keep them off the stack */
+    static FBJob job;
+    FBOutput out;
+    FBFrameSink sink;
+    FBJobError err;
+    char at[32];
+
+    App_PlayStop();
+    App_PreviewStop();
+    if (App.rendering) {
+        App_SetStatus("%s", FB_Str(MSG_STATUS_ALREADY_RENDERING));
+        return -1;
+    }
+    if (!App.backend->Play)
+        return -1;
+    App.play.end = FB_TimelineDuration(&App.timeline);
+    if (App.play.end <= 0)
+        return -1;
+    if (from < 0 || from >= App.play.end)
+        from = 0;                       /* at the end: from the start */
+    App.play.from = from;
+
+    FB_TimelineWindow(&win, with_proxies(), from, App.play.end - from);
+    memset(&out, 0, sizeof(out));
+    out.quality = FB_QUALITY_PREVIEW;
+    err = FB_JobBuild(&job, &win, &out);
+    if (err != FB_JOB_OK) {
+        FB_Log(FB_LOG_ERROR, "play", "Can't build the job: %s",
+               FB_JobErrorString(err));
+        App_SetStatus("%s", App_JobErrorString(err));
+        return -1;
+    }
+    log_job(&job);
+
+    App.play.sound = job.audio_out[0] && Audio_Open() == 0;
+    if (FB_PlayerInit(&App.play.pl, App.play.sound) != 0) {
+        App_SetStatus("%s", FB_Str(MSG_STATUS_NO_MEMORY));
+        return -1;
+    }
+    sink = FB_PlayerSink(&App.play.pl);
+    if (App.backend->Play(App.backend, &job, &sink) != 0) {
+        App_SetStatus(FB_Str(MSG_STATUS_FAILED),
+                      App.backend->Result(App.backend).message);
+        FB_PlayerFree(&App.play.pl);
+        return -1;
+    }
+    App.play.on = 1;
+    App.play.ended = 0;
+    App.play.shown_at = 0;
+    FB_FormatTimeMs(at, sizeof(at), from, Locale_DecimalPoint());
+    App_SetStatus(FB_Str(MSG_STATUS_PLAYING), at);
+    return 0;
+}
+
+/* Stops; `why` is the status line (NULL = say where it stopped). */
+static void play_stop(const char *why)
+{
+    char at[32];
+
+    if (!App.play.on)
+        return;
+    FB_FormatTimeMs(at, sizeof(at), App_PlayPosition(), Locale_DecimalPoint());
+    App.play.on = 0;
+    if (!App.play.ended)
+        App.backend->Cancel(App.backend);
+    Audio_Stop();
+    FB_Log(FB_LOG_INFO, "play", "Stopped at %s: %ld pictures shown, %ld "
+           "skipped", at, App.play.pl.num_shown, App.play.pl.num_dropped);
+    FB_PlayerFree(&App.play.pl);
+    if (why)
+        App_SetStatus("%s", why);
+    else
+        App_SetStatus(FB_Str(MSG_STATUS_PLAY_STOPPED), at);
+}
+
+void App_PlayStop(void)
+{
+    play_stop(NULL);
+}
+
+fb_ms_t App_PlayPosition(void)
+{
+    fb_ms_t t;
+
+    if (!App.play.on)
+        return 0;
+    t = App.play.from + FB_PlayerTime(&App.play.pl, FB_BackendClockUs());
+    return t < App.play.end ? t : App.play.end;
+}
+
+void App_PlayTimeText(char *buf, size_t len)
+{
+    char at[32], total[32];
+
+    FB_FormatTimeMs(at, sizeof(at), App_PlayPosition(), Locale_DecimalPoint());
+    FB_FormatTimeMs(total, sizeof(total), App.play.end, Locale_DecimalPoint());
+    snprintf(buf, len, FB_Str(MSG_PLAY_TIME), at, total);
+}
+
+const FBPlayFrame *App_PollPlay(long *sleep_ms)
+{
+    FBPlayer *pl = &App.play.pl;
+    const FBPlayFrame *f = NULL;
+    long long now;
+    long due;
+
+    *sleep_ms = 0;
+    if (!App.play.on)
+        return NULL;
+
+    /* Some work, unless the queues are full (then it returns at once). */
+    if (!App.play.ended) {
+        FBProgress p = App.backend->Progress(App.backend);
+
+        if (p.state != FB_RENDER_RUNNING) {
+            FBResult r = App.backend->Result(App.backend);
+
+            App.play.ended = 1;
+            FB_PlayerSetEnded(pl);
+            if (r.state == FB_RENDER_FAILED) {
+                char msg[300];
+
+                snprintf(msg, sizeof(msg), FB_Str(MSG_STATUS_FAILED),
+                         r.message);
+                play_stop(msg);
+                return NULL;
+            }
+        }
+    }
+
+    now = FB_BackendClockUs();
+    if (!FB_PlayerStarted(pl) && FB_PlayerReady(pl)) {
+        FB_PlayerStart(pl, now);
+        FB_Log(FB_LOG_INFO, "play", "Playing: %d pictures buffered", pl->count);
+    }
+    if (FB_PlayerStarted(pl)) {
+        f = FB_PlayerFrame(pl, now);
+        if (App.play.sound)
+            Audio_Feed(take_audio, pl);
+    }
+    if (!f && FB_PlayerFinished(pl, now)) {
+        play_stop(FB_Str(MSG_STATUS_PLAY_END));
+        return NULL;
+    }
+
+    /* The backend wants a turn while there's room in the picture queue;
+     * else nothing is due until the next picture (but AHI wants sound
+     * every 100 ms, so not long). */
+    if (App.play.ended || pl->count >= FB_PLAY_FRAMES) {
+        due = FB_PlayerNextDue(pl, now);
+        *sleep_ms = due < 0 || due > 40 ? 40 : due;
+    }
+    return f;
 }

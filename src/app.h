@@ -10,6 +10,7 @@
 #include "formbrod/timeline.h"
 #include "formbrod/backend.h"
 #include "formbrod/cache.h"
+#include "formbrod/player.h"
 
 typedef struct FBApp {
     FBTimeline  timeline;
@@ -37,6 +38,15 @@ typedef struct FBApp {
         long    clock0;        /* when window 0 was ready (ms), or -1 */
         long    started;       /* when the preview was asked for (ms) */
     } preview;
+    /* Playing in the preview window (App_PlayStart). */
+    struct {
+        int      on;
+        int      ended;        /* the backend has given everything */
+        int      sound;        /* sound goes out through AHI */
+        fb_ms_t  from, end;    /* in the edit */
+        FBPlayer pl;
+        long long shown_at;    /* clock of the last time text */
+    } play;
 } FBApp;
 
 extern FBApp App;
@@ -158,6 +168,24 @@ int  App_Previewing(void);
 int  App_PreviewWaiting(void);
 void App_PollPreview(void);
 const char *App_PreviewPlaylist(void);
+
+/* Playing the edit in the preview window, from `from` (the playhead) to
+ * the end: the job's frames go straight to the window and the sound to
+ * AHI, read from proxies where they're ready. Nothing is written. Late
+ * pictures are skipped to keep time. Stop at any point.
+ *
+ * PollPlay does a turn: some backend work, the picture due now (or NULL;
+ * the main loop shows it in the window, and it stays valid until the
+ * next call), sound for AHI. `sleep_ms` says how long the loop may wait
+ * before the next turn. PlayPosition is where playback is in the edit,
+ * for the playhead. */
+int  App_PlayStart(fb_ms_t from);
+void App_PlayStop(void);
+int  App_Playing(void);
+const FBPlayFrame *App_PollPlay(long *sleep_ms);
+fb_ms_t App_PlayPosition(void);
+/* "0:12,3 of 1:05,0", for under the picture. */
+void App_PlayTimeText(char *buf, size_t len);
 
 /* Media probing (src/backend/media.c). Fills duration, stream flags and
  * video size/aspect/rate of `info` (not its path). */

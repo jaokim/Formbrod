@@ -58,7 +58,8 @@ typedef struct FBPlayer {
     fb_ms_t     last_pts;            /* of the last picture given */
 } FBPlayer;
 
-/* 0, or -1 if out of memory. */
+/* 0, or -1 if out of memory. Without `has_audio` (no sound in the job,
+ * or no sound output) sound given to it is thrown away. */
 int  FB_PlayerInit(FBPlayer *pl, int has_audio);
 void FB_PlayerFree(FBPlayer *pl);
 
