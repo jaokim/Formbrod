@@ -13,6 +13,9 @@
  *                                       its file); left out = unchanged
  *   MOVE CLIP/N/A,AT/N/A                start a clip at AT ms in the edit;
  *                                       the clips after it move along
+ *   CACHE ON/S,OFF/S,WIDTH/N,AUTO/S     preview copies: turn them on or
+ *                                       off, set their width (or AUTO);
+ *                                       returns "ON|OFF <width> <waiting>"
  *   TRACKS                              number of tracks
  *   REMOVE CLIP/N/A
  *   EFFECT CLIP/N/A,MODULE/A            add an effect, returns its index
@@ -107,6 +110,23 @@ static void cmd_tracks(struct ARexxCmd *cmd, struct RexxMsg *rm)
 {
     (void)rm;
     snprintf(result, sizeof(result), "%d", App.timeline.num_tracks);
+    set_result(cmd, 0);
+}
+
+static void cmd_cache(struct ARexxCmd *cmd, struct RexxMsg *rm)
+{
+    (void)rm;
+    if (cmd->ac_ArgList[0])
+        App_SetProxies(1);
+    if (cmd->ac_ArgList[1])
+        App_SetProxies(0);
+    if (cmd->ac_ArgList[3])
+        App_SetProxyWidth(0);
+    else if (cmd->ac_ArgList[2])
+        App_SetProxyWidth(*(int32 *)cmd->ac_ArgList[2]);
+    snprintf(result, sizeof(result), "%s %d %d",
+             App_ProxiesEnabled() ? "ON" : "OFF", App_ProxyWidth(),
+             FB_CachePending(&App.cache));
     set_result(cmd, 0);
 }
 
@@ -321,6 +341,7 @@ static struct ARexxCmd commands[] = {
     { "TRACKS",       18, cmd_tracks,       NULL,                0, NULL, 0, 0, NULL },
     { "TRIM",         19, cmd_trim,         "CLIP/N/A,IN/N,OUT/N", 0, NULL, 0, 0, NULL },
     { "MOVE",         20, cmd_move,         "CLIP/N/A,AT/N/A",   0, NULL, 0, 0, NULL },
+    { "CACHE",        21, cmd_cache,        "ON/S,OFF/S,WIDTH/N,AUTO/S", 0, NULL, 0, 0, NULL },
     { NULL,           0,  NULL,             NULL,                0, NULL, 0, 0, NULL }
 };
 

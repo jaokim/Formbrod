@@ -44,6 +44,7 @@
 #define FB_MAX_PARAMS    8
 #define FB_PATH_LEN      512
 #define FB_NAME_LEN      32
+#define FB_KEY_LEN       17   /* a cache fingerprint: 16 hex digits + NUL */
 
 typedef int64_t fb_ms_t; /* time in milliseconds */
 
@@ -57,6 +58,10 @@ typedef struct FBSource {
     int     width, height;
     int     sar_num, sar_den;   /* pixel aspect, 0/0 or 1/1 = square */
     int     fps_num, fps_den;
+    int     intra;          /* every frame is a keyframe (MJPEG, DV...) */
+    /* The file's fingerprint for the media cache (formbrod/cache.h),
+     * "" until it has been read. Like the probed info, never saved. */
+    char    key[FB_KEY_LEN];
 } FBSource;
 
 /* How a clip whose shape differs from the output frame is fitted into it. */

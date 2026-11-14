@@ -494,3 +494,24 @@ It can't start before %s, where the clip in front of it ends
 MSG_STATUS_MOVED (188//)
 %s now starts at %s
 ;
+;
+; A small, quick copy of a video for previews is ready; %s is the file name.
+MSG_STATUS_PROXY_READY (189//)
+Preview copy of %s is ready
+;
+; Settings menu, a checkmark item: make small, quick copies of videos for
+; previews, in the background.
+MSG_MENU_PROXIES (190//)
+Make preview copies
+;
+; Settings menu: a submenu choosing how wide the preview copies are.
+MSG_MENU_PROXY_SIZE (191//)
+Preview copy size
+;
+; In the size submenu: chosen from how fast the computer is.
+MSG_MENU_PROXY_AUTO (192//)
+Automatic
+;
+; In the size submenu; %d is a width in pixels.
+MSG_MENU_PROXY_WIDTH (193//)
+%d pixels wide

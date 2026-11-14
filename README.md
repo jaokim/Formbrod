@@ -42,6 +42,8 @@ Early skeleton. Working so far:
       (PNG, JPEG...) as clips of any length
 - [x] Track editor under the film strip: clips you select and trim by
       dragging their ends, track names and a Track menu, drops onto tracks
+- [x] Preview copies (proxies): each video gets a small MJPEG copy in
+      the background, once per file, and previews are rendered from them
 - [ ] Moving clips by dragging them, within a track or to another
 - [ ] Real thumbnails, waveforms
 - [ ] Remote rendering on a render server
@@ -197,6 +199,7 @@ The port is called `FORMBROD`.
 | `SPLIT` | `AT/N/A` (ms), `TRACK/N` (default: all tracks) | |
 | `TRIM` | `CLIP/N/A,IN/N,OUT/N` (ms in the clip's file; left out = unchanged) | |
 | `MOVE` | `CLIP/N/A,AT/N/A` (ms in the edit; the clips after it move along) | |
+| `CACHE` | `ON/S,OFF/S,WIDTH/N,AUTO/S` (preview copies) | `ON\|OFF <width> <waiting>` |
 | `REMOVE` | `CLIP/N/A` | |
 | `EFFECT` | `CLIP/N/A,MODULE/A` | effect index |
 | `SETPARAM` | `CLIP/N/A,EFFECT/N/A,NAME/A,VALUE/A` | |
@@ -300,6 +303,39 @@ each requester opens where it was last used, also after a restart;
 show plain blocks with file names and decode nothing, for slower Amigas;
 and for the log file `Log`, `LogFile` and `LogLevel` (see below). Without
 application.library 53 the drawers are only remembered until Formbrod quits.
+
+Preview copies have three settings: `MakeProxies` (*Settings → Make
+preview copies*, `1` or `0`), `ProxyWidth` (*Settings → Preview copy
+size*: `auto` or a width in pixels) and `CacheDir` (default
+`PROGDIR:Cache`; there is no menu item for it yet).
+
+## Preview copies
+
+Camera and phone videos (H.264, H.265) are slow to decode and to jump
+around in, because most of their frames are only stored as changes from
+other frames. So when a video is added, or a project is opened, Formbrod
+makes a small copy of it in the background where every frame stands on
+its own (MJPEG, with the sound as plain PCM), and renders previews from
+that. Exports still read the original files.
+
+- **Once per file.** A file is recognised by a fingerprint of its size and
+  three 64 KB slices of it (start, middle and end), so moving or renaming
+  it doesn't matter, and nor does using it in several projects. A copy is
+  written under a temporary name and renamed when it is complete, so a
+  copy in the cache drawer is always whole.
+- **Sized for the machine.** With `ProxyWidth` set to `auto` the width is
+  picked from the CPU: 640 pixels for an X1000 or X5000, 480 for an
+  A1222, 320 for a Sam460 or a G3/G4 machine. The width is part of the
+  file name (`<key>.proxy1-640.mov`), so changing it keeps the old copies,
+  and two Amigas can share one cache drawer.
+- **In the background.** Copies are made a slice at a time between
+  window events, one file at a time, and wait while an export runs. A
+  file that fails is not tried again until Formbrod is restarted.
+- Files that are already quick (MJPEG, DV and the like up to 1024 pixels
+  wide), still pictures and sound files get no copy.
+- Each copy has a `<key>.info` text file next to it saying which file it
+  was made from. Deleting the cache drawer's contents is safe; the copies
+  are made again when needed.
 
 ## Log file
 

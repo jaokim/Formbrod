@@ -9,6 +9,7 @@
 
 #include "formbrod/timeline.h"
 #include "formbrod/backend.h"
+#include "formbrod/cache.h"
 
 typedef struct FBApp {
     FBTimeline  timeline;
@@ -18,6 +19,12 @@ typedef struct FBApp {
     char        status[256];   /* last status line, shown in the window */
     char        project[FB_PATH_LEN]; /* project file, "" = never saved */
     int         modified;      /* changed since it was opened or saved */
+    /* The media cache: proxies made in the background (cache.h). Its jobs
+     * run on their own backend, so they can later go to a render server
+     * while exports stay local, or the other way round. */
+    FBCache     cache;
+    FBBackend  *cache_backend;
+    int         caching;       /* a cache job is running */
 } FBApp;
 
 extern FBApp App;
@@ -79,6 +86,27 @@ void App_SetStatus(const char *fmt, ...);
 
 /* Translated text for a job error, for the status line. */
 const char *App_JobErrorString(FBJobError err);
+
+/* The media cache. Video files get a small proxy, made in the background
+ * when they're added or a project is opened, once per file; previews are
+ * rendered from proxies that are ready (the export always uses the
+ * originals). Settings: "MakeProxies" (1/0, default 1), "CacheDir"
+ * (default PROGDIR:Cache) and "ProxyWidth" ("auto" or a width; auto picks
+ * one from the CPU, see FB_CacheAutoWidth()).
+ *
+ * PollCache does a slice of the current cache job; the main loop calls it
+ * whenever CacheBusy is true. It pauses while an export runs, and returns
+ * 1 when a proxy has just been finished (the status line changed). */
+int  App_CacheBusy(void);
+int  App_PollCache(void);
+int  App_ProxiesEnabled(void);
+void App_SetProxies(int on);
+/* 0 = auto. ProxyWidth returns the width in use. Changing it starts
+ * proxies of the new size (the old ones stay, and are used again if it's
+ * changed back). */
+int  App_ProxyWidthSetting(void);
+int  App_ProxyWidth(void);
+void App_SetProxyWidth(int width);
 
 /* Media probing (src/backend/media.c). Fills duration, stream flags and
  * video size/aspect/rate of `info` (not its path). */

@@ -10,6 +10,7 @@
 #include "formbrod/timeview.h"
 #include "formbrod/log.h"
 #include "formbrod/project.h"
+#include "formbrod/cache.h"
 
 static int failures;
 
@@ -903,6 +904,212 @@ static void test_time_text(void)
     CHECK(FB_ParseTime(buf, ',', &ms) == 0 && ms == 3725125);
 }
 
+
+/* ---- Media cache --------------------------------------------------------- */
+
+#define CACHE_DIR "build/host"
+
+static void write_bytes(const char *path, const unsigned char *p, size_t n)
+{
+    FILE *f = fopen(path, "wb");
+
+    if (f) {
+        fwrite(p, 1, n, f);
+        fclose(f);
+    }
+}
+
+static int exists(const char *path)
+{
+    FILE *f = fopen(path, "rb");
+
+    if (f)
+        fclose(f);
+    return f != NULL;
+}
+
+static void test_cache_keys(void)
+{
+    static unsigned char big[300 * 1024];
+    char k1[FB_KEY_LEN], k2[FB_KEY_LEN];
+    size_t i;
+
+    for (i = 0; i < sizeof(big); i++)
+        big[i] = (unsigned char)(i * 7 + (i >> 9));
+
+    /* The same bytes give the same key, in memory and from a file. */
+    FB_CacheKeyData(big, sizeof(big), k1);
+    CHECK(strlen(k1) == 16);
+    write_bytes(CACHE_DIR "/key-big.bin", big, sizeof(big));
+    CHECK(FB_CacheKey(CACHE_DIR "/key-big.bin", k2) == 0);
+    CHECK(strcmp(k1, k2) == 0);
+
+    /* Small files are hashed whole. */
+    FB_CacheKeyData(big, 1000, k1);
+    write_bytes(CACHE_DIR "/key-small.bin", big, 1000);
+    CHECK(FB_CacheKey(CACHE_DIR "/key-small.bin", k2) == 0);
+    CHECK(strcmp(k1, k2) == 0);
+
+    /* A change in the start, middle or end, or in length, changes it. */
+    FB_CacheKeyData(big, sizeof(big), k1);
+    big[10] ^= 1;
+    FB_CacheKeyData(big, sizeof(big), k2);
+    CHECK(strcmp(k1, k2) != 0);
+    big[10] ^= 1;
+    big[sizeof(big) / 2] ^= 1;
+    FB_CacheKeyData(big, sizeof(big), k2);
+    CHECK(strcmp(k1, k2) != 0);
+    big[sizeof(big) / 2] ^= 1;
+    big[sizeof(big) - 1] ^= 1;
+    FB_CacheKeyData(big, sizeof(big), k2);
+    CHECK(strcmp(k1, k2) != 0);
+    big[sizeof(big) - 1] ^= 1;
+    FB_CacheKeyData(big, sizeof(big) - 1, k2);
+    CHECK(strcmp(k1, k2) != 0);
+
+    CHECK(FB_CacheKey(CACHE_DIR "/no-such-file", k2) == -1);
+    CHECK(k2[0] == '\0');
+}
+
+static FBSource cache_source(const char *path, const char *key, int w, int h)
+{
+    FBSource s;
+
+    memset(&s, 0, sizeof(s));
+    strcpy(s.path, path);
+    strcpy(s.key, key);
+    s.duration = 12000;
+    s.has_video = 1;
+    s.has_audio = 1;
+    FB_SourceSetVideo(&s, w, h, 1, 1, 25, 1);
+    return s;
+}
+
+static void test_cache_rules(void)
+{
+    static FBCache c;
+    FBSource s = cache_source("a.mp4", "0123456789abcdef", 1920, 1080);
+    char recipe[64];
+
+    FB_CacheInit(&c, CACHE_DIR, 0);
+    CHECK(c.proxy_width == FB_PROXY_WIDTH);
+    FB_CacheRecipe(&c, FB_CACHE_PROXY, recipe, sizeof(recipe));
+    CHECK(strcmp(recipe, "proxy1-640") == 0);
+    FB_CacheInit(&c, CACHE_DIR, 33);
+    CHECK(c.proxy_width == FB_PROXY_MIN_WIDTH);
+    FB_CacheInit(&c, CACHE_DIR, 481);
+    CHECK(c.proxy_width == 480);
+
+    CHECK(FB_CacheWantsProxy(&c, &s));
+    s.intra = 1;                       /* full HD MJPEG: still worth it */
+    CHECK(FB_CacheWantsProxy(&c, &s));
+    FB_SourceSetVideo(&s, 720, 576, 64, 45, 25, 1);   /* DV */
+    CHECK(!FB_CacheWantsProxy(&c, &s));
+    s.intra = 0;                       /* small H.264: yes, for seeking */
+    CHECK(FB_CacheWantsProxy(&c, &s));
+    s.still = 1;
+    CHECK(!FB_CacheWantsProxy(&c, &s));
+    s.still = 0;
+    s.has_video = 0;                   /* music */
+    CHECK(!FB_CacheWantsProxy(&c, &s));
+    s.has_video = 1;
+    s.key[0] = '\0';                   /* couldn't be read */
+    CHECK(!FB_CacheWantsProxy(&c, &s));
+
+    CHECK(FB_CacheAutoWidth(1800, 2) == 640);   /* X1000 */
+    CHECK(FB_CacheAutoWidth(2000, 2) == 640);   /* X5000/20 */
+    CHECK(FB_CacheAutoWidth(1200, 2) == 480);   /* A1222 */
+    CHECK(FB_CacheAutoWidth(1150, 1) == 320);   /* Sam460 */
+    CHECK(FB_CacheAutoWidth(800, 1) == 320);    /* G4 */
+    CHECK(FB_CacheAutoWidth(0, 0) == FB_PROXY_WIDTH);
+}
+
+static void test_cache_queue(void)
+{
+    static FBCache c;
+    static FBJob job, back;
+    static char text[FB_FILTERGRAPH_LEN + 4096];
+    FBSource a = cache_source("Work:Video/a.mp4", "00000000000000aa", 1920, 1080);
+    FBSource b = cache_source("Work:Video/b.mp4", "00000000000000bb", 480, 270);
+    char path[FB_PATH_LEN];
+    int t;
+
+    b.has_audio = 0;
+    remove(CACHE_DIR "/00000000000000aa.proxy1-640.mov");
+    remove(CACHE_DIR "/00000000000000bb.proxy1-640.mov");
+    FB_CacheInit(&c, CACHE_DIR, 640);
+
+    CHECK(FB_CachePath(&c, a.key, FB_CACHE_PROXY, 1, path, sizeof(path)) == 0);
+    CHECK(strcmp(path, CACHE_DIR "/00000000000000aa.proxy1-640-part.mov") == 0);
+
+    /* Asking twice queues it once. */
+    CHECK(FB_CacheRequest(&c, &a) == FB_CACHE_QUEUED);
+    CHECK(FB_CacheRequest(&c, &a) == FB_CACHE_QUEUED);
+    CHECK(FB_CacheRequest(&c, &b) == FB_CACHE_QUEUED);
+    CHECK(c.num_tasks == 2 && FB_CachePending(&c) == 2);
+
+    /* The job: scaled down, MJPEG and PCM, into the partial file. */
+    t = FB_CacheNextJob(&c, &job);
+    CHECK(t == 0);
+    CHECK(FB_CacheNextJob(&c, &back) == -1);   /* one at a time */
+    CHECK(FB_CacheRequest(&c, &a) == FB_CACHE_BUSY);
+    CHECK(job.num_inputs == 1 && strcmp(job.inputs[0], a.path) == 0);
+    CHECK(strcmp(job.filtergraph,
+                 "[0:v]scale=640:-2:flags=fast_bilinear[outv];"
+                 "[0:a]anull[outa]") == 0);
+    CHECK(strcmp(job.output.vcodec, "mjpeg") == 0);
+    CHECK(strcmp(job.output.acodec, "pcm_s16le") == 0);
+    CHECK(strcmp(job.output.path, path) == 0);
+    CHECK(job.length == 12000);
+    CHECK(FB_JobWrite(&job, text, sizeof(text)) > 0);
+    CHECK(FB_JobParse(&back, text) == 0);
+    CHECK(strcmp(back.filtergraph, job.filtergraph) == 0);
+
+    /* Finished: the partial file becomes the real one. */
+    write_bytes(path, (const unsigned char *)"x", 1);
+    CHECK(FB_CacheFinish(&c, 1) == FB_CACHE_READY);
+    CHECK(!exists(path));
+    CHECK(FB_CacheFind(&c, a.key, FB_CACHE_PROXY, path, sizeof(path)));
+    CHECK(strcmp(path, CACHE_DIR "/00000000000000aa.proxy1-640.mov") == 0);
+    CHECK(exists(CACHE_DIR "/00000000000000aa.info"));
+    CHECK(FB_CacheRequest(&c, &a) == FB_CACHE_READY);
+    CHECK(FB_CacheState(&c, a.key, FB_CACHE_PROXY) == FB_CACHE_READY);
+
+    /* Another width is another file. */
+    {
+        static FBCache small;
+
+        FB_CacheInit(&small, CACHE_DIR, 320);
+        CHECK(!FB_CacheFind(&small, a.key, FB_CACHE_PROXY, NULL, 0));
+    }
+
+    /* A small one isn't scaled; no sound, no audio chain. Aborting puts
+     * it back in the queue; failing doesn't retry it. */
+    t = FB_CacheNextJob(&c, &job);
+    CHECK(t == 1);
+    CHECK(strcmp(job.filtergraph, "[0:v]null[outv]") == 0);
+    CHECK(job.audio_out[0] == '\0');
+    FB_CacheAbort(&c);
+    CHECK(FB_CacheState(&c, b.key, FB_CACHE_PROXY) == FB_CACHE_QUEUED);
+    CHECK(FB_CacheNextJob(&c, &job) == 1);
+    CHECK(FB_CacheFinish(&c, 0) == FB_CACHE_FAILED);
+    CHECK(FB_CacheRequest(&c, &b) == FB_CACHE_FAILED);
+    CHECK(FB_CachePending(&c) == 0);
+    CHECK(FB_CacheNextJob(&c, &job) == -1);
+
+    /* A copy that appears meanwhile (from a render server) isn't made. */
+    {
+        FBSource d = cache_source("Work:d.mp4", "00000000000000dd", 1280, 720);
+
+        remove(CACHE_DIR "/00000000000000dd.proxy1-640.mov");
+        CHECK(FB_CacheRequest(&c, &d) == FB_CACHE_QUEUED);
+        write_bytes(CACHE_DIR "/00000000000000dd.proxy1-640.mov",
+                    (const unsigned char *)"x", 1);
+        CHECK(FB_CacheNextJob(&c, &job) == -1);
+        CHECK(FB_CacheState(&c, d.key, FB_CACHE_PROXY) == FB_CACHE_READY);
+    }
+}
+
 int main(void)
 {
     FB_RegisterBuiltinModules();
@@ -920,6 +1127,9 @@ int main(void)
     test_project_roundtrip();
     test_project_hand_edited();
     test_project_tracks();
+    test_cache_keys();
+    test_cache_rules();
+    test_cache_queue();
     if (failures) {
         printf("%d check(s) failed\n", failures);
         return 1;
