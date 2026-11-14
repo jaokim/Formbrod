@@ -46,6 +46,13 @@ Early skeleton. Working so far:
       to a new one
 - [x] Preview copies (proxies): each video gets a small MJPEG copy in
       the background, once per file, and previews are rendered from them
+- [x] Crossfades between clips on a track: the clips overlap, drawn with
+      an X over them; picture with ffmpeg's `xfade` (fade, wipes, slides, circle...),
+      sound with `acrossfade`. Not yet tried on AmigaOS
+- [x] Clip window: double-click a clip (or Edit > Clip settings) for
+      all its settings: timing, crossfade, fades, fit, volume, the file's
+      picture, and its effects with a field per module parameter. It
+      follows the selection. Not yet tried on AmigaOS
 - [ ] Real thumbnails, waveforms
 - [ ] Remote rendering on a render server
 
@@ -80,7 +87,8 @@ Early skeleton. Working so far:
   clip selected in the list, or else on the picture under the playhead.
   The clips after it on the same track move along, so no gap is left.
 - Put the playhead *after* the end of a clip and choose **Set out** to make
-  it longer, as far as its file goes; a still picture can be any length.
+  it longer, as far as its file goes; a still picture can be any length,
+  and so can an animation (animated GIF or APNG), which loops.
   The timeline goes on a little past its last clip for this.
 - Or type the times: under the playhead and zoom controls, the selected
   clip shows where it **Starts** in the edit, where in its file it begins
@@ -209,10 +217,14 @@ The port is called `FORMBROD`.
 | `SPLIT` | `AT/N/A` (ms), `TRACK/N` (default: all tracks) | |
 | `TRIM` | `CLIP/N/A,IN/N,OUT/N` (ms in the clip's file; left out = unchanged) | |
 | `MOVE` | `CLIP/N/A,AT/N/A,TRACK/N`: without `TRACK`, start the clip at `AT` ms (the clips after it move along); with `TRACK`, move it there like a drag: at `AT` if there's room, else in between that track's clips (`TRACK` = the number of tracks makes a new one) | the clip's new number, with `TRACK` |
+| `CROSSFADE` | `CLIP/N/A,LENGTH/N/A,KIND/K`: crossfade `LENGTH` ms from the clip before it on its track (0 = a plain cut); a gap between them closes first, then the clips overlap, so it and the ones after it move earlier. `KIND` is an ffmpeg `xfade` transition (`fade`, `fadeblack`, `wipeleft`, `slideleft`, `circleopen`, ...) | the length set (shortened if it didn't fit) |
 | `CACHE` | `ON/S,OFF/S,WIDTH/N,AUTO/S` (preview copies) | `ON\|OFF <width> <waiting>` |
 | `REMOVE` | `CLIP/N/A` | |
 | `EFFECT` | `CLIP/N/A,MODULE/A` | effect index |
 | `SETPARAM` | `CLIP/N/A,EFFECT/N/A,NAME/A,VALUE/A` | |
+| `REMOVEEFFECT` | `CLIP/N/A,EFFECT/N/A` | |
+| `FADES` | `CLIP/N/A,IN/N,OUT/N`: fade in and out in ms (0 = none, left out = unchanged); kept within the clip | `<in> <out>` |
+| `VOLUME` | `CLIP/N/A,PERCENT/N/A`: 100 = as recorded, up to 400 | |
 | `EXPORT` | `FILE/A,PREVIEW/S` | |
 | `CANCEL` | | |
 | `RENDERSTATUS` | | `IDLE`, `RUNNING <pos> <total>`, `DONE`, `FAILED`, `CANCELLED` |
@@ -274,6 +286,8 @@ the video files have moved:
         FIT fill
         EFFECT fade
             PARAM in 0.5
+    CLIP 1 8000 12000
+        CROSSFADE 1000 wipeleft
 
     TRACK audio
     CLIP 3 0 60000
@@ -290,7 +304,10 @@ the video files have moved:
 - `CLIP <source> <in> <out>` takes a part of a source (times in ms) and
   puts it on the track above, right after the clip before it, so changing
   a length by hand moves the rest along. `AT <ms>` starts it later instead,
-  leaving a gap; `VOLUME` scales its sound (1 = as recorded). `FIT`,
+  leaving a gap; `CROSSFADE <ms> [<kind>]` mixes it in from the clip before
+  it over that time, so it starts that much earlier (the kind is an ffmpeg
+  `xfade` transition, `fade` if left out; older versions just cut there).
+  `VOLUME` scales its sound (1 = as recorded). `FIT`,
   `EFFECT` and `PARAM` lines belong to the clip above them. Indentation is
   only for reading.
 - Version 1 files have no `TRACK` lines; they open as one picture track.
@@ -338,9 +355,11 @@ that. Exports still read the original files.
   A1222, 320 for a Sam460 or a G3/G4 machine. The width is part of the
   file name (`<key>.proxy1-640.mov`), so changing it keeps the old copies,
   and two Amigas can share one cache drawer.
-- **In the background.** Copies are made a slice at a time between
-  window events, one file at a time, and wait while an export runs. A
-  file that fails is not tried again until Formbrod is restarted.
+- **In the background.** Copies are made a slice at a time (about 30 ms
+  of work, at least one packet), one file at a time, and only once the
+  window has been left alone for 1.5 s, so editing never waits for them.
+  They wait while an export runs. A file that fails is not tried again
+  until Formbrod is restarted.
 - Files that are already quick (MJPEG, DV and the like up to 1024 pixels
   wide), still pictures and sound files get no copy.
 - Each copy has a `<key>.info` text file next to it saying which file it

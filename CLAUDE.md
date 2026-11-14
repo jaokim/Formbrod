@@ -31,6 +31,9 @@ through modules and ARexx.
   behind `#if` checks at the top of the file). It appends format/fps
   conversion filters after the job's output labels, so jobs don't need to
   know what the encoder accepts.
+- `src/gui/clipwindow.c` – the clip window: every setting of the selected
+  clip, opened by double-clicking it. Effect parameters get fields from
+  the module's `FBParamDef`s, so modules need no GUI code.
 - `src/gui/track.c`, `src/gui/timebase.c` – the timeline gadgets (ruler,
   film strip) and the time axis they share. Their arithmetic is in the
   portable `src/timeline/timeview.c`. Notes in `gadgets/timeline/README.md`.

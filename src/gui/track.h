@@ -69,6 +69,9 @@ struct FBTimebase;
                                                  /*    where it starts, ms   */
 #define LANES_Scrolled       (TRACK_Dummy + 212) /* N: a drag scrolled the   */
                                                  /*    view or made it longer */
+#define LANES_Open           (TRACK_Dummy + 213) /* N: int32 clip that was   */
+                                                 /*    double-clicked, sent  */
+                                                 /*    with LANES_Selected   */
 
 /* Which track is at a point in the window (for files dropped on it):
  * returns the track, -1 for the drop area below the tracks, or -2 if the
@@ -120,6 +123,15 @@ extern Class *TrackClass, *RulerClass, *FilmstripClass, *LanesClass;
  * (0xRRGGBB), a rectangle cut to `clip`, and up to `room` pixels of text
  * with its top-left corner at x, y. */
 void Track_SetRGB(struct RastPort *rp, uint32 rgb);
+
+/* A colour per file, so clips from one file look alike wherever they
+ * are: a light fill, a middle tone (blocks in the film strip), an edge
+ * and text. Repeats after TRACK_NUM_RAMPS files. */
+typedef struct TrackRamp {
+    uint32 fill, mid, edge, text;
+} TrackRamp;
+#define TRACK_NUM_RAMPS 8
+const TrackRamp *Track_SourceRamp(int source);
 void Track_FillClipped(struct RastPort *rp, const struct Rectangle *clip,
                        long x0, long y0, long x1, long y1);
 void Track_Text(struct RastPort *rp, struct TextFont *font,

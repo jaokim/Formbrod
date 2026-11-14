@@ -15,6 +15,21 @@
 #include "locale/catalog.h"
 #include "version.h"
 
+/* Proxies are made only when the user has left the window alone this
+ * long, so editing never waits for them. */
+#define IDLE_MS 1500
+
+/* Milliseconds by the system clock, in DOS ticks (20 ms). */
+static uint32 now_ms(void)
+{
+    struct DateStamp ds;
+
+    IDOS->DateStamp(&ds);
+    return ((uint32)ds.ds_Days * 24 * 60 * 60 * TICKS_PER_SECOND +
+            (uint32)ds.ds_Minute * 60 * TICKS_PER_SECOND +
+            (uint32)ds.ds_Tick) * (1000 / TICKS_PER_SECOND);
+}
+
 static const char USED ver[] =
     "$VER: Formbrod " FB_VERSION " (" FB_VERSION_DATE ")";
 
@@ -51,6 +66,7 @@ int main(int argc, char **argv)
     while (!App.quit) {
         uint32 mask = MainWindow_SigMask() | ARexx_SigMask() | SIGBREAKF_CTRL_C;
         uint32 sigs;
+        static uint32 last_input;
 
         if (App.rendering) {
             FBProgress p;
@@ -60,15 +76,25 @@ int main(int argc, char **argv)
             MainWindow_SetProgress(&p);
             if (!App.rendering)
                 MainWindow_Refresh();
-        } else if (App_CacheBusy()) {
+        } else if (App_CacheBusy() && now_ms() - last_input >= IDLE_MS) {
             /* Proxies are made in the background, a slice at a time,
-             * between window and ARexx events. */
+             * between window and ARexx events, while nothing happens. */
             sigs = IExec->SetSignal(0, mask) & mask;
             if (App_PollCache())
                 MainWindow_Refresh();
+        } else if (App_CacheBusy()) {
+            /* Just used: the window has the machine. Look again for
+             * input every tick until it has been left alone a while. */
+            sigs = IExec->SetSignal(0, mask) & mask;
+            if (!sigs)
+                IDOS->Delay(1);
         } else {
             sigs = IExec->Wait(mask);
         }
+
+        /* The arrow with an hourglass while an export runs. Not for
+         * proxies: they're made quietly whenever the window is idle. */
+        MainWindow_SetWorking(App.rendering);
 
         if (sigs & SIGBREAKF_CTRL_C)
             App.quit = 1;
@@ -76,8 +102,10 @@ int main(int argc, char **argv)
             ARexx_Handle();
             MainWindow_Refresh();
         }
-        if (sigs & MainWindow_SigMask())
+        if (sigs & MainWindow_SigMask()) {
+            last_input = now_ms();
             MainWindow_Handle(sigs);
+        }
     }
     rc = RETURN_OK;
 

@@ -114,6 +114,10 @@ static FBProbeResult probe(const char *path, FBSource *info,
             *duration <= STILL_MAX_MS) {
             info->still = 1;
             *duration = 0;
+        } else if (strcmp(name, "gif") == 0 || strcmp(name, "apng") == 0) {
+            /* An animation without sound (Boing!): it loops, so clips of
+             * it can be as long as wanted. */
+            info->loops = 1;
         }
     }
     avformat_close_input(&fmt);

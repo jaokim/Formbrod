@@ -230,6 +230,7 @@ int App_OpenProject(const char *path)
             src->has_video = info.has_video;
             src->has_audio = info.has_audio;
             src->still     = info.still;
+            src->loops     = info.loops;
             src->intra     = info.intra;
             FB_SourceSetVideo(src, info.width, info.height,
                               info.sar_num, info.sar_den,
@@ -340,6 +341,7 @@ static int add_source(const char *path)
     FB_SourceSetVideo(&App.timeline.sources[src], info.width, info.height,
                       info.sar_num, info.sar_den, info.fps_num, info.fps_den);
     App.timeline.sources[src].still = info.still;
+    App.timeline.sources[src].loops = info.loops;
     App.timeline.sources[src].intra = info.intra;
     cache_request(&App.timeline.sources[src]);
     return src;
@@ -517,6 +519,36 @@ int App_MoveClip(int clip, fb_ms_t start)
     return 0;
 }
 
+fb_ms_t App_SetCrossfade(int clip, fb_ms_t len, const char *kind)
+{
+    FBTimeline *tl = &App.timeline;
+    const char *name;
+    char when[24];
+    fb_ms_t got;
+
+    if (clip < 0 || clip >= tl->num_clips) {
+        App_SetStatus("%s", FB_Str(MSG_STATUS_NO_SUCH_CLIP));
+        return -1;
+    }
+    got = FB_TimelineSetCrossfade(tl, clip, len, kind);
+    if (got < 0) {
+        App_SetStatus("%s", FB_Str(MSG_STATUS_CANT_CROSSFADE));
+        return -1;
+    }
+    App.modified = 1;
+    name = file_part(tl->sources[tl->clips[clip].source].path);
+    if (got == 0) {
+        App_SetStatus(FB_Str(MSG_STATUS_NO_CROSSFADE), name);
+    } else {
+        FB_FormatTimecode(when, sizeof(when), FB_US(got), FB_US(100), 0,
+                          Locale_DecimalPoint());
+        App_SetStatus(FB_Str(MSG_STATUS_CROSSFADE), name, when);
+    }
+    FB_Log(FB_LOG_INFO, "edit", "crossfade into clip %d: %lld ms, %s", clip,
+           (long long)got, FB_ClipCrossfadeKind(&tl->clips[clip]));
+    return got;
+}
+
 int App_MoveClipTo(int clip, int track, fb_ms_t at)
 {
     FBTimeline *tl = &App.timeline;
@@ -600,9 +632,9 @@ int App_SetOut(int clip, fb_ms_t at)
         return -1;
     }
     /* Past the clip's end makes it longer, as far as the file goes (a
-     * still picture can be any length). */
+     * still picture or a looping animation can be any length). */
     out = c->in + (at - c->start);
-    dur = App.timeline.sources[c->source].duration;
+    dur = FB_SourceLimit(&App.timeline.sources[c->source]);
     if (dur > 0 && out > dur)
         out = dur;
     return App_TrimClip(clip, c->in, out);
@@ -646,6 +678,86 @@ int App_SetEffectParam(int clip, int effect, const char *name, double value)
         return -1;
     if (FB_EffectSetParam(&c->effects[effect], name, value) != 0)
         return -1;
+    App.modified = 1;
+    return 0;
+}
+
+int App_RemoveEffect(int clip, int effect)
+{
+    if (clip < 0 || clip >= App.timeline.num_clips ||
+        FB_ClipRemoveEffect(&App.timeline.clips[clip], effect) != 0)
+        return -1;
+    App.modified = 1;
+    return 0;
+}
+
+void App_GetFades(int clip, fb_ms_t *in, fb_ms_t *out)
+{
+    const FBClip *c;
+    int fx;
+
+    *in = *out = 0;
+    if (clip < 0 || clip >= App.timeline.num_clips)
+        return;
+    c = &App.timeline.clips[clip];
+    if ((fx = FB_ClipFindEffect(c, "fade")) < 0)
+        return;
+    /* The module's defaults when a parameter isn't set. */
+    *in  = (fb_ms_t)(FB_EffectGetParam(&c->effects[fx], "in", 1.0) * 1000.0
+                     + 0.5);
+    *out = (fb_ms_t)(FB_EffectGetParam(&c->effects[fx], "out", 0.0) * 1000.0
+                     + 0.5);
+}
+
+int App_SetFades(int clip, fb_ms_t in, fb_ms_t out)
+{
+    FBClip *c;
+    fb_ms_t old_in, old_out, len;
+    int fx;
+
+    if (clip < 0 || clip >= App.timeline.num_clips) {
+        App_SetStatus("%s", FB_Str(MSG_STATUS_NO_SUCH_CLIP));
+        return -1;
+    }
+    c = &App.timeline.clips[clip];
+    App_GetFades(clip, &old_in, &old_out);
+    if (in < 0)
+        in = old_in;
+    if (out < 0)
+        out = old_out;
+    len = c->out - c->in;
+    if (in > len)
+        in = len;
+    if (out > len - in)
+        out = len - in;
+    fx = FB_ClipFindEffect(c, "fade");
+    if (in == 0 && out == 0) {
+        if (fx >= 0)
+            FB_ClipRemoveEffect(c, fx);
+    } else {
+        if (fx < 0) {
+            if (!FB_ClipAddEffect(c, "fade"))
+                return -1;
+            fx = c->num_effects - 1;
+        }
+        FB_EffectSetParam(&c->effects[fx], "in", in / 1000.0);
+        FB_EffectSetParam(&c->effects[fx], "out", out / 1000.0);
+    }
+    App.modified = 1;
+    return 0;
+}
+
+int App_SetVolume(int clip, double volume)
+{
+    if (clip < 0 || clip >= App.timeline.num_clips) {
+        App_SetStatus("%s", FB_Str(MSG_STATUS_NO_SUCH_CLIP));
+        return -1;
+    }
+    if (volume < 0.0)
+        volume = 0.0;
+    if (volume > FB_MAX_VOLUME)
+        volume = FB_MAX_VOLUME;
+    App.timeline.clips[clip].volume = volume;
     App.modified = 1;
     return 0;
 }

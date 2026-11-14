@@ -456,7 +456,7 @@ MSG_HINT_STARTS (176//)
 Where the clip starts in the edit. Type a time and press Return: the clips after it move along
 ;
 MSG_HINT_LANES (177//)
-Click a clip to select it, drag its ends to trim it. Click a track's name to select the track
+Click a clip to select it, drag its ends to trim it, double-click it for all its settings. Click a track's name to select the track
 ;
 MSG_MENU_TRACK (178//)
 Track
@@ -515,3 +515,164 @@ Automatic
 ; In the size submenu; %d is a width in pixels.
 MSG_MENU_PROXY_WIDTH (193//)
 %d pixels wide
+;
+; ---- Crossfades --------------------------------------------------------
+;
+; Button: give the selected clip a crossfade from the clip before it (or
+; take it away again). The clips then overlap.
+MSG_BTN_CROSSFADE (194//)
+Cr_ossfade
+;
+; Inspector field: how long the selected clip crossfades from the one
+; before it.
+MSG_LABEL_CROSSFADE (195//)
+Crossfade
+;
+MSG_HINT_CROSSFADE (196//)
+How long it fades over from the clip before it. 0 for a plain cut
+;
+; Status line; %s is the file name, then a time.
+MSG_STATUS_CROSSFADE (197//)
+%s now fades in over %s
+;
+; Status line after taking a crossfade away; %s is the file name.
+MSG_STATUS_NO_CROSSFADE (198//)
+%s now follows with a plain cut
+;
+MSG_STATUS_CANT_CROSSFADE (199//)
+A crossfade needs a clip before it on the same track
+;
+; Edit menu: a submenu choosing how the selected clip's crossfade looks.
+MSG_MENU_CROSSFADE (200//)
+Crossfade
+;
+MSG_MENU_CROSSFADE_KIND (201//)
+Crossfade kind
+;
+; The kinds. A plain mix of the two pictures.
+MSG_XFADE_FADE (202//)
+Fade
+;
+; Through black: the first picture goes dark, then the next comes up.
+MSG_XFADE_FADEBLACK (203//)
+Through black
+;
+; Pixels of the next picture appear here and there.
+MSG_XFADE_DISSOLVE (204//)
+Dissolve
+;
+; The next picture is uncovered from the right towards the left.
+MSG_XFADE_WIPELEFT (205//)
+Wipe left
+;
+MSG_XFADE_WIPERIGHT (206//)
+Wipe right
+;
+; The next picture slides in, pushing the first one out to the left.
+MSG_XFADE_SLIDELEFT (207//)
+Slide left
+;
+; The next picture appears in a growing circle.
+MSG_XFADE_CIRCLEOPEN (208//)
+Circle
+;
+; Both pictures turn into big pixels in between.
+MSG_XFADE_PIXELIZE (209//)
+Pixelate
+;
+; ---- The clip window -----------------------------------------------
+;
+; Title of the window with all of the selected clip's settings.
+MSG_CLIPWIN_TITLE (210//)
+Clip
+;
+MSG_CLIPWIN_NONE (211//)
+No clip selected
+;
+; Group titles in the clip window.
+MSG_GROUP_TIMING (212//)
+Timing
+;
+MSG_GROUP_FADES (213//)
+Fades
+;
+MSG_GROUP_PICTURE (214//)
+Picture
+;
+MSG_GROUP_SOUND (215//)
+Sound
+;
+MSG_GROUP_EFFECTS (216//)
+Effects
+;
+; Which kind of crossfade.
+MSG_LABEL_KIND (217//)
+Kind
+;
+; How long the clip fades in at its start, and out at its end.
+MSG_LABEL_FADE_IN (218//)
+Fade in
+;
+MSG_LABEL_FADE_OUT (219//)
+Fade out
+;
+; How the clip is fitted into the frame.
+MSG_LABEL_FIT (220//)
+Fit
+;
+; Fit choice: whatever the project's setting is.
+MSG_FIT_AS_PROJECT (221//)
+As the project
+;
+; The picture as it is in the file.
+MSG_LABEL_SOURCE (222//)
+In the file
+;
+; Width, height, frame rate.
+MSG_SOURCE_PICTURE (223//)
+%ld x %ld, %s frames/s
+;
+; Width, height.
+MSG_SOURCE_STILL (224//)
+%ld x %ld, still picture
+;
+MSG_SOURCE_NO_PICTURE (225//)
+No picture
+;
+; What fitting does to it in the finished film.
+MSG_LABEL_SHOWN (226//)
+In the film
+;
+MSG_FITS_AS_IS (227//)
+As it is
+;
+; 100 is as recorded.
+MSG_LABEL_VOLUME (228//)
+Volume (%)
+;
+MSG_EFFECTS_NONE (229//)
+No other effects. Add them from the Effects menu.
+;
+; Buttons going through the clip's effects one at a time.
+MSG_BTN_PREV_EFFECT (230//)
+_Previous
+;
+MSG_BTN_NEXT_EFFECT (231//)
+_Next
+;
+MSG_BTN_REMOVE_EFFECT (232//)
+_Remove effect
+;
+; An effect's name, which one it is and how many there are.
+MSG_EFFECT_OF (233//)
+%s (%ld of %ld)
+;
+; Edit menu: opens the clip window.
+MSG_MENU_CLIP_SETTINGS (234//)
+Clip settings...
+;
+MSG_STATUS_BAD_NUMBER (235//)
+%s isn't a number
+;
+MSG_LABEL_FILE (236//)
+File

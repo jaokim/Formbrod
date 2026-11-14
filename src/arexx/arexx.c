@@ -16,6 +16,12 @@
  *                                       with TRACK: move it in between the
  *                                       clips of that track (TRACKS = new
  *                                       track) near AT; returns its number
+ *   CROSSFADE CLIP/N/A,LENGTH/N/A,KIND/K
+ *                                       crossfade LENGTH ms from the clip
+ *                                       before (0 = plain cut); KIND is an
+ *                                       ffmpeg xfade name (fade, wipeleft,
+ *                                       circleopen...); returns the length
+ *                                       set, which may be shorter
  *   CACHE ON/S,OFF/S,WIDTH/N,AUTO/S     preview copies: turn them on or
  *                                       off, set their width (or AUTO);
  *                                       returns "ON|OFF <width> <waiting>"
@@ -23,6 +29,10 @@
  *   REMOVE CLIP/N/A
  *   EFFECT CLIP/N/A,MODULE/A            add an effect, returns its index
  *   SETPARAM CLIP/N/A,EFFECT/N/A,NAME/A,VALUE/A
+ *   REMOVEEFFECT CLIP/N/A,EFFECT/N/A
+ *   FADES CLIP/N/A,IN/N,OUT/N           fade in and out, ms (0 = none; left
+ *                                       out = as it is); returns "<in> <out>"
+ *   VOLUME CLIP/N/A,PERCENT/N/A         100 = as recorded, up to 400
  *   EXPORT FILE/A,PREVIEW/S
  *   CANCEL
  *   RENDERSTATUS                        IDLE|RUNNING <pos> <total>|DONE|FAILED
@@ -117,6 +127,57 @@ static void cmd_move(struct ARexxCmd *cmd, struct RexxMsg *rm)
     }
     set_result(cmd, App_MoveClip(*(int32 *)cmd->ac_ArgList[0],
                                  *(int32 *)cmd->ac_ArgList[1]) ? RC_ERROR : 0);
+}
+
+static void cmd_removeeffect(struct ARexxCmd *cmd, struct RexxMsg *rm)
+{
+    (void)rm;
+    result[0] = '\0';
+    set_result(cmd, App_RemoveEffect(*(int32 *)cmd->ac_ArgList[0],
+                                     *(int32 *)cmd->ac_ArgList[1])
+                    ? RC_ERROR : 0);
+}
+
+static void cmd_fades(struct ARexxCmd *cmd, struct RexxMsg *rm)
+{
+    int clip = *(int32 *)cmd->ac_ArgList[0];
+    fb_ms_t in, out;
+    int rc;
+
+    (void)rm;
+    result[0] = '\0';
+    rc = App_SetFades(clip,
+                      cmd->ac_ArgList[1] ? *(int32 *)cmd->ac_ArgList[1] : -1,
+                      cmd->ac_ArgList[2] ? *(int32 *)cmd->ac_ArgList[2] : -1);
+    if (rc == 0) {
+        App_GetFades(clip, &in, &out);
+        snprintf(result, sizeof(result), "%lld %lld", (long long)in,
+                 (long long)out);
+    }
+    set_result(cmd, rc ? RC_ERROR : 0);
+}
+
+static void cmd_volume(struct ARexxCmd *cmd, struct RexxMsg *rm)
+{
+    (void)rm;
+    result[0] = '\0';
+    set_result(cmd, App_SetVolume(*(int32 *)cmd->ac_ArgList[0],
+                                  *(int32 *)cmd->ac_ArgList[1] / 100.0)
+                    ? RC_ERROR : 0);
+}
+
+static void cmd_crossfade(struct ARexxCmd *cmd, struct RexxMsg *rm)
+{
+    fb_ms_t got;
+
+    (void)rm;
+    result[0] = '\0';
+    got = App_SetCrossfade(*(int32 *)cmd->ac_ArgList[0],
+                           *(int32 *)cmd->ac_ArgList[1],
+                           (const char *)cmd->ac_ArgList[2]);
+    if (got >= 0)
+        snprintf(result, sizeof(result), "%lld", (long long)got);
+    set_result(cmd, got < 0 ? RC_ERROR : 0);
 }
 
 static void cmd_tracks(struct ARexxCmd *cmd, struct RexxMsg *rm)
@@ -355,6 +416,10 @@ static struct ARexxCmd commands[] = {
     { "TRIM",         19, cmd_trim,         "CLIP/N/A,IN/N,OUT/N", 0, NULL, 0, 0, NULL },
     { "MOVE",         20, cmd_move,         "CLIP/N/A,AT/N/A,TRACK/N", 0, NULL, 0, 0, NULL },
     { "CACHE",        21, cmd_cache,        "ON/S,OFF/S,WIDTH/N,AUTO/S", 0, NULL, 0, 0, NULL },
+    { "CROSSFADE",    22, cmd_crossfade,    "CLIP/N/A,LENGTH/N/A,KIND/K", 0, NULL, 0, 0, NULL },
+    { "REMOVEEFFECT", 23, cmd_removeeffect, "CLIP/N/A,EFFECT/N/A", 0, NULL, 0, 0, NULL },
+    { "FADES",        24, cmd_fades,        "CLIP/N/A,IN/N,OUT/N", 0, NULL, 0, 0, NULL },
+    { "VOLUME",       25, cmd_volume,       "CLIP/N/A,PERCENT/N/A", 0, NULL, 0, 0, NULL },
     { NULL,           0,  NULL,             NULL,                0, NULL, 0, 0, NULL }
 };
 

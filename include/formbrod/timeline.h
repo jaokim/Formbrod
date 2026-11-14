@@ -16,8 +16,11 @@
  *   - Track 0 is the bottom one. Higher picture tracks are drawn on top of
  *     lower ones; all sound is mixed together.
  *
- * Clips on a track never overlap, and the array is kept sorted by track and
- * then start time. Cutting closes gaps: removing or trimming a clip moves
+ * Clips on a track don't overlap, except where a clip begins with a
+ * crossfade: it then starts `xfade` ms before the clip in front of it ends,
+ * and the two are mixed over that time. Nothing adds a crossfade by itself;
+ * the user does (FB_TimelineSetCrossfade). The array is kept sorted by
+ * track and then start time. Cutting closes gaps: removing or trimming a clip moves
  * the clips after it on the same track. A gap only appears where a clip was
  * placed with a later start (a project file's AT line, later the detail
  * editor); gaps play as black (or transparent, on upper picture tracks)
@@ -40,6 +43,10 @@
 
 /* How long a still picture is when it's added. */
 #define FB_STILL_LENGTH  5000
+/* The loudest a clip's sound can be set: four times as recorded. */
+#define FB_MAX_VOLUME 4.0
+/* How long a crossfade is when it's added. */
+#define FB_CROSSFADE_LENGTH 1000
 #define FB_MAX_EFFECTS   8
 #define FB_MAX_PARAMS    8
 #define FB_PATH_LEN      512
@@ -54,6 +61,9 @@ typedef struct FBSource {
     int     has_video;
     int     has_audio;
     int     still;          /* a single picture: clips can be any length */
+    /* A short animation (animated GIF, APNG): it plays over and over, so
+     * clips of it can be any length too. Its duration is one round. */
+    int     loops;
     /* Video stream info from probing; 0 = unknown. */
     int     width, height;
     int     sar_num, sar_den;   /* pixel aspect, 0/0 or 1/1 = square */
@@ -109,6 +119,12 @@ typedef struct FBClip {
     fb_ms_t  in;
     fb_ms_t  out;
     double   volume;               /* 1.0 = as recorded */
+    /* A crossfade from the clip before it on its track: this clip starts
+     * `xfade` ms before that one ends. 0 = a plain cut (or a gap). The
+     * kind is an ffmpeg xfade transition name, "" = "fade"; the sound
+     * always crossfades. */
+    fb_ms_t  xfade;
+    char     xfade_kind[FB_NAME_LEN];
     FBFit    fit;                  /* FB_FIT_DEFAULT = timeline's */
     int      num_effects;
     FBEffect effects[FB_MAX_EFFECTS];
@@ -183,8 +199,10 @@ int     FB_TimelineTrimClip(FBTimeline *tl, int clip, fb_ms_t in, fb_ms_t out);
 
 /* Moves a clip to start at `start`; the clips after it on its track move
  * by the same amount, so nothing overlaps and any gaps between them stay.
- * It can't start before the clip in front of it ends (-1 then). Moving it
- * later leaves a gap in front of it. */
+ * It can't start before the clip in front of it ends (-1 then), except
+ * that a clip with a crossfade can: that makes the crossfade longer (see
+ * FB_TimelineSetCrossfade). Moving it to or past that end removes its
+ * crossfade; moving it later leaves a gap in front of it. */
 int     FB_TimelineMoveClip(FBTimeline *tl, int clip, fb_ms_t start);
 
 /* Whether a source can go on a track: a video track needs a picture, an
@@ -216,8 +234,32 @@ fb_ms_t FB_TimelineDropPoint(const FBTimeline *tl, int track, fb_ms_t at,
 fb_ms_t FB_TimelineStartWithout(const FBTimeline *tl, int i, int skip);
 
 /* The earliest a clip can start: where the clip before it on its track
- * ends, or 0. */
+ * ends, or 0; for a clip with a crossfade, where the longest crossfade
+ * would start it. */
 fb_ms_t FB_TimelineEarliestStart(const FBTimeline *tl, int clip);
+
+/* ---- Crossfades ---- */
+
+/* Gives a clip a crossfade `len` ms long from the clip before it on its
+ * track (0 removes it). A gap between them closes first: the clip moves up
+ * to meet that one. It and the clips after it then move earlier by the
+ * overlap (later again when it's shortened or removed). A crossfade can't
+ * be longer than either clip leaves room for; a longer `len` is cut to
+ * fit. `kind` NULL keeps the kind. Returns the length set, or -1 (the
+ * first clip on a track has nothing to fade from). */
+fb_ms_t FB_TimelineSetCrossfade(FBTimeline *tl, int clip, fb_ms_t len,
+                                const char *kind);
+
+/* The longest crossfade a clip can have, or 0 if it can't have one (the
+ * first clip on its track). */
+fb_ms_t FB_TimelineMaxCrossfade(const FBTimeline *tl, int clip);
+
+/* Whether `kind` can be a crossfade kind: a name of lower-case letters,
+ * digits and '_' (ffmpeg's xfade names: "fade", "wipeleft", ...), or "". */
+int     FB_CrossfadeKindValid(const char *kind);
+
+/* The kind's name, "fade" when it's "". */
+const char *FB_ClipCrossfadeKind(const FBClip *clip);
 
 /* Where a clip ends on the timeline. */
 fb_ms_t FB_ClipEnd(const FBClip *clip);
@@ -229,6 +271,10 @@ int     FB_TimelineClipAt(const FBTimeline *tl, fb_ms_t t, fb_ms_t *source_t);
 
 /* Adds an effect to a clip. Returns pointer to it so params can be set. */
 FBEffect *FB_ClipAddEffect(FBClip *clip, const char *module);
+/* Takes effect `index` off a clip; the ones after it move down. */
+int     FB_ClipRemoveEffect(FBClip *clip, int index);
+/* The first effect of a module on a clip, or -1. */
+int     FB_ClipFindEffect(const FBClip *clip, const char *module);
 int     FB_EffectSetParam(FBEffect *fx, const char *name, double value);
 double  FB_EffectGetParam(const FBEffect *fx, const char *name, double def);
 
@@ -250,6 +296,10 @@ int     FB_TimelineFrameSize(const FBTimeline *tl, int *width, int *height);
 
 /* The frame rate: the format's, else the first clip's source. 0 if unknown. */
 int     FB_TimelineFrameRate(const FBTimeline *tl, int *num, int *den);
+
+/* How far into its file a clip of `src` can reach: the file's length, or
+ * 0 for no limit (a still picture, or an animation that loops). */
+fb_ms_t FB_SourceLimit(const FBSource *src);
 
 /* The fit mode that applies to a clip: its own, else the timeline's, else
  * FB_FIT_FIT. Never returns FB_FIT_DEFAULT. */

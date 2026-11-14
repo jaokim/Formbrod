@@ -60,6 +60,7 @@
 #include <libavutil/avutil.h>
 #include <libavutil/channel_layout.h>
 #include <libavutil/opt.h>
+#include <libavutil/time.h>
 #include <libavutil/pixdesc.h>
 #include <libavutil/log.h>
 
@@ -70,9 +71,12 @@
 #define FB_SUPPORTED_CONFIG 1   /* avcodec_get_supported_config (7.1+) */
 #endif
 
-/* Packets read per Progress() call. Small enough that a slow machine
- * still gets back to the GUI often, large enough not to waste time. */
-#define PACKETS_PER_SLICE 8
+/* How long a Progress() call may work: packets are read until this much
+ * time has gone (always at least one), so the GUI gets a turn often even
+ * where one packet takes long (a 720p frame under emulation). At most
+ * MAX_SLICE_PACKETS, so a fast machine still updates its progress. */
+#define SLICE_US          30000
+#define MAX_SLICE_PACKETS 64
 #define MAX_PAD_USES      32    /* buffer sources fed by one stream */
 
 enum { KIND_VIDEO = 0, KIND_AUDIO = 1, NUM_KINDS = 2 };
@@ -1140,9 +1144,11 @@ static int read_input(LocalPriv *p, int i)
 
 static void local_slice(LocalPriv *p)
 {
+    int64_t until = av_gettime_relative() + SLICE_US;
     int n, ret;
 
-    for (n = 0; n < PACKETS_PER_SLICE; n++) {
+    for (n = 0; n < MAX_SLICE_PACKETS &&
+                (n == 0 || av_gettime_relative() < until); n++) {
         int i;
 
         if (drain_sinks(p) < 0)

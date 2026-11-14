@@ -21,6 +21,8 @@
  *       EFFECT fade
  *           PARAM in 0.5
  *   CLIP 2 2000 5000
+ *   CLIP 2 9000 12000
+ *       CROSSFADE 1000 wipeleft
  *
  *   TRACK audio
  *       MUTED
@@ -38,7 +40,10 @@
  * under it switch off its sound or picture. Each CLIP goes on the track
  * above it, right after the clip before it, so a length changed by hand
  * moves the clips after it along. AT <ms> starts a clip later, leaving a
- * gap. VOLUME scales its sound (1 = as recorded).
+ * gap. CROSSFADE <ms> [<kind>] mixes it in from the clip before it over
+ * that time, starting it that much earlier; the kind is an ffmpeg xfade
+ * transition, "fade" if left out. (Readers that don't know CROSSFADE cut
+ * there instead.) VOLUME scales its sound (1 = as recorded).
  *
  * Version 1 had no tracks: its clips are read as one picture track.
  *

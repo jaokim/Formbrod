@@ -374,7 +374,7 @@ MSG_HINT_STARTS
 Var klippet börjar i redigeringen. Skriv en tid och tryck Retur: klippen efter följer med
 ;
 MSG_HINT_LANES
-Klicka på ett klipp för att välja det, dra i dess ändar för att korta eller förlänga det. Klicka på ett spårs namn för att välja spåret
+Klicka på ett klipp för att välja det, dra i dess ändar för att korta eller förlänga det, dubbelklicka för alla dess inställningar. Klicka på ett spårs namn för att välja spåret
 ;
 MSG_MENU_TRACK
 Spår
@@ -424,3 +424,132 @@ Automatisk
 MSG_MENU_PROXY_WIDTH
 %d bildpunkter breda
 ;
+;
+MSG_BTN_CROSSFADE
+Ö_vertoning
+;
+MSG_LABEL_CROSSFADE
+Övertoning
+;
+MSG_HINT_CROSSFADE
+Hur länge den tonar över från klippet före. 0 för ett rakt klipp
+;
+MSG_STATUS_CROSSFADE
+%s tonar nu in under %s
+;
+MSG_STATUS_NO_CROSSFADE
+%s följer nu med ett rakt klipp
+;
+MSG_STATUS_CANT_CROSSFADE
+En övertoning behöver ett klipp före sig på samma spår
+;
+MSG_MENU_CROSSFADE
+Övertoning
+;
+MSG_MENU_CROSSFADE_KIND
+Sorts övertoning
+;
+MSG_XFADE_FADE
+Toning
+;
+MSG_XFADE_FADEBLACK
+Via svart
+;
+MSG_XFADE_DISSOLVE
+Upplösning
+;
+MSG_XFADE_WIPELEFT
+Ridå åt vänster
+;
+MSG_XFADE_WIPERIGHT
+Ridå åt höger
+;
+MSG_XFADE_SLIDELEFT
+Glid åt vänster
+;
+MSG_XFADE_CIRCLEOPEN
+Cirkel
+;
+MSG_XFADE_PIXELIZE
+Pixlar
+;
+MSG_CLIPWIN_TITLE
+Klipp
+;
+MSG_CLIPWIN_NONE
+Inget klipp valt
+;
+MSG_GROUP_TIMING
+Tider
+;
+MSG_GROUP_FADES
+Toningar
+;
+MSG_GROUP_PICTURE
+Bild
+;
+MSG_GROUP_SOUND
+Ljud
+;
+MSG_GROUP_EFFECTS
+Effekter
+;
+MSG_LABEL_KIND
+Sort
+;
+MSG_LABEL_FADE_IN
+Tona in
+;
+MSG_LABEL_FADE_OUT
+Tona ut
+;
+MSG_LABEL_FIT
+Anpassning
+;
+MSG_FIT_AS_PROJECT
+Som projektet
+;
+MSG_LABEL_SOURCE
+I filen
+;
+MSG_SOURCE_PICTURE
+%ld x %ld, %s bilder/s
+;
+MSG_SOURCE_STILL
+%ld x %ld, stillbild
+;
+MSG_SOURCE_NO_PICTURE
+Ingen bild
+;
+MSG_LABEL_SHOWN
+I filmen
+;
+MSG_FITS_AS_IS
+Som den är
+;
+MSG_LABEL_VOLUME
+Volym (%)
+;
+MSG_EFFECTS_NONE
+Inga andra effekter. Lägg till dem från menyn Effekter.
+;
+MSG_BTN_PREV_EFFECT
+_Föregående
+;
+MSG_BTN_NEXT_EFFECT
+_Nästa
+;
+MSG_BTN_REMOVE_EFFECT
+_Ta bort effekt
+;
+MSG_EFFECT_OF
+%s (%ld av %ld)
+;
+MSG_MENU_CLIP_SETTINGS
+Klippinställningar...
+;
+MSG_STATUS_BAD_NUMBER
+%s är inget tal
+;
+MSG_LABEL_FILE
+Fil
