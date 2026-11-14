@@ -36,6 +36,11 @@ typedef struct FBJob {
     char     audio_out[FB_NAME_LEN];   /* "" if no audio */
     FBOutput output;
     fb_ms_t  length;                   /* result's length, 0 if unknown */
+    /* Where each input's first used frame is (ms in the file, 0 = from
+     * the start): nothing before it is used, so a backend may jump there
+     * (to the keyframe before it) instead of decoding up to it. Times in
+     * the filtergraph stay relative to the file's start either way. */
+    fb_ms_t  seek[FB_MAX_SOURCES];
 } FBJob;
 
 typedef enum {

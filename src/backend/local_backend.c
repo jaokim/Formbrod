@@ -414,6 +414,23 @@ static int open_inputs(LocalPriv *p)
         ret = avformat_find_stream_info(in->fmt, NULL);
         if (ret < 0)
             return fail(p, ret, "Can't read %s", p->job.inputs[i]);
+        if (p->job.seek[i] > 0) {
+            /* Jump to the keyframe at or before the first frame used;
+             * trim drops what's before it. Times are counted from the
+             * file's start, as everywhere else here. */
+            int64_t ts = (int64_t)p->job.seek[i] * 1000;
+
+            if (in->fmt->start_time != AV_NOPTS_VALUE)
+                ts += in->fmt->start_time;
+            ret = avformat_seek_file(in->fmt, -1, INT64_MIN, ts, ts, 0);
+            if (ret < 0)
+                FB_Log(FB_LOG_WARNING, "render",
+                       "Input %d: can't jump to %lld ms, reading from the "
+                       "start", i, (long long)p->job.seek[i]);
+            else
+                FB_Log(FB_LOG_INFO, "render", "Input %d: jumped to %lld ms",
+                       i, (long long)p->job.seek[i]);
+        }
     }
     return 0;
 }

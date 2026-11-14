@@ -76,6 +76,21 @@ int main(int argc, char **argv)
             MainWindow_SetProgress(&p);
             if (!App.rendering)
                 MainWindow_Refresh();
+        } else if (App_PreviewWaiting()) {
+            /* Between preview windows: the next one starts when playback
+             * has caught up (App_PollPreview). Proxies are made meanwhile
+             * while the window is left alone, as below. */
+            int was = App_Previewing();
+
+            sigs = IExec->SetSignal(0, mask) & mask;
+            App_PollPreview();
+            if (App.rendering || was != App_Previewing())
+                MainWindow_Refresh();     /* a window started, or it ended */
+            else if (App_CacheBusy() && now_ms() - last_input >= IDLE_MS) {
+                if (App_PollCache())
+                    MainWindow_Refresh();
+            } else if (!sigs)
+                IDOS->Delay(App_CacheBusy() ? 1 : 5);   /* don't spin */
         } else if (App_CacheBusy() && now_ms() - last_input >= IDLE_MS) {
             /* Proxies are made in the background, a slice at a time,
              * between window and ARexx events, while nothing happens. */

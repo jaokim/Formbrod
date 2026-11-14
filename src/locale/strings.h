@@ -378,8 +378,18 @@
 #define MSG_STATUS_BAD_NUMBER_STR        "%s isn't a number"
 #define MSG_LABEL_FILE                   236
 #define MSG_LABEL_FILE_STR               "File"
+#define MSG_BTN_STOP_PREVIEW             237
+#define MSG_BTN_STOP_PREVIEW_STR         "_Stop"
+#define MSG_STATUS_PREVIEW_FROM          238
+#define MSG_STATUS_PREVIEW_FROM_STR      "Rendering a preview from %s..."
+#define MSG_STATUS_PREVIEW_AHEAD         239
+#define MSG_STATUS_PREVIEW_AHEAD_STR     "Preview ready to %s of %s (renders at %s x real time)"
+#define MSG_STATUS_PREVIEW_END           240
+#define MSG_STATUS_PREVIEW_END_STR       "Preview ready to the end: %s"
+#define MSG_STATUS_PREVIEW_STOPPED       241
+#define MSG_STATUS_PREVIEW_STOPPED_STR   "Preview stopped"
 
-#define FB_NUM_STRINGS 183
+#define FB_NUM_STRINGS 188
 
 #ifdef FB_STRINGS_ARRAY
 static const struct FBBuiltinString {
@@ -569,6 +579,11 @@ static const struct FBBuiltinString {
     { MSG_MENU_CLIP_SETTINGS, MSG_MENU_CLIP_SETTINGS_STR },
     { MSG_STATUS_BAD_NUMBER, MSG_STATUS_BAD_NUMBER_STR },
     { MSG_LABEL_FILE, MSG_LABEL_FILE_STR },
+    { MSG_BTN_STOP_PREVIEW, MSG_BTN_STOP_PREVIEW_STR },
+    { MSG_STATUS_PREVIEW_FROM, MSG_STATUS_PREVIEW_FROM_STR },
+    { MSG_STATUS_PREVIEW_AHEAD, MSG_STATUS_PREVIEW_AHEAD_STR },
+    { MSG_STATUS_PREVIEW_END, MSG_STATUS_PREVIEW_END_STR },
+    { MSG_STATUS_PREVIEW_STOPPED, MSG_STATUS_PREVIEW_STOPPED_STR },
 };
 #endif
 

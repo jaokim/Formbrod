@@ -346,7 +346,12 @@ FBJobError FB_JobBuild(FBJob *job, const FBTimeline *tl, const FBOutput *out)
             input_of[s] = job->num_inputs;
             copy_str(job->inputs[job->num_inputs++], tl->sources[s].path,
                      FB_PATH_LEN);
+            job->seek[input_of[s]] = c->in;
+        } else if (c->in < job->seek[input_of[s]]) {
+            job->seek[input_of[s]] = c->in;
         }
+        if (tl->sources[s].still)
+            job->seek[input_of[s]] = 0;   /* one picture, nothing to skip */
     }
 
     /* Black, silence, a second picture track or a crossfade (both pictures
@@ -578,6 +583,9 @@ int FB_JobWrite(const FBJob *job, char *out, size_t len)
     buf_printf(&b, "FORMBROD-JOB %d\n", job->version);
     for (i = 0; i < job->num_inputs; i++)
         buf_printf(&b, "INPUT %s\n", job->inputs[i]);
+    for (i = 0; i < job->num_inputs; i++)
+        if (job->seek[i] > 0)
+            buf_printf(&b, "SEEK %d %lld\n", i, (long long)job->seek[i]);
     buf_printf(&b, "FILTERGRAPH %s\n", job->filtergraph);
     buf_printf(&b, "VOUT %s\n", job->video_out);
     if (job->audio_out[0])
@@ -643,6 +651,13 @@ int FB_JobParse(FBJob *job, const char *text)
             if (job->num_inputs >= FB_MAX_SOURCES)
                 return -1;
             copy_str(job->inputs[job->num_inputs++], val, FB_PATH_LEN);
+        } else if (strcmp(line, "SEEK") == 0) {
+            int in;
+            long long ms;
+
+            if (sscanf(val, "%d %lld", &in, &ms) == 2 && in >= 0 &&
+                in < FB_MAX_SOURCES && ms > 0)
+                job->seek[in] = (fb_ms_t)ms;
         } else if (strcmp(line, "FILTERGRAPH") == 0) {
             copy_str(job->filtergraph, val, sizeof(job->filtergraph));
         } else if (strcmp(line, "VOUT") == 0) {
@@ -698,7 +713,16 @@ int FB_JobToCommandLine(const FBJob *job, char *out, size_t len)
     b.overflow = 0;
 
     buf_printf(&b, "ffmpeg -y");
+    /* With a jump into an input, -copyts -start_at_zero keep its times
+     * counted from the file's start, as the filtergraph expects. */
+    for (i = 0; i < job->num_inputs; i++)
+        if (job->seek[i] > 0) {
+            buf_printf(&b, " -copyts -start_at_zero");
+            break;
+        }
     for (i = 0; i < job->num_inputs; i++) {
+        if (job->seek[i] > 0)
+            buf_printf(&b, " -ss %.3f", job->seek[i] / 1000.0);
         buf_printf(&b, " -i ");
         buf_quoted(&b, job->inputs[i]);
     }

@@ -12,6 +12,8 @@
 #include "version.h"
 #include "locale/catalog.h"
 
+#include <time.h>
+
 #ifdef __amigaos4__
 #include <proto/exec.h>
 #include <proto/dos.h>
@@ -20,6 +22,7 @@
 static void cache_start(void);
 static void cache_request(FBSource *src);
 static void cache_stop(void);
+static int preview_window_done(const FBResult *r);
 
 FBApp App;
 
@@ -41,6 +44,7 @@ int App_Init(void)
 
 void App_Cleanup(void)
 {
+    App_PreviewStop();
     if (App.cache_backend) {
         cache_stop();   /* no half-made proxies left behind */
         App.cache_backend->Dispose(App.cache_backend);
@@ -907,7 +911,9 @@ FBProgress App_PollRender(void)
         FBResult r = App.backend->Result(App.backend);
 
         App.rendering = 0;
-        if (r.state == FB_RENDER_DONE)
+        if (App.preview.rendering)
+            preview_window_done(&r);
+        else if (r.state == FB_RENDER_DONE)
             App_SetStatus(FB_Str(MSG_STATUS_DONE), r.message);
         else if (r.state == FB_RENDER_CANCELLED)
             App_SetStatus("%s", FB_Str(MSG_STATUS_CANCELLED));
@@ -1107,4 +1113,273 @@ int App_PollCache(void)
                r.message);
     }
     return 0;
+}
+
+/* ---- Preview from the playhead -------------------------------------------- */
+
+#define PREVIEW_WINDOW   10000   /* ms per window */
+#define PREVIEW_AHEAD    2       /* windows rendered ahead of playback */
+#define PREVIEW_BEHIND   3       /* windows kept behind it */
+#define PREVIEW_PLAYLIST "T:formbrod-preview.m3u"
+
+/* A clock in ms; only differences are used. */
+static long now_ms(void)
+{
+#ifdef __amigaos4__
+    struct DateStamp ds;
+
+    IDOS->DateStamp(&ds);
+    return ((long)ds.ds_Days * 1440 + ds.ds_Minute) * 60000L +
+           ds.ds_Tick * (1000 / TICKS_PER_SECOND);
+#else
+    return (long)(clock() / (CLOCKS_PER_SEC / 1000));
+#endif
+}
+
+static void preview_path(int i, char *out, size_t len)
+{
+    snprintf(out, len, "T:formbrod-preview-%03d.mp4", i);
+}
+
+const char *App_PreviewPlaylist(void)
+{
+    return PREVIEW_PLAYLIST;
+}
+
+int App_Previewing(void)
+{
+    return App.preview.on;
+}
+
+/* Where a player started on the playlist when window 0 was ready would
+ * be now, as a window number. */
+static int preview_play_window(void)
+{
+    if (App.preview.clock0 < 0)
+        return 0;
+    return (int)((now_ms() - App.preview.clock0) / PREVIEW_WINDOW);
+}
+
+int App_PreviewWaiting(void)
+{
+    return App.preview.on && !App.preview.rendering;
+}
+
+static void preview_delete(int from, int to)
+{
+    char path[64];
+    int i;
+
+    for (i = from; i < to; i++) {
+        preview_path(i, path, sizeof(path));
+        remove(path);
+    }
+}
+
+static int preview_write_playlist(void)
+{
+    char path[64];
+    FILE *f = fopen(PREVIEW_PLAYLIST, "w");
+    int i;
+
+    if (!f)
+        return -1;
+    for (i = 0; i < App.preview.count; i++) {
+        preview_path(i, path, sizeof(path));
+        fprintf(f, "%s\n", path);
+    }
+    fclose(f);
+    return 0;
+}
+
+static int preview_render(int i)
+{
+    static FBTimeline win;   /* large; keep it off the stack */
+    static FBJob job;
+    fb_ms_t from = App.preview.from + (fb_ms_t)i * PREVIEW_WINDOW;
+    fb_ms_t len = App.preview.end - from;
+    FBOutput out;
+    FBJobError err;
+
+    if (len > PREVIEW_WINDOW)
+        len = PREVIEW_WINDOW;
+    FB_TimelineWindow(&win, with_proxies(), from, len);
+    memset(&out, 0, sizeof(out));
+    preview_path(i, out.path, sizeof(out.path));
+    strcpy(out.vcodec, "mpeg4");
+    strcpy(out.acodec, "aac");
+    out.quality = FB_QUALITY_PREVIEW;
+    err = FB_JobBuild(&job, &win, &out);
+    if (err != FB_JOB_OK) {
+        FB_Log(FB_LOG_ERROR, "preview", "Window %d (%lld ms): %s", i,
+               (long long)from, FB_JobErrorString(err));
+        App_SetStatus("%s", App_JobErrorString(err));
+        return -1;
+    }
+    FB_Log(FB_LOG_INFO, "preview", "Window %d: %lld ms from %lld ms", i,
+           (long long)len, (long long)from);
+    /* Gaps between clips are filled with black and silence, but one at
+     * the end of the window isn't (the job ends with its last clip), so
+     * a player would get there early. Only typed Starts make such gaps. */
+    if (FB_TimelineDuration(&win) < len)
+        FB_Log(FB_LOG_WARNING, "preview",
+               "Window %d ends in a gap: %lld ms instead of %lld", i,
+               (long long)FB_TimelineDuration(&win), (long long)len);
+    log_job(&job);
+    if (App.backend->Submit(App.backend, &job) != 0) {
+        App_SetStatus("%s", App.backend->Result(App.backend).message);
+        return -1;
+    }
+    App.rendering = 1;
+    App.preview.rendering = 1;
+    App.preview.next = i + 1;
+    return 0;
+}
+
+static void preview_start_player(void)
+{
+    const char *player = Prefs_GetString("PreviewPlayer", "");
+    char cmd[FB_PATH_LEN + 64];
+
+    if (!player[0])
+        return;
+    snprintf(cmd, sizeof(cmd), "%s \"%s\"", player, PREVIEW_PLAYLIST);
+    FB_Log(FB_LOG_INFO, "preview", "Starting the player: %s", cmd);
+#ifdef __amigaos4__
+    {
+        BPTR in = IDOS->Open("NIL:", MODE_OLDFILE);
+        BPTR out = IDOS->Open("NIL:", MODE_NEWFILE);
+
+        /* Asynchronous: the handles are closed when the command ends. */
+        if (IDOS->SystemTags(cmd, SYS_Asynch, TRUE, SYS_Input, in,
+                             SYS_Output, out, TAG_END) != 0) {
+            FB_Log(FB_LOG_WARNING, "preview", "Can't start the player");
+            if (in)
+                IDOS->Close(in);
+            if (out)
+                IDOS->Close(out);
+        }
+    }
+#endif
+}
+
+int App_PreviewStart(fb_ms_t from)
+{
+    char at[32];
+
+    App_PreviewStop();
+    if (App.rendering) {
+        App_SetStatus("%s", FB_Str(MSG_STATUS_ALREADY_RENDERING));
+        return -1;
+    }
+    App.preview.end = FB_TimelineDuration(&App.timeline);
+    if (App.preview.end <= 0)
+        return -1;
+    if (from < 0 || from >= App.preview.end)
+        from = 0;                    /* at the end: from the start */
+    App.preview.from = from;
+    App.preview.count = (int)((App.preview.end - from + PREVIEW_WINDOW - 1) /
+                              PREVIEW_WINDOW);
+    App.preview.next = 0;
+    App.preview.ready = 0;
+    App.preview.gone = 0;
+    App.preview.clock0 = -1;
+    App.preview.started = now_ms();
+    preview_delete(0, 1000);         /* windows left from earlier runs */
+    if (preview_write_playlist() != 0)
+        FB_Log(FB_LOG_WARNING, "preview", "Can't write %s", PREVIEW_PLAYLIST);
+    if (preview_render(0) != 0)
+        return -1;
+    App.preview.on = 1;
+    FB_FormatTimeMs(at, sizeof(at), from, Locale_DecimalPoint());
+    App_SetStatus(FB_Str(MSG_STATUS_PREVIEW_FROM), at);
+    return 0;
+}
+
+void App_PreviewStop(void)
+{
+    if (!App.preview.on)
+        return;
+    App.preview.on = 0;
+    if (App.preview.rendering) {
+        App.backend->Cancel(App.backend);   /* closes and deletes the file */
+        App.rendering = 0;
+        App.preview.rendering = 0;
+    }
+    App_SetStatus("%s", FB_Str(MSG_STATUS_PREVIEW_STOPPED));
+}
+
+/* A window has been rendered (or failed). Returns 1 if the preview goes
+ * on. */
+static int preview_window_done(const FBResult *r)
+{
+    char upto[32], total[32], speed[16];
+    long took;
+    int i = App.preview.next - 1;
+
+    App.preview.rendering = 0;
+    if (!App.preview.on)
+        return 0;
+    if (r->state != FB_RENDER_DONE) {
+        App.preview.on = 0;
+        if (r->state == FB_RENDER_CANCELLED)
+            App_SetStatus("%s", FB_Str(MSG_STATUS_PREVIEW_STOPPED));
+        else
+            App_SetStatus(FB_Str(MSG_STATUS_FAILED), r->message);
+        return 0;
+    }
+    App.preview.ready = i + 1;
+    if (i == 0) {
+        App.preview.clock0 = now_ms();
+        preview_start_player();
+    }
+
+    /* How fast it renders compared with playing: the edit rendered so
+     * far against the time it took. */
+    took = now_ms() - App.preview.started;
+    {
+        fb_ms_t done = (fb_ms_t)App.preview.ready * PREVIEW_WINDOW;
+        long tenths = took > 0 ? (long)(done * 10 / took) : 0;
+
+        snprintf(speed, sizeof(speed), "%ld%c%ld", tenths / 10,
+                 Locale_DecimalPoint(), tenths % 10);
+        FB_Log(FB_LOG_INFO, "preview",
+               "Window %d ready after %ld ms: %s times real time", i, took,
+               speed);
+    }
+
+    if (App.preview.ready >= App.preview.count) {
+        App.preview.on = 0;
+        App_SetStatus(FB_Str(MSG_STATUS_PREVIEW_END), PREVIEW_PLAYLIST);
+        return 0;
+    }
+    {
+        fb_ms_t at = App.preview.from + (fb_ms_t)App.preview.ready *
+                     PREVIEW_WINDOW;
+
+        FB_FormatTimeMs(upto, sizeof(upto), at, Locale_DecimalPoint());
+        FB_FormatTimeMs(total, sizeof(total), App.preview.end,
+                        Locale_DecimalPoint());
+        App_SetStatus(FB_Str(MSG_STATUS_PREVIEW_AHEAD), upto, total, speed);
+    }
+    return 1;
+}
+
+void App_PollPreview(void)
+{
+    int play;
+
+    if (!App.preview.on || App.preview.rendering || App.rendering)
+        return;
+    play = preview_play_window();
+    /* Windows a player has finished with go, so T: doesn't fill up. */
+    if (play - PREVIEW_BEHIND > App.preview.gone) {
+        preview_delete(App.preview.gone, play - PREVIEW_BEHIND);
+        App.preview.gone = play - PREVIEW_BEHIND;
+    }
+    /* Stay a little ahead of playback; render on at once if behind. */
+    if (App.preview.next - play > PREVIEW_AHEAD)
+        return;
+    if (preview_render(App.preview.next) != 0)
+        App.preview.on = 0;
 }
