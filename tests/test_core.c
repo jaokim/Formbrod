@@ -903,11 +903,101 @@ static void test_time_text(void)
     CHECK(FB_ParseTime(buf, ',', &ms) == 0 && ms == 3725125);
 }
 
+static void test_move_clips(void)
+{
+    FBTimeline tl;
+    int a, b, m, i;
+
+    FB_TimelineInit(&tl);
+    a = FB_TimelineAddSource(&tl, "a.mp4", 10000, 1, 1);
+    b = FB_TimelineAddSource(&tl, "b.mp4", 10000, 1, 0);
+    m = FB_TimelineAddSource(&tl, "music.mp3", 60000, 0, 1);
+    /* Video 1 (track 0): A 0-2, B 2-5, A 5-6. Audio 1 (track 1): music. */
+    FB_TimelineAppendToTrack(&tl, 0, a, 0, 2000);
+    FB_TimelineAppendToTrack(&tl, 0, b, 0, 3000);
+    FB_TimelineAppendToTrack(&tl, 0, a, 4000, 5000);
+    FB_TimelineAppendToTrack(&tl, 1, m, 0, 20000);
+    tl.clips[0].volume = 0.5;
+    FB_ClipAddEffect(&tl.clips[0], "fade");
+
+    /* Where a 1 s clip dropped at a time goes: there, if nothing is in
+     * the way; else in front of the first clip whose middle is after its
+     * middle, or after the last clip. */
+    {
+        int ins;
+
+        CHECK(FB_TimelineDropPoint(&tl, 0, 0, 1000, -1, &ins) == 0 && ins);
+        CHECK(FB_TimelineDropPoint(&tl, 0, 1000, 1000, -1, &ins) == 2000 &&
+              ins);
+        CHECK(FB_TimelineDropPoint(&tl, 0, 3500, 1000, -1, &ins) == 5000 &&
+              ins);
+        CHECK(FB_TimelineDropPoint(&tl, 0, 5800, 1000, -1, &ins) == 6000 &&
+              !ins);                                /* after the last */
+        CHECK(FB_TimelineDropPoint(&tl, 0, 9000, 1000, -1, &ins) == 9000 &&
+              !ins);                                /* free: a gap */
+        CHECK(FB_TimelineDropPoint(&tl, 0, 6000, 1000, -1, &ins) == 6000 &&
+              !ins);
+        CHECK(FB_TimelineDropPoint(&tl, 5, 7000, 1000, -1, &ins) == 7000 &&
+              !ins);                                /* no clips */
+        /* With B (2-5) taken out, the last A moves up to 2-3: 3-4 is
+         * free, and where it was (5-6) is free too. */
+        CHECK(FB_TimelineStartWithout(&tl, 2, 1) == 2000);
+        CHECK(FB_TimelineStartWithout(&tl, 0, 1) == 0);
+        CHECK(FB_TimelineStartWithout(&tl, 3, 1) == 0);   /* other track */
+        CHECK(FB_TimelineDropPoint(&tl, 0, 3000, 1000, 1, &ins) == 3000 &&
+              !ins);
+        CHECK(FB_TimelineDropPoint(&tl, 0, 2200, 1000, 1, &ins) == 3000 &&
+              !ins);                                /* in the way: after */
+    }
+
+    /* The last clip, dragged further out, keeps a gap in front of it. */
+    i = FB_TimelineMoveClipTo(&tl, 2, 0, 8000);
+    CHECK(i == 2 && tl.clips[2].start == 8000);
+    CHECK(FB_TimelineMoveClipTo(&tl, 2, 0, 5000) == 2);   /* and back */
+    CHECK(tl.clips[2].start == 5000);
+
+    /* The first clip (A 0-2, with a fade) to the end of its track:
+     * B 0-3, A 3-4, A 4-6. */
+    i = FB_TimelineMoveClipTo(&tl, 0, 0, 4000);
+    CHECK(i == 2);
+    CHECK(tl.clips[0].source == b && tl.clips[0].start == 0);
+    CHECK(tl.clips[1].start == 3000 && tl.clips[1].in == 4000);
+    CHECK(tl.clips[2].start == 4000 && tl.clips[2].in == 0 &&
+          tl.clips[2].volume == 0.5 && tl.clips[2].num_effects == 1);
+    CHECK(FB_TimelineTrackEnd(&tl, 0) == 6000);
+
+    /* Back to the front: A 0-2, B 2-5, A 5-6. */
+    i = FB_TimelineMoveClipTo(&tl, 2, 0, 0);
+    CHECK(i == 0 && tl.clips[0].start == 0 && tl.clips[0].num_effects == 1);
+    CHECK(tl.clips[1].start == 2000 && tl.clips[2].start == 5000);
+
+    /* A video clip can't go on the music track; sound can't go on video. */
+    CHECK(FB_TimelineMoveClipTo(&tl, 1, 1, 0) == -1);
+    CHECK(FB_TimelineMoveClipTo(&tl, 3, 0, 0) == -1);
+    CHECK(tl.num_clips == 4);
+
+    /* B to a new track, at 1.5 s: Video 1 closes up to A 0-2, A 2-3. */
+    i = FB_TimelineMoveClipTo(&tl, 1, tl.num_tracks, 1500);
+    CHECK(tl.num_tracks == 3 && tl.tracks[2].kind == FB_TRACK_VIDEO);
+    CHECK(i == 3 && tl.clips[i].track == 2 && tl.clips[i].start == 1500);
+    CHECK(tl.clips[1].start == 2000 && FB_TimelineTrackEnd(&tl, 0) == 3000);
+
+    /* And onto Video 1 between the two A clips. */
+    i = FB_TimelineMoveClipTo(&tl, 3, 0, 500);   /* its middle: 2 s */
+    CHECK(i == 1 && tl.clips[1].source == b && tl.clips[1].start == 2000);
+    CHECK(tl.clips[2].start == 5000 && FB_TimelineTrackEnd(&tl, 2) == 0);
+
+    /* Nothing to move, or no such track. */
+    CHECK(FB_TimelineMoveClipTo(&tl, 9, 0, 0) == -1);
+    CHECK(FB_TimelineMoveClipTo(&tl, 0, 7, 0) == -1);
+}
+
 int main(void)
 {
     FB_RegisterBuiltinModules();
     test_timeline();
     test_tracks();
+    test_move_clips();
     test_log();
     test_job_build_and_roundtrip();
     test_job_tracks();

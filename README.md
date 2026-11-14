@@ -42,7 +42,8 @@ Early skeleton. Working so far:
       (PNG, JPEG...) as clips of any length
 - [x] Track editor under the film strip: clips you select and trim by
       dragging their ends, track names and a Track menu, drops onto tracks
-- [ ] Moving clips by dragging them, within a track or to another
+- [x] Moving clips by dragging them, within a track, to another track or
+      to a new one
 - [ ] Real thumbnails, waveforms
 - [ ] Remote rendering on a render server
 
@@ -56,6 +57,15 @@ Early skeleton. Working so far:
   drawn on top of lower ones; all sound is mixed.
 - Click a clip to select it; drag either end of a clip to make it shorter
   or longer. The clips after it on the track move along.
+- Drag the middle of a clip to move it. Its old place closes up straight
+  away, and an outline shows where it will land: exactly where you drop
+  it if there's room (after the last clip, or in a gap wide enough),
+  leaving a gap in front of it; on top of other clips it goes in between
+  them instead, at the orange line, and they make room. Its ends snap to
+  the ends of other clips, the start and the playhead when close. Drop it
+  below the tracks to give it a track of its own. A video clip only goes
+  on video tracks and an audio clip on audio tracks (the outline turns
+  grey). The right mouse button cancels.
 - Click a track's name to select the track for the **Track** menu:
   *Append file...* (adds a file after its last clip), *Mute audio*,
   *Hide video* and *Remove track*.
@@ -196,7 +206,7 @@ The port is called `FORMBROD`.
 | `TRACKS` | | number of tracks |
 | `SPLIT` | `AT/N/A` (ms), `TRACK/N` (default: all tracks) | |
 | `TRIM` | `CLIP/N/A,IN/N,OUT/N` (ms in the clip's file; left out = unchanged) | |
-| `MOVE` | `CLIP/N/A,AT/N/A` (ms in the edit; the clips after it move along) | |
+| `MOVE` | `CLIP/N/A,AT/N/A,TRACK/N`: without `TRACK`, start the clip at `AT` ms (the clips after it move along); with `TRACK`, move it there like a drag: at `AT` if there's room, else in between that track's clips (`TRACK` = the number of tracks makes a new one) | the clip's new number, with `TRACK` |
 | `REMOVE` | `CLIP/N/A` | |
 | `EFFECT` | `CLIP/N/A,MODULE/A` | effect index |
 | `SETPARAM` | `CLIP/N/A,EFFECT/N/A,NAME/A,VALUE/A` | |
