@@ -329,6 +329,11 @@ int FB_TimelineRemoveClip(FBTimeline *tl, int clip)
     return 0;
 }
 
+fb_ms_t FB_SourceLimit(const FBSource *src)
+{
+    return src->still || src->loops ? 0 : src->duration;
+}
+
 int FB_TimelineTrimClip(FBTimeline *tl, int clip, fb_ms_t in, fb_ms_t out)
 {
     FBClip *c;
@@ -337,7 +342,7 @@ int FB_TimelineTrimClip(FBTimeline *tl, int clip, fb_ms_t in, fb_ms_t out)
     if (clip < 0 || clip >= tl->num_clips)
         return -1;
     c = &tl->clips[clip];
-    dur = tl->sources[c->source].duration;
+    dur = FB_SourceLimit(&tl->sources[c->source]);
     if (in < 0 || out <= in || (dur > 0 && out > dur))
         return -1;
     old_end = FB_ClipEnd(c);

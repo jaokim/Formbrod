@@ -1496,6 +1496,41 @@ static void test_clip_effects(void)
     CHECK(FB_ClipFindEffect(c, "fade") == -1);
 }
 
+static void test_looping_animation(void)
+{
+    static FBTimeline tl;
+    static FBJob job;
+    FBOutput out;
+    int v, g;
+
+    FB_TimelineInit(&tl);
+    v = FB_TimelineAddSource(&tl, "a.mp4", 10000, 1, 1);
+    FB_SourceSetVideo(&tl.sources[v], 320, 240, 1, 1, 25, 1);
+    g = FB_TimelineAddSource(&tl, "boing.gif", 1100, 1, 0);
+    FB_SourceSetVideo(&tl.sources[g], 46, 47, 1, 1, 10, 1);
+    FB_TimelineAppendToTrack(&tl, 0, v, 0, 6000);
+    FB_TimelineAddTrack(&tl, FB_TRACK_VIDEO);
+    FB_TimelineAddClip(&tl, 1, g, 0, 1100, 500);
+
+    /* Without looping, one round at most. */
+    CHECK(FB_SourceLimit(&tl.sources[g]) == 1100);
+    CHECK(FB_TimelineTrimClip(&tl, 1, 0, 5000) == -1);
+    /* Looping: any length. */
+    tl.sources[g].loops = 1;
+    CHECK(FB_SourceLimit(&tl.sources[g]) == 0);
+    CHECK(FB_SourceLimit(&tl.sources[v]) == 10000);
+    CHECK(FB_TimelineTrimClip(&tl, 1, 0, 5000) == 0);
+
+    memset(&out, 0, sizeof(out));
+    strcpy(out.path, "out.mp4");
+    out.quality = FB_QUALITY_FINAL;
+    CHECK(FB_JobBuild(&job, &tl, &out) == FB_JOB_OK);
+    printf("looping animation: %s\n", job.filtergraph);
+    /* 11 frames at 10/s, over and over. */
+    CHECK(strstr(job.filtergraph, "[1:v]loop=loop=-1:size=11:start=0,"
+                 "setpts=N*1/(10*TB),trim=start=0.000:end=5.000") != NULL);
+}
+
 int main(void)
 {
     FB_RegisterBuiltinModules();
@@ -1506,6 +1541,7 @@ int main(void)
     test_job_crossfade();
     test_project_crossfade();
     test_clip_effects();
+    test_looping_animation();
     test_log();
     test_job_build_and_roundtrip();
     test_job_tracks();

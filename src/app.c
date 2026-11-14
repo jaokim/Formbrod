@@ -230,6 +230,7 @@ int App_OpenProject(const char *path)
             src->has_video = info.has_video;
             src->has_audio = info.has_audio;
             src->still     = info.still;
+            src->loops     = info.loops;
             src->intra     = info.intra;
             FB_SourceSetVideo(src, info.width, info.height,
                               info.sar_num, info.sar_den,
@@ -340,6 +341,7 @@ static int add_source(const char *path)
     FB_SourceSetVideo(&App.timeline.sources[src], info.width, info.height,
                       info.sar_num, info.sar_den, info.fps_num, info.fps_den);
     App.timeline.sources[src].still = info.still;
+    App.timeline.sources[src].loops = info.loops;
     App.timeline.sources[src].intra = info.intra;
     cache_request(&App.timeline.sources[src]);
     return src;
@@ -630,9 +632,9 @@ int App_SetOut(int clip, fb_ms_t at)
         return -1;
     }
     /* Past the clip's end makes it longer, as far as the file goes (a
-     * still picture can be any length). */
+     * still picture or a looping animation can be any length). */
     out = c->in + (at - c->start);
-    dur = App.timeline.sources[c->source].duration;
+    dur = FB_SourceLimit(&App.timeline.sources[c->source]);
     if (dur > 0 && out > dur)
         out = dur;
     return App_TrimClip(clip, c->in, out);

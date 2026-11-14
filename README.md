@@ -87,7 +87,8 @@ Early skeleton. Working so far:
   clip selected in the list, or else on the picture under the playhead.
   The clips after it on the same track move along, so no gap is left.
 - Put the playhead *after* the end of a clip and choose **Set out** to make
-  it longer, as far as its file goes; a still picture can be any length.
+  it longer, as far as its file goes; a still picture can be any length,
+  and so can an animation (animated GIF or APNG), which loops.
   The timeline goes on a little past its last clip for this.
 - Or type the times: under the playhead and zoom controls, the selected
   clip shows where it **Starts** in the edit, where in its file it begins

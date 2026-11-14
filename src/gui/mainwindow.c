@@ -1026,7 +1026,7 @@ static void clip_field_changed(uint32 id)
         App_SetCrossfade(clip, t, NULL);
     } else if (id == GID_IN) {
         fb_ms_t len = c->out - c->in;
-        fb_ms_t dur = tl->sources[c->source].duration;
+        fb_ms_t dur = FB_SourceLimit(&tl->sources[c->source]);
 
         if (dur > 0 && t + len > dur)
             len = dur - t;

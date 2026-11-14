@@ -687,8 +687,8 @@ static void trim_to(struct LanesData *ld, long x)
     } else {
         if (at < c->in + min)
             at = c->in + min;
-        if (src->duration > 0 && at > src->duration)
-            at = src->duration;
+        if (FB_SourceLimit(src) > 0 && at > FB_SourceLimit(src))
+            at = FB_SourceLimit(src);
         ld->drag_out = at;
     }
 }

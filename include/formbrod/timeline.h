@@ -61,6 +61,9 @@ typedef struct FBSource {
     int     has_video;
     int     has_audio;
     int     still;          /* a single picture: clips can be any length */
+    /* A short animation (animated GIF, APNG): it plays over and over, so
+     * clips of it can be any length too. Its duration is one round. */
+    int     loops;
     /* Video stream info from probing; 0 = unknown. */
     int     width, height;
     int     sar_num, sar_den;   /* pixel aspect, 0/0 or 1/1 = square */
@@ -292,6 +295,10 @@ int     FB_TimelineFrameSize(const FBTimeline *tl, int *width, int *height);
 
 /* The frame rate: the format's, else the first clip's source. 0 if unknown. */
 int     FB_TimelineFrameRate(const FBTimeline *tl, int *num, int *den);
+
+/* How far into its file a clip of `src` can reach: the file's length, or
+ * 0 for no limit (a still picture, or an animation that loops). */
+fb_ms_t FB_SourceLimit(const FBSource *src);
 
 /* The fit mode that applies to a clip: its own, else the timeline's, else
  * FB_FIT_FIT. Never returns FB_FIT_DEFAULT. */

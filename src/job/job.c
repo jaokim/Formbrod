@@ -169,15 +169,32 @@ static FBJobError clip_video(Buf *b, const FBTimeline *tl, const FBClip *c,
 {
     FBJobError err;
 
+    const FBSource *src = &tl->sources[c->source];
+
     /* A still picture is one frame: repeat it at the frame rate, then
      * take the clip's part like any other. */
-    if (tl->sources[c->source].still)
+    if (src->still) {
         buf_printf(b, "[%d:v]loop=loop=-1:size=1:start=0,"
                    "setpts=N*%d/(%d*TB),", in,
                    f->fps_num > 0 ? f->fps_den : 1,
                    f->fps_num > 0 ? f->fps_num : 25);
-    else
+    } else if (src->loops) {
+        /* An animation that loops: all its frames, over and over, at its
+         * own rate (the loop filter keeps at most 32767 frames). */
+        int num = src->fps_num > 0 ? src->fps_num : 10;
+        int den = src->fps_num > 0 && src->fps_den > 0 ? src->fps_den : 1;
+        long frames = (long)((src->duration * (double)num) /
+                             (1000.0 * den) + 0.5);
+
+        if (frames < 1)
+            frames = 1;
+        if (frames > 32767)
+            frames = 32767;
+        buf_printf(b, "[%d:v]loop=loop=-1:size=%ld:start=0,"
+                   "setpts=N*%d/(%d*TB),", in, frames, den, num);
+    } else {
         buf_printf(b, "[%d:v]", in);
+    }
     buf_printf(b, "trim=start=%.3f:end=%.3f,setpts=PTS-STARTPTS",
                secs(c->in), secs(c->out));
     /* concat needs one frame size and pixel shape for all clips */
