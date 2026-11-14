@@ -1199,6 +1199,40 @@ static void test_move_clips(void)
     CHECK(FB_TimelineMoveClipTo(&tl, 0, 7, 0) == -1);
 }
 
+/* Three picture tracks: each overlay reads what the one before wrote. */
+static void test_job_three_tracks(void)
+{
+    static FBTimeline tl;
+    static FBJob job;
+    FBOutput out;
+    int k, s, m;
+
+    FB_TimelineInit(&tl);
+    k = FB_TimelineAddSource(&tl, "k.jpg", 0, 1, 0);
+    FB_SourceSetVideo(&tl.sources[k], 800, 600, 1, 1, 0, 0);
+    tl.sources[k].still = 1;
+    s = FB_TimelineAddSource(&tl, "s.mp4", 11895, 1, 1);
+    FB_SourceSetVideo(&tl.sources[s], 640, 360, 1, 1, 25, 1);
+    m = FB_TimelineAddSource(&tl, "m.mpg", 10466, 1, 1);
+    FB_SourceSetVideo(&tl.sources[m], 720, 480, 8, 9, 30000, 1001);
+    CHECK(FB_TimelineAppendToTrack(&tl, 0, k, 0, 5100) >= 0);
+    CHECK(FB_TimelineAppendToTrack(&tl, 1, s, 0, 11895) >= 0);
+    CHECK(FB_TimelineAppendToTrack(&tl, 2, m, 0, 10466) >= 0);
+    CHECK(FB_TimelineAppendToTrack(&tl, 3, s, 0, 3000) >= 0);
+
+    memset(&out, 0, sizeof(out));
+    strcpy(out.path, "out.mp4");
+    out.quality = FB_QUALITY_PREVIEW;
+    CHECK(FB_JobBuild(&job, &tl, &out) == FB_JOB_OK);
+    CHECK(strstr(job.filtergraph,
+                 "[t0v][t1v]overlay=format=auto:eof_action=pass[c0];") != NULL);
+    CHECK(strstr(job.filtergraph,
+                 "[c0][t2v]overlay=format=auto:eof_action=pass[c1];") != NULL);
+    CHECK(strstr(job.filtergraph,
+                 "[c1][t3v]overlay=format=auto:eof_action=pass[outv]") != NULL);
+    printf("three tracks: %s\n", job.filtergraph);
+}
+
 int main(void)
 {
     FB_RegisterBuiltinModules();
@@ -1208,6 +1242,7 @@ int main(void)
     test_log();
     test_job_build_and_roundtrip();
     test_job_tracks();
+    test_job_three_tracks();
     test_still();
     test_job_errors();
     test_fit();
