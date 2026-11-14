@@ -81,7 +81,8 @@ enum {
     GID_POSITION, GID_PROGRESS, GID_STATUS,
     GID_RULER, GID_FILMSTRIP, GID_SCROLL, GID_ZOOM,
     GID_SET_IN, GID_SET_OUT, GID_LANES,
-    GID_CLIPNAME, GID_STARTS, GID_IN, GID_LENGTH, GID_LAST
+    GID_CLIPNAME, GID_STARTS, GID_IN, GID_LENGTH, GID_XFADE,
+    GID_CROSSFADE, GID_LAST
 };
 
 /* Menu commands without a button. Menu items for button actions use the
@@ -93,8 +94,38 @@ enum {
     MID_WRITE_LOG, MID_TRACK_APPEND, MID_TRACK_MUTE, MID_TRACK_HIDE,
     MID_TRACK_REMOVE, MID_PROXIES, MID_PROXY_SIZE_MENU,
     MID_PROXY_AUTO, MID_PROXY_320, MID_PROXY_480, MID_PROXY_640,
-    MID_EFFECT = 200     /* + module index */
+    MID_XFADE_MENU,
+    MID_XFADE_KIND = 150,    /* + index in XfadeKinds */
+    MID_EFFECT = 200         /* + module index */
 };
+
+/* The crossfade kinds offered in the Edit menu: ffmpeg xfade names. ARexx
+ * and project files can use any other of ffmpeg's. */
+static const struct {
+    const char *name;
+    long        msg;
+} XfadeKinds[] = {
+    { "fade",       MSG_XFADE_FADE },
+    { "fadeblack",  MSG_XFADE_FADEBLACK },
+    { "dissolve",   MSG_XFADE_DISSOLVE },
+    { "wipeleft",   MSG_XFADE_WIPELEFT },
+    { "wiperight",  MSG_XFADE_WIPERIGHT },
+    { "slideleft",  MSG_XFADE_SLIDELEFT },
+    { "circleopen", MSG_XFADE_CIRCLEOPEN },
+    { "pixelize",   MSG_XFADE_PIXELIZE },
+};
+#define NUM_XFADE_KINDS ((int)(sizeof(XfadeKinds) / sizeof(XfadeKinds[0])))
+
+/* A crossfade kind as shown: its menu label, or its own name. */
+static const char *xfade_label(const char *name)
+{
+    int i;
+
+    for (i = 0; i < NUM_XFADE_KINDS; i++)
+        if (strcmp(XfadeKinds[i].name, name) == 0)
+            return FB_Str(XfadeKinds[i].msg);
+    return name;
+}
 
 static struct {
     struct ClassLibrary *base;
@@ -133,6 +164,7 @@ static struct HintInfo Hints[] = {
     { GID_LENGTH,    -1, NULL, 0 },
     { GID_STARTS,    -1, NULL, 0 },
     { GID_LANES,     -1, NULL, 0 },
+    { GID_XFADE,     -1, NULL, 0 },
     { -1, -1, NULL, 0 }
 };
 static BOOL TrackClassesMade;
@@ -396,9 +428,11 @@ static BOOL menu_enabled(uint32 id)
 {
     BOOL have_clips = FB_TimelineDuration(&App.timeline) > 0;
 
-    if (id >= MID_EFFECT)
+    if (id >= MID_XFADE_KIND)
         return have_clips;
     switch (id) {
+    case GID_CROSSFADE:
+    case MID_XFADE_MENU:
     case GID_SPLIT:
     case GID_REMOVE:
     case GID_SET_IN:
@@ -540,7 +574,7 @@ static BOOL make_menus(struct Screen *scr)
     struct NewMenu *nm;
     int n = 0, i;
 
-    nm = calloc(48 + nmods, sizeof(*nm));
+    nm = calloc(64 + nmods, sizeof(*nm));
     if (!nm)
         return FALSE;
 
@@ -565,6 +599,13 @@ static BOOL make_menus(struct Screen *scr)
     add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_SET_IN),   NULL, GID_SET_IN);
     add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_SET_OUT),  NULL, GID_SET_OUT);
     add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_REMOVE),   NULL, GID_REMOVE);
+    add_menu(nm, &n, NM_ITEM, NM_BARLABEL,               NULL, 0);
+    add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_CROSSFADE), NULL, GID_CROSSFADE);
+    add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_CROSSFADE_KIND), NULL,
+             MID_XFADE_MENU);
+    for (i = 0; i < NUM_XFADE_KINDS; i++)
+        add_menu(nm, &n, NM_SUB, FB_Str(XfadeKinds[i].msg), NULL,
+                 MID_XFADE_KIND + (uint32)i);
 
     /* One item per registered module, so new modules show up here without
      * GUI changes. Module labels aren't translated yet. */
@@ -776,6 +817,22 @@ static void handle_menu(uint32 id)
         MainWindow_Refresh();
         return;
     }
+    if (id >= MID_XFADE_KIND && id < MID_XFADE_KIND + NUM_XFADE_KINDS) {
+        const FBTimeline *tl = &App.timeline;
+
+        /* The selected clip's crossfade gets this kind; one without a
+         * crossfade gets one. */
+        if ((clip = selected_clip()) < 0) {
+            App_SetStatus("%s", FB_Str(MSG_STATUS_SELECT_CLIP));
+        } else {
+            fb_ms_t len = tl->clips[clip].xfade;
+
+            App_SetCrossfade(clip, len > 0 ? len : FB_CROSSFADE_LENGTH,
+                             XfadeKinds[id - MID_XFADE_KIND].name);
+        }
+        MainWindow_Refresh();
+        return;
+    }
     if (is_fit_id(id)) {
         App_SetDefaultFit(FB_FIT_FIT + (int)(id - MID_FIT_FIT));
         MainWindow_Refresh();
@@ -843,6 +900,7 @@ static void handle_menu(uint32 id)
     case GID_SET_IN:
     case GID_SET_OUT:
     case GID_REMOVE:
+    case GID_CROSSFADE:
     case GID_PREVIEW:
         handle_gadget(id);
         break;
@@ -865,6 +923,7 @@ static void handle_menupick(uint16 code)
 /* ---- The selected clip: name, start, where in its file, length --------- */
 
 static char NameText[160], StartsText[24], InText[24], LengthText[24];
+static char XfadeText[24];
 
 static void set_field(uint32 id, char *text, BOOL disabled)
 {
@@ -877,17 +936,21 @@ static void set_field(uint32 id, char *text, BOOL disabled)
         IIntuition->RefreshGList(Gad[id], Win, NULL, 1);
 }
 
-/* Shows the clip's name (with its fit and effects), where it starts in
- * the edit, where in its file it begins, and how long it is. A still
- * picture has no place in a file, only a length. */
+/* Shows the clip's name (with its fit, effects and crossfade kind), where
+ * it starts in the edit, where in its file it begins, how long it is, and
+ * how long it crossfades from the clip before. A still picture has no
+ * place in a file, only a length; a clip that can't have a crossfade has
+ * no crossfade field. */
 static void update_clip_fields(int clip)
 {
     const FBTimeline *tl = &App.timeline;
     char dp = Locale_DecimalPoint();
     BOOL none = clip < 0 || clip >= tl->num_clips;
     BOOL still = !none && tl->sources[tl->clips[clip].source].still;
+    BOOL no_xfade = none || (tl->clips[clip].xfade <= 0 &&
+                             FB_TimelineMaxCrossfade(tl, clip) <= 0);
 
-    StartsText[0] = InText[0] = LengthText[0] = '\0';
+    StartsText[0] = InText[0] = LengthText[0] = XfadeText[0] = '\0';
     if (none) {
         strncpy(NameText, FB_Str(MSG_INSPECTOR_NONE), sizeof(NameText) - 1);
         NameText[sizeof(NameText) - 1] = '\0';
@@ -910,18 +973,27 @@ static void update_clip_fields(int clip)
             strncat(NameText, c->effects[e].module,
                     sizeof(NameText) - strlen(NameText) - 1);
         }
+        if (c->xfade > 0) {
+            strncat(NameText, (fit || c->num_effects) ? ", " : ": ",
+                    sizeof(NameText) - strlen(NameText) - 1);
+            strncat(NameText, xfade_label(FB_ClipCrossfadeKind(c)),
+                    sizeof(NameText) - strlen(NameText) - 1);
+        }
         FB_FormatTimeMs(StartsText, sizeof(StartsText), c->start, dp);
         if (still)
             strcpy(InText, "-");       /* a picture has no place in a file */
         else
             FB_FormatTimeMs(InText, sizeof(InText), c->in, dp);
         FB_FormatTimeMs(LengthText, sizeof(LengthText), c->out - c->in, dp);
+        if (!no_xfade)
+            FB_FormatTimeMs(XfadeText, sizeof(XfadeText), c->xfade, dp);
     }
     IIntuition->SetGadgetAttrs(Gad[GID_CLIPNAME], Win, NULL,
                                GA_Text, NameText, TAG_END);
     set_field(GID_STARTS, StartsText, none);
     set_field(GID_IN, InText, none || still);
     set_field(GID_LENGTH, LengthText, none);
+    set_field(GID_XFADE, XfadeText, no_xfade);
 }
 
 /* A field was changed (Return or Tab). Starts moves the clip (and the
@@ -946,6 +1018,8 @@ static void clip_field_changed(uint32 id)
     }
     if (id == GID_STARTS) {
         App_MoveClip(clip, t);
+    } else if (id == GID_XFADE) {
+        App_SetCrossfade(clip, t, NULL);
     } else if (id == GID_IN) {
         fb_ms_t len = c->out - c->in;
         fb_ms_t dur = tl->sources[c->source].duration;
@@ -990,6 +1064,7 @@ void MainWindow_Refresh(void)
     IIntuition->SetGadgetAttrs(Gad[GID_SPLIT], Win, NULL, GA_Disabled, total <= 0, TAG_END);
     IIntuition->SetGadgetAttrs(Gad[GID_REMOVE], Win, NULL, GA_Disabled, total <= 0, TAG_END);
     IIntuition->SetGadgetAttrs(Gad[GID_FADE], Win, NULL, GA_Disabled, total <= 0, TAG_END);
+    IIntuition->SetGadgetAttrs(Gad[GID_CROSSFADE], Win, NULL, GA_Disabled, total <= 0, TAG_END);
     IIntuition->SetGadgetAttrs(Gad[GID_PREVIEW], Win, NULL, GA_Disabled, total <= 0, TAG_END);
     /* While rendering, Export turns into Cancel. */
     IIntuition->SetGadgetAttrs(Gad[GID_EXPORT], Win, NULL,
@@ -1177,6 +1252,7 @@ static void handle_gadget(uint32 id)
     case GID_STARTS:
     case GID_IN:
     case GID_LENGTH:
+    case GID_XFADE:
         clip_field_changed(id);
         break;
     case GID_SET_IN:
@@ -1210,6 +1286,14 @@ static void handle_gadget(uint32 id)
     case GID_FADE:
         if ((clip = selected_clip()) >= 0)
             App_AddEffect(clip, "fade");
+        else
+            App_SetStatus("%s", FB_Str(MSG_STATUS_SELECT_CLIP));
+        break;
+    case GID_CROSSFADE:
+        /* On and off: a crossfade from the clip before, or a cut again. */
+        if ((clip = selected_clip()) >= 0)
+            App_SetCrossfade(clip, App.timeline.clips[clip].xfade > 0
+                                   ? 0 : FB_CROSSFADE_LENGTH, NULL);
         else
             App_SetStatus("%s", FB_Str(MSG_STATUS_SELECT_CLIP));
         break;
@@ -1344,6 +1428,7 @@ int MainWindow_Open(void)
     Hints[4].hi_Text = FB_Str(MSG_HINT_TIMES);
     Hints[5].hi_Text = FB_Str(MSG_HINT_STARTS);
     Hints[6].hi_Text = FB_Str(MSG_HINT_LANES);
+    Hints[7].hi_Text = FB_Str(MSG_HINT_CROSSFADE);
 
 
     AppPort = IExec->AllocSysObjectTags(ASOT_PORT, TAG_END);
@@ -1357,6 +1442,7 @@ int MainWindow_Open(void)
         LAYOUT_AddChild, button(GID_SET_OUT, FB_Str(MSG_BTN_SET_OUT)),
         LAYOUT_AddChild, button(GID_REMOVE,  FB_Str(MSG_BTN_REMOVE)),
         LAYOUT_AddChild, button(GID_FADE,    FB_Str(MSG_BTN_FADE)),
+        LAYOUT_AddChild, button(GID_CROSSFADE, FB_Str(MSG_BTN_CROSSFADE)),
         LAYOUT_AddChild, button(GID_PREVIEW, FB_Str(MSG_BTN_PREVIEW)),
         LAYOUT_AddChild, button(GID_EXPORT,  FB_Str(MSG_BTN_EXPORT)),
         TAG_END);
@@ -1410,7 +1496,7 @@ int MainWindow_Open(void)
         GA_Text,     NameText,
         BUTTON_Justification, BCJ_LEFT,
         TAG_END);
-    for (i = GID_STARTS; i <= GID_LENGTH; i++)
+    for (i = GID_STARTS; i <= GID_XFADE; i++)
         Gad[i] = (struct Gadget *)IIntuition->NewObject(CLS(C_STRING), NULL,
             GA_ID,            i,
             GA_RelVerify,     TRUE,
@@ -1429,6 +1515,8 @@ int MainWindow_Open(void)
         CHILD_Label,        label(FB_Str(MSG_LABEL_FROM_FILE)),
         LAYOUT_AddChild,    Gad[GID_LENGTH],
         CHILD_Label,        label(FB_Str(MSG_LABEL_LENGTH)),
+        LAYOUT_AddChild,    Gad[GID_XFADE],
+        CHILD_Label,        label(FB_Str(MSG_LABEL_CROSSFADE)),
         TAG_END);
     strcpy(NameText, FB_Str(MSG_INSPECTOR_NONE));
 

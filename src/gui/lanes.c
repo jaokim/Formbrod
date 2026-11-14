@@ -16,7 +16,9 @@
  *
  * Mouse:
  *   - a track's name selects the track (for the Track menu);
- *   - a clip selects it;
+ *   - a clip selects it. Where two clips overlap in a crossfade, the
+ *     overlap is drawn with an X and belongs to the clip fading in
+ *     (except the very end, which is the earlier clip's end);
  *   - a clip's edge, dragged, trims it: the clip is drawn at its new
  *     length while dragging, and on release the window is told the new in
  *     and out points (LANES_EditClip/In/Out);
@@ -76,6 +78,8 @@
 #define COL_GHOST      0xFFFFFF      /* a dragged clip's outline */
 #define COL_GHOST_NO   0x888780      /* ...where it can't go */
 #define COL_INSERT     0xEF9F27      /* where it will go in */
+#define COL_XFADE_FILL 0xD3D1C7      /* a crossfade's overlap */
+#define COL_XFADE_EDGE 0x444441
 #define DRAG_PX        3             /* move this far before it's a drag */
 #define SNAP_PX        6             /* ends this near something snap to it */
 
@@ -245,6 +249,17 @@ static int clip_at(const struct LanesData *ld, int track, long x, int *hit)
                 *hit = HIT_OUT;
             else
                 *hit = HIT_BODY;
+            /* In a crossfade's overlap: the clip fading in, which comes
+             * next. */
+            if (*hit != HIT_OUT && i + 1 < tl->num_clips &&
+                tl->clips[i + 1].track == track &&
+                tl->clips[i + 1].xfade > 0) {
+                long n0, n1;
+
+                clip_span(ld, i + 1, &n0, &n1);
+                if (x >= n0)
+                    continue;
+            }
             return i;
         }
         /* Just past the end of a clip: its end, to make it longer. */
@@ -327,6 +342,56 @@ static void draw_clip(const struct LanesData *ld, struct trackDraw *d,
         Track_FillClipped(rp, &box, left + x0, bottom - 1, left + x1, bottom);
         Track_FillClipped(rp, &box, left + x0, top, left + x0 + 2, bottom);
         Track_FillClipped(rp, &box, left + x1 - 2, top, left + x1, bottom);
+    }
+}
+
+/* A crossfade: the overlap of a clip and the one before it, as a box with
+ * an X (the one fading out, the other fading in). */
+static void draw_crossfade(const struct LanesData *ld, struct trackDraw *d,
+                           const Row *row, int clip)
+{
+    struct RastPort *rp = d->trd_RPort;
+    long left = d->trd_Box.Left, w = d->trd_Box.Width;
+    long top = d->trd_Box.Top + row->y, bottom = top + row->h - 1;
+    long x0, x1, p0, p1, x, span;
+    struct Rectangle box;
+
+    if (clip <= 0 || ld->tl->clips[clip - 1].track != row->track)
+        return;
+    if (row->kind == ROW_LINKED && !ld->tl->sources[
+            ld->tl->clips[clip].source].has_audio)
+        return;
+    clip_span(ld, clip, &x0, &x1);
+    clip_span(ld, clip - 1, &p0, &p1);
+    if (p1 > x1)
+        p1 = x1;
+    if (p1 < x0 || p1 < 0 || x0 >= w)
+        return;
+    box.MinX = left + (x0 > 0 ? x0 : 0);
+    box.MaxX = left + (p1 < w ? p1 : w - 1);
+    box.MinY = top;
+    box.MaxY = bottom;
+
+    Track_SetRGB(rp, COL_XFADE_EDGE);
+    IGraphics->RectFill(rp, box.MinX, box.MinY, box.MaxX, box.MaxY);
+    Track_SetRGB(rp, COL_XFADE_FILL);
+    Track_FillClipped(rp, &box, left + x0 + 1, top + 1, left + p1 - 1,
+                      bottom - 1);
+    /* The X, a pixel column at a time so it stays inside the box. */
+    Track_SetRGB(rp, COL_XFADE_EDGE);
+    span = p1 - x0 > 0 ? p1 - x0 : 1;
+    for (x = x0; x <= p1; x++) {
+        long y = (x - x0) * (row->h - 1) / span;
+
+        Track_FillClipped(rp, &box, left + x, top + y, left + x, top + y);
+        Track_FillClipped(rp, &box, left + x, bottom - y, left + x,
+                          bottom - y);
+    }
+    if (clip == ld->selected) {
+        Track_SetRGB(rp, COL_SELECTED);
+        Track_FillClipped(rp, &box, left + x0, top, left + p1, top + 1);
+        Track_FillClipped(rp, &box, left + x0, bottom - 1, left + p1, bottom);
+        Track_FillClipped(rp, &box, left + x0, top, left + x0 + 2, bottom);
     }
 }
 
@@ -429,6 +494,13 @@ static void lanes_draw(struct LanesData *ld, struct trackDraw *d)
             if (tl->clips[i].track == row->track &&
                 !(ld->mode == MODE_MOVE && i == ld->drag_clip))
                 draw_clip(ld, d, row, i);
+        /* Crossfades on top. While a clip is moved, the one after it
+         * loses its crossfade (FB_TimelineStartWithout). */
+        for (i = 0; i < tl->num_clips; i++)
+            if (tl->clips[i].track == row->track && tl->clips[i].xfade > 0 &&
+                !(ld->mode == MODE_MOVE &&
+                  (i == ld->drag_clip || i == ld->drag_clip + 1)))
+                draw_crossfade(ld, d, row, i);
     }
 
     if (ld->mode == MODE_MOVE)

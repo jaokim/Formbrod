@@ -195,6 +195,49 @@ static void test_mixed_sizes(void)
     CHECK(pr.width == 320 && pr.height == 240);
 }
 
+/* Two clips of different size and rate with a wipe between them, and an
+ * upper track crossfading with transparency around it. */
+static void test_crossfade(void)
+{
+    FBTimeline tl;
+    FBOutput out;
+    FBJob job;
+    FBResult res;
+    Probe pr;
+    char a[FB_PATH_LEN], b[FB_PATH_LEN], c[FB_PATH_LEN];
+    int calls;
+
+    printf("crossfades, on the bottom track and an upper one\n");
+    in_path(a, "a.mp4");
+    in_path(b, "b.mkv");
+    in_path(c, "c.mp4");
+    FB_TimelineInit(&tl);
+    FB_TimelineAddSource(&tl, a, 5000, 1, 1);
+    FB_SourceSetVideo(&tl.sources[0], 320, 240, 1, 1, 25, 1);
+    FB_TimelineAddSource(&tl, b, 4000, 1, 1);
+    FB_SourceSetVideo(&tl.sources[1], 640, 360, 1, 1, 30, 1);
+    FB_TimelineAddSource(&tl, c, 3000, 1, 0);
+    FB_SourceSetVideo(&tl.sources[2], 320, 240, 1, 1, 25, 1);
+    FB_TimelineAppendToTrack(&tl, 0, 0, 0, 2000);
+    FB_TimelineAppendToTrack(&tl, 0, 1, 0, 2000);
+    CHECK(FB_TimelineSetCrossfade(&tl, 1, 1000, "wipeleft") == 1000);
+    FB_TimelineAddTrack(&tl, FB_TRACK_VIDEO);
+    FB_TimelineAddClip(&tl, 1, 2, 0, 1000, 500);
+    FB_TimelineAppendToTrack(&tl, 1, 2, 1000, 2000);
+    CHECK(FB_TimelineSetCrossfade(&tl, 3, 500, NULL) == 500);
+    set_output(&out, "out_xfade.mp4", "mpeg4", "aac", 0, 0,
+               FB_QUALITY_FINAL);
+    CHECK(FB_JobBuild(&job, &tl, &out) == FB_JOB_OK);
+    CHECK(strstr(job.filtergraph, "xfade=transition=wipeleft") != NULL);
+    CHECK(strstr(job.filtergraph, "acrossfade=d=1.000") != NULL);
+
+    CHECK(render(&job, &calls, &res) == FB_RENDER_DONE);
+    CHECK(probe(out.path, &pr) == 0);
+    CHECK(near(pr.duration, 3.0));
+    CHECK(pr.video == 1 && pr.audio == 1);
+    CHECK(pr.width == 320 && pr.height == 240);
+}
+
 /* Two clips from one file, in reverse order: one stream feeds two pads. */
 static void test_same_source_reversed(void)
 {
@@ -394,6 +437,7 @@ int main(int argc, char **argv)
     test_join();
     test_same_source_reversed();
     test_mixed_sizes();
+    test_crossfade();
     test_video_only_fallback();
     test_h264();
     test_cancel();

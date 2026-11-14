@@ -515,3 +515,67 @@ Automatic
 ; In the size submenu; %d is a width in pixels.
 MSG_MENU_PROXY_WIDTH (193//)
 %d pixels wide
+;
+; ---- Crossfades --------------------------------------------------------
+;
+; Button: give the selected clip a crossfade from the clip before it (or
+; take it away again). The clips then overlap.
+MSG_BTN_CROSSFADE (194//)
+Cr_ossfade
+;
+; Inspector field: how long the selected clip crossfades from the one
+; before it.
+MSG_LABEL_CROSSFADE (195//)
+Crossfade
+;
+MSG_HINT_CROSSFADE (196//)
+How long it fades over from the clip before it. 0 for a plain cut
+;
+; Status line; %s is the file name, then a time.
+MSG_STATUS_CROSSFADE (197//)
+%s now fades in over %s
+;
+; Status line after taking a crossfade away; %s is the file name.
+MSG_STATUS_NO_CROSSFADE (198//)
+%s now follows with a plain cut
+;
+MSG_STATUS_CANT_CROSSFADE (199//)
+A crossfade needs a clip right before it on the same track, with no gap
+;
+; Edit menu: a submenu choosing how the selected clip's crossfade looks.
+MSG_MENU_CROSSFADE (200//)
+Crossfade
+;
+MSG_MENU_CROSSFADE_KIND (201//)
+Crossfade kind
+;
+; The kinds. A plain mix of the two pictures.
+MSG_XFADE_FADE (202//)
+Fade
+;
+; Through black: the first picture goes dark, then the next comes up.
+MSG_XFADE_FADEBLACK (203//)
+Through black
+;
+; Pixels of the next picture appear here and there.
+MSG_XFADE_DISSOLVE (204//)
+Dissolve
+;
+; The next picture is uncovered from the right towards the left.
+MSG_XFADE_WIPELEFT (205//)
+Wipe left
+;
+MSG_XFADE_WIPERIGHT (206//)
+Wipe right
+;
+; The next picture slides in, pushing the first one out to the left.
+MSG_XFADE_SLIDELEFT (207//)
+Slide left
+;
+; The next picture appears in a growing circle.
+MSG_XFADE_CIRCLEOPEN (208//)
+Circle
+;
+; Both pictures turn into big pixels in between.
+MSG_XFADE_PIXELIZE (209//)
+Pixelate

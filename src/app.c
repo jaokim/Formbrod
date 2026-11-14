@@ -517,6 +517,36 @@ int App_MoveClip(int clip, fb_ms_t start)
     return 0;
 }
 
+fb_ms_t App_SetCrossfade(int clip, fb_ms_t len, const char *kind)
+{
+    FBTimeline *tl = &App.timeline;
+    const char *name;
+    char when[24];
+    fb_ms_t got;
+
+    if (clip < 0 || clip >= tl->num_clips) {
+        App_SetStatus("%s", FB_Str(MSG_STATUS_NO_SUCH_CLIP));
+        return -1;
+    }
+    got = FB_TimelineSetCrossfade(tl, clip, len, kind);
+    if (got < 0) {
+        App_SetStatus("%s", FB_Str(MSG_STATUS_CANT_CROSSFADE));
+        return -1;
+    }
+    App.modified = 1;
+    name = file_part(tl->sources[tl->clips[clip].source].path);
+    if (got == 0) {
+        App_SetStatus(FB_Str(MSG_STATUS_NO_CROSSFADE), name);
+    } else {
+        FB_FormatTimecode(when, sizeof(when), FB_US(got), FB_US(100), 0,
+                          Locale_DecimalPoint());
+        App_SetStatus(FB_Str(MSG_STATUS_CROSSFADE), name, when);
+    }
+    FB_Log(FB_LOG_INFO, "edit", "crossfade into clip %d: %lld ms, %s", clip,
+           (long long)got, FB_ClipCrossfadeKind(&tl->clips[clip]));
+    return got;
+}
+
 int App_MoveClipTo(int clip, int track, fb_ms_t at)
 {
     FBTimeline *tl = &App.timeline;

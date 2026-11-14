@@ -174,8 +174,14 @@ int FB_ProjectWrite(const FBTimeline *tl, const char *project_dir,
             continue;
         buf_printf(&b, "CLIP %d %lld %lld\n", c->source + 1,
                    (long long)c->in, (long long)c->out);
-        if (c->start != cursor)
+        if (c->xfade > 0) {
+            buf_printf(&b, "    CROSSFADE %lld", (long long)c->xfade);
+            if (c->xfade_kind[0])
+                buf_printf(&b, " %s", c->xfade_kind);
+            buf_printf(&b, "\n");
+        } else if (c->start != cursor) {
             buf_printf(&b, "    AT %lld\n", (long long)c->start);
+        }
         cursor = FB_ClipEnd(c);
         if (c->volume != 1.0)
             buf_printf(&b, "    VOLUME %.10g\n", c->volume);
@@ -366,6 +372,25 @@ FBProjectError FB_ProjectParse(FBTimeline *tl, const char *text,
             if (!clip || read_ll(&val, &at) != 0 || *val || at < clip->start)
                 FAIL(FB_PROJECT_BAD_LINE);
             clip->start = at;
+        } else if (strcmp(line, "CROSSFADE") == 0) {
+            long long ms;
+            char kind[FB_NAME_LEN];
+            size_t kl;
+
+            /* Mixed from the clip before it, which it then overlaps.
+             * Older versions skip the line and simply cut. */
+            if (!clip || read_ll(&val, &ms) != 0 || ms <= 0)
+                FAIL(FB_PROJECT_BAD_LINE);
+            while (*val == ' ' || *val == '\t')
+                val++;
+            kl = strcspn(val, " \t");
+            if (kl >= sizeof(kind))
+                FAIL(FB_PROJECT_BAD_LINE);
+            memcpy(kind, val, kl);
+            kind[kl] = '\0';
+            if (FB_TimelineSetCrossfade(tl, (int)(clip - tl->clips),
+                                        (fb_ms_t)ms, kind) < 0)
+                FAIL(FB_PROJECT_BAD_LINE);
         } else if (strcmp(line, "VOLUME") == 0) {
             char *end;
             double v = strtod(val, &end);
