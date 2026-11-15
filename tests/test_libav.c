@@ -23,6 +23,7 @@
 #include "formbrod/cache.h"
 #include "formbrod/player.h"
 #include "formbrod/render.h"
+#include "formbrod/thumbs.h"
 
 static int failures;
 static char dir[400];
@@ -474,6 +475,82 @@ static void test_proxy(void)
     }
 }
 
+/* Makes a source's thumbnail strip like the app does; returns its
+ * frames, or -1. */
+static long make_strip(FBCache *c, FBSource *src)
+{
+    static FBJob job;
+    char path[FB_PATH_LEN];
+    FBResult res;
+    FILE *f;
+    long size;
+    int calls;
+
+    FB_CachePath(c, src->key, FB_CACHE_THUMBS, 0, path, sizeof(path));
+    remove(path);   /* from an earlier run */
+    CHECK(FB_CacheRequestThumbs(c, src) == FB_CACHE_QUEUED);
+    if (FB_CacheNextJob(c, &job) < 0)
+        return -1;
+    CHECK(render(&job, &calls, &res) == FB_RENDER_DONE);
+    CHECK(FB_CacheFinish(c, 1) == FB_CACHE_READY);
+    f = fopen(path, "rb");
+    if (!f)
+        return -1;
+    fseek(f, 0, SEEK_END);
+    size = ftell(f);
+    fclose(f);
+    CHECK(size % (c->thumb_w * c->thumb_h * 4) == 0);
+    return size / (c->thumb_w * c->thumb_h * 4);
+}
+
+/* Thumbnail strips: one raw ARGB frame a second (not 25), a still's one
+ * frame, and the store reading them back. */
+static void test_thumbs(void)
+{
+    static FBCache c;
+    static FBThumbStore st;
+    const unsigned char *px;
+    FBSource src, pic;
+    long n;
+
+    printf("thumbnail strips\n");
+    FB_CacheInit(&c, dir, 0);
+    memset(&src, 0, sizeof(src));
+    in_path(src.path, "a.mp4");
+    strcpy(src.key, "00000000thumbs01");
+    src.duration = 5000;
+    src.has_video = 1;
+    src.has_audio = 1;
+    FB_SourceSetVideo(&src, 320, 240, 1, 1, 25, 1);
+    n = make_strip(&c, &src);
+    printf("  a.mp4: %ld thumbnails\n", n);
+    CHECK(n >= 5 && n <= 6);
+
+    memset(&pic, 0, sizeof(pic));
+    in_path(pic.path, "e.bmp");
+    strcpy(pic.key, "00000000thumbs02");
+    pic.duration = 5000;
+    pic.has_video = 1;
+    pic.still = 1;
+    FB_SourceSetVideo(&pic, 621, 610, 1, 1, 25, 1);
+    CHECK(make_strip(&c, &pic) == 1);
+
+    CHECK(FB_ThumbsInit(&st, c.thumb_w, c.thumb_h, 8) == 0);
+    CHECK(FB_ThumbsLock(&st, src.key, 3, &px) == FB_THUMB_WAIT);
+    CHECK(FB_ThumbsLock(&st, pic.key, 9, &px) == FB_THUMB_WAIT);
+    CHECK(FB_ThumbsLoad(&st, &c) == 2);
+    CHECK(FB_ThumbsLock(&st, src.key, 3, &px) == FB_THUMB_HIT);
+    if (px) {
+        CHECK(px[0] == 255);     /* opaque ARGB */
+        FB_ThumbsUnlock(&st);
+    }
+    /* Past a still's only frame is that frame. */
+    CHECK(FB_ThumbsLock(&st, pic.key, 9, &px) == FB_THUMB_HIT);
+    if (px)
+        FB_ThumbsUnlock(&st);
+    FB_ThumbsFree(&st);
+}
+
 /* A window from the middle: inputs jump to their first frame used. */
 static void test_window_seek(void)
 {
@@ -885,6 +962,7 @@ int main(int argc, char **argv)
     test_cancel();
     test_errors();
     test_proxy();
+    test_thumbs();
     test_window_seek();
     test_play();
     test_play_player(10);

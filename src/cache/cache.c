@@ -135,6 +135,8 @@ void FB_CacheRecipe(const FBCache *c, FBCacheKind kind, char *out,
 {
     if (kind == FB_CACHE_RENDER)
         snprintf(out, len, "render1-%d", FB_PREVIEW_WIDTH);
+    else if (kind == FB_CACHE_THUMBS)
+        snprintf(out, len, "thumbs1-%dx%d", c->thumb_w, c->thumb_h);
     else
         snprintf(out, len, "proxy1-%d", c->proxy_width);
 }
@@ -149,6 +151,12 @@ int FB_CacheWantsProxy(const FBCache *c, const FBSource *src)
                        ? c->proxy_width : FB_PROXY_SKIP_WIDTH))
         return 0;
     return 1;
+}
+
+int FB_CacheWantsThumbs(const FBCache *c, const FBSource *src)
+{
+    (void)c;
+    return src->has_video && src->key[0];
 }
 
 int FB_CacheAutoWidth(int mhz, int cores)
@@ -171,6 +179,16 @@ void FB_CacheInit(FBCache *c, const char *dir, int proxy_width)
     if (proxy_width < FB_PROXY_MIN_WIDTH)
         proxy_width = FB_PROXY_MIN_WIDTH;
     c->proxy_width = proxy_width;
+    c->thumb_w = FB_THUMB_W;
+    c->thumb_h = FB_THUMB_H;
+}
+
+void FB_CacheSetThumbSize(FBCache *c, int w, int h)
+{
+    if (w > 0 && h > 0) {
+        c->thumb_w = w;
+        c->thumb_h = h;
+    }
 }
 
 int FB_CachePath(const FBCache *c, const char *key, FBCacheKind kind,
@@ -179,8 +197,9 @@ int FB_CachePath(const FBCache *c, const char *key, FBCacheKind kind,
     char recipe[64], name[128];
 
     FB_CacheRecipe(c, kind, recipe, sizeof(recipe));
-    if (snprintf(name, sizeof(name), "%s.%s%s.mov", key, recipe,
-                 partial ? "-part" : "") >= (int)sizeof(name))
+    if (snprintf(name, sizeof(name), "%s.%s%s.%s", key, recipe,
+                 partial ? "-part" : "",
+                 kind == FB_CACHE_THUMBS ? "rgb" : "mov") >= (int)sizeof(name))
         return -1;
     return FB_PathJoin(c->dir, name, out, len);
 }
@@ -248,17 +267,16 @@ static void compact(FBCache *c)
     c->num_tasks = j;
 }
 
-FBCacheState FB_CacheRequest(FBCache *c, const FBSource *src)
+static FBCacheState request(FBCache *c, const FBSource *src,
+                            FBCacheKind kind)
 {
     FBCacheTask *t;
     int i;
 
-    if (!c->dir[0] || !FB_CacheWantsProxy(c, src))
-        return FB_CACHE_NONE;
-    i = find_task(c, src->key, FB_CACHE_PROXY);
+    i = find_task(c, src->key, kind);
     if (i >= 0 && c->tasks[i].state != FB_CACHE_READY)
         return c->tasks[i].state;   /* queued, busy or failed: once only */
-    if (FB_CacheFind(c, src->key, FB_CACHE_PROXY, NULL, 0))
+    if (FB_CacheFind(c, src->key, kind, NULL, 0))
         return FB_CACHE_READY;
     if (i < 0) {
         if (c->num_tasks >= FB_CACHE_MAX_TASKS)
@@ -270,10 +288,40 @@ FBCacheState FB_CacheRequest(FBCache *c, const FBSource *src)
     t = &c->tasks[i];
     memset(t, 0, sizeof(*t));
     copy_str(t->key, src->key, sizeof(t->key));
-    t->kind = FB_CACHE_PROXY;
+    t->kind = kind;
     t->state = FB_CACHE_QUEUED;
     t->source = *src;
     return FB_CACHE_QUEUED;
+}
+
+FBCacheState FB_CacheRequest(FBCache *c, const FBSource *src)
+{
+    if (!c->dir[0] || !FB_CacheWantsProxy(c, src))
+        return FB_CACHE_NONE;
+    return request(c, src, FB_CACHE_PROXY);
+}
+
+FBCacheState FB_CacheRequestThumbs(FBCache *c, const FBSource *src)
+{
+    if (!c->dir[0] || !FB_CacheWantsThumbs(c, src))
+        return FB_CACHE_NONE;
+    return request(c, src, FB_CACHE_THUMBS);
+}
+
+void FB_CacheDrop(FBCache *c, FBCacheKind kind)
+{
+    int i, j = 0;
+
+    for (i = 0; i < c->num_tasks; i++) {
+        if (c->tasks[i].kind == kind && i != c->current)
+            continue;
+        if (i == c->current)
+            c->current = j;
+        if (i != j)
+            c->tasks[j] = c->tasks[i];
+        j++;
+    }
+    c->num_tasks = j;
 }
 
 int FB_CachePending(const FBCache *c)
@@ -287,6 +335,45 @@ int FB_CachePending(const FBCache *c)
     return n;
 }
 
+/* A thumbnail strip: one frame per step (a still's only frame), scaled
+ * to fill the cell and cut to it, as raw ARGB. fps with start_time=0
+ * puts frame k at k * step from the file's start, as FB_ThumbIndex()
+ * counts, and round=up makes it the picture showing at that moment
+ * (the default, near, takes one up to half a step later). Read from the
+ * proxy if it's there. */
+static int build_thumbs_job(const FBCache *c, const FBCacheTask *task,
+                            FBJob *job)
+{
+    const FBSource *s = &task->source;
+    char fps[64] = "", sar[32] = "";
+    int n;
+
+    if (!FB_CacheFind(c, task->key, FB_CACHE_PROXY, job->inputs[0],
+                      FB_PATH_LEN))
+        copy_str(job->inputs[0], s->path, FB_PATH_LEN);
+    if (!s->still)
+        snprintf(fps, sizeof(fps), "fps=fps=1000/%lld:start_time=0:round=up,",
+                 (long long)FB_ThumbStep(s->duration));
+    /* Pixels that aren't square (DV, some cameras) are made square
+     * first, as the edit's jobs do, so the picture keeps its shape. */
+    if (s->sar_num > 0 && s->sar_den > 0 && s->sar_num != s->sar_den)
+        strcpy(sar, "scale=iw*sar:ih,");
+    n = snprintf(job->filtergraph, sizeof(job->filtergraph),
+                 "[0:v]%s%sscale=%d:%d:force_original_aspect_ratio=increase:"
+                 "flags=fast_bilinear,crop=%d:%d,setsar=1,format=argb[outv]",
+                 fps, sar, c->thumb_w, c->thumb_h, c->thumb_w, c->thumb_h);
+    if (n >= (int)sizeof(job->filtergraph))
+        return -1;
+    copy_str(job->video_out, "outv", sizeof(job->video_out));
+    if (FB_CachePath(c, task->key, task->kind, 1, job->output.path,
+                     sizeof(job->output.path)) != 0)
+        return -1;
+    copy_str(job->output.vcodec, "rawvideo", sizeof(job->output.vcodec));
+    job->output.quality = FB_QUALITY_PREVIEW;
+    job->length = s->still ? 0 : s->duration;
+    return 0;
+}
+
 int FB_CacheBuildJob(const FBCache *c, const FBCacheTask *task, FBJob *job)
 {
     const FBSource *s = &task->source;
@@ -295,6 +382,8 @@ int FB_CacheBuildJob(const FBCache *c, const FBCacheTask *task, FBJob *job)
     memset(job, 0, sizeof(*job));
     job->version = FB_JOB_VERSION;
     job->num_inputs = 1;
+    if (task->kind == FB_CACHE_THUMBS)
+        return build_thumbs_job(c, task, job);
     copy_str(job->inputs[0], s->path, FB_PATH_LEN);
 
     /* Same frames and timing as the file, only smaller and every frame a
@@ -337,6 +426,14 @@ int FB_CacheNextJob(FBCache *c, FBJob *job)
 
         if (t->state != FB_CACHE_QUEUED)
             continue;
+        if (t->kind == FB_CACHE_THUMBS) {
+            int p = find_task(c, t->key, FB_CACHE_PROXY);
+
+            /* Its proxy is coming: wait for it, it's quicker to read. */
+            if (p >= 0 && (c->tasks[p].state == FB_CACHE_QUEUED ||
+                           c->tasks[p].state == FB_CACHE_BUSY))
+                continue;
+        }
         if (FB_CacheFind(c, t->key, t->kind, NULL, 0)) {
             t->state = FB_CACHE_READY;   /* someone else made it */
             continue;

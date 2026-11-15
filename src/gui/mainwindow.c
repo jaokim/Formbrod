@@ -51,6 +51,7 @@
 #include <proto/dos.h>
 #include <proto/intuition.h>
 #include <proto/graphics.h>
+#include <graphics/gfx.h>         /* PIXF_A8R8G8B8 */
 #include <proto/asl.h>
 #include <proto/wb.h>
 #include <proto/utility.h>
@@ -381,15 +382,63 @@ static uint32 idcmp_hook(struct Hook *hook, Object *winobj,
  * Off is for slower Amigas: then nothing is decoded for thumbnails. */
 static BOOL show_pictures(void)
 {
-    return strcmp(Prefs_GetString("ShowPictures", "1"), "0") != 0;
+    return App_ThumbsEnabled() != 0;
 }
 
 static void set_show_pictures(BOOL on)
 {
-    Prefs_SetString("ShowPictures", on ? "1" : "0");
-    Prefs_Save();
+    App_SetThumbnails(on);
     IIntuition->SetGadgetAttrs(Gad[GID_FILMSTRIP], Win, NULL,
                                FILMSTRIP_Pictures, on, TAG_END);
+}
+
+/* The film strip's FBThumbFunc: the thumbnail from App.thumbs, written
+ * straight into the window (WritePixelArray takes ARGB as the strips
+ * hold it, and converts for the screen). This may run in Intuition's
+ * input task, so it only looks in memory; a miss is loaded by the main
+ * loop (App_LoadThumbs) and the strip drawn again. A file that will get
+ * no thumbnails is drawn as a plain block in its colour. */
+static BOOL draw_thumb(APTR data, const FBThumbRequest *r)
+{
+    const FBTimeline *tl = &App.timeline;
+    const FBSource *src;
+    const unsigned char *px;
+    FBThumbLook look;
+    long index;
+
+    (void)data;
+    if (r->source < 0 || r->source >= tl->num_sources)
+        return FALSE;
+    src = &tl->sources[r->source];
+    if (r->cell.Width != App.thumbs.w || r->cell.Height != App.thumbs.h)
+        return FALSE;
+    index = src->still ? 0 : FB_ThumbIndex(FB_ThumbStep(src->duration),
+                                           r->source_t);
+    look = FB_ThumbsLock(&App.thumbs, src->key, index, &px);
+    if (look == FB_THUMB_WAIT)
+        return FALSE;
+    if (look == FB_THUMB_NONE) {
+        Track_SetRGB(r->rp, Track_SourceRamp(r->source)->mid);
+        Track_FillClipped(r->rp, &r->clip, r->clip.MinX, r->clip.MinY,
+                          r->clip.MaxX, r->clip.MaxY);
+        return TRUE;
+    }
+    /* Only the part inside clip (a cell can be cut off at the edges). */
+    IGraphics->WritePixelArray((uint8 *)px, r->clip.MinX - r->cell.Left,
+                               r->clip.MinY - r->cell.Top,
+                               App.thumbs.w * 4, PIXF_A8R8G8B8, r->rp,
+                               r->clip.MinX, r->clip.MinY,
+                               r->clip.MaxX - r->clip.MinX + 1,
+                               r->clip.MaxY - r->clip.MinY + 1);
+    FB_ThumbsUnlock(&App.thumbs);
+    return TRUE;
+}
+
+void MainWindow_ThumbsLoaded(void)
+{
+    if (WinObj && Gad[GID_FILMSTRIP])
+        IIntuition->SetGadgetAttrs(Gad[GID_FILMSTRIP], Win, NULL,
+                                   TRACK_Redraw, TRUE, TAG_END);
 }
 
 /* ---- Preview copies ---------------------------------------------------- */
@@ -1493,6 +1542,7 @@ static Object *track(Class *cls, uint32 id, CONST_STRPTR empty_text)
         TRACK_Inset,     Inset,
         TRACK_Label,     id == GID_FILMSTRIP ? FB_Str(MSG_TRACK_RESULT) : NULL,
         FILMSTRIP_Pictures, show_pictures(),
+        FILMSTRIP_ThumbFunc, draw_thumb,
         LANES_DropText,  FB_Str(MSG_TRACK_DROP),
         LANES_PictureName, FB_Str(MSG_TRACK_PICTURE),
         LANES_SoundName, FB_Str(MSG_TRACK_SOUND),
@@ -1517,6 +1567,8 @@ int MainWindow_Open(void)
         if (!classes[i].base)
             return -1;
     }
+    /* Thumbnails fill a film-strip cell, less a pixel on either side. */
+    App_ThumbSize(FB_CELL_W_DEFAULT - 2, FB_CELL_H_DEFAULT);
     if (!Track_MakeClasses())
         return -1;
     TrackClassesMade = TRUE;

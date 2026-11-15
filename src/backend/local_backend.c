@@ -626,6 +626,12 @@ static int encoder_tail(LocalPriv *p, int kind, const AVCodec *codec,
                 ok = 1;
         if (!ok)
             pf = fmts[0];
+        /* Raw output (thumbnail strips, thumbs.h) is frames exactly as the
+         * job's graph makes them, as ARGB: no constant rate, which would
+         * repeat a strip's one-a-second frames 25 times, and no YUV. */
+        if (codec->id == AV_CODEC_ID_RAWVIDEO)
+            return snprintf(buf, len, ";[%s]format=pix_fmts=argb[_fb_v]",
+                            label) >= (int)len ? -1 : 0;
         /* JPEG wants full-range colour (0-255, not video's 16-235), and
          * the MJPEG encoder refuses ordinary yuv420p unless it's told the
          * colour is full range. So the range is converted with scale and

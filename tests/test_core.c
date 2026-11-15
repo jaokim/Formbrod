@@ -13,6 +13,7 @@
 #include "formbrod/cache.h"
 #include "formbrod/player.h"
 #include "formbrod/render.h"
+#include "formbrod/thumbs.h"
 
 static int failures;
 
@@ -1051,6 +1052,192 @@ static void test_cache_rules(void)
     CHECK(FB_CacheAutoWidth(0, 0) == FB_PROXY_WIDTH);
 }
 
+/* Thumbnail strips: steps, names, the queue and the job. */
+static void test_thumb_strips(void)
+{
+    static FBCache c;
+    static FBJob job;
+    FBSource s = cache_source("Work:a.mp4", "00000000strip001", 1920, 1080);
+    FBSource pic = cache_source("Work:p.png", "00000000strip002", 640, 480);
+    char recipe[64], path[FB_PATH_LEN];
+    int t;
+
+    /* A second a frame, fewer for long files, never over the limit. */
+    CHECK(FB_ThumbStep(0) == 1000);
+    CHECK(FB_ThumbStep(1200000) == 1000);      /* 20 minutes */
+    CHECK(FB_ThumbStep(1200001) == 2000);
+    CHECK(FB_ThumbStep(3600000) == 3000);      /* an hour */
+    CHECK(3600000 / FB_ThumbStep(3600000) <= FB_THUMB_MAX_FRAMES);
+    /* The nearest frame. */
+    CHECK(FB_ThumbIndex(1000, 0) == 0);
+    CHECK(FB_ThumbIndex(1000, -5) == 0);
+    CHECK(FB_ThumbIndex(1000, 499999) == 0);
+    CHECK(FB_ThumbIndex(1000, 500000) == 1);
+    CHECK(FB_ThumbIndex(2000, 5000000) == 3);
+
+    FB_CacheInit(&c, CACHE_DIR, 0);
+    CHECK(c.thumb_w == FB_THUMB_W && c.thumb_h == FB_THUMB_H);
+    FB_CacheRecipe(&c, FB_CACHE_THUMBS, recipe, sizeof(recipe));
+    CHECK(strcmp(recipe, "thumbs1-86x48") == 0);
+    CHECK(FB_CachePath(&c, s.key, FB_CACHE_THUMBS, 1, path,
+                       sizeof(path)) == 0);
+    CHECK(strcmp(path, CACHE_DIR "/00000000strip001.thumbs1-86x48-part.rgb")
+          == 0);
+    FB_CacheSetThumbSize(&c, 62, 35);
+    FB_CacheRecipe(&c, FB_CACHE_THUMBS, recipe, sizeof(recipe));
+    CHECK(strcmp(recipe, "thumbs1-62x35") == 0);
+    FB_CacheSetThumbSize(&c, 0, 35);           /* ignored */
+    CHECK(c.thumb_w == 62);
+    FB_CacheSetThumbSize(&c, FB_THUMB_W, FB_THUMB_H);
+
+    /* Stills get one too; sound and unreadable files don't. */
+    pic.still = 1;
+    CHECK(FB_CacheWantsThumbs(&c, &s) && FB_CacheWantsThumbs(&c, &pic));
+    s.has_video = 0;
+    CHECK(!FB_CacheWantsThumbs(&c, &s));
+    s.has_video = 1;
+    s.key[0] = '\0';
+    CHECK(FB_CacheRequestThumbs(&c, &s) == FB_CACHE_NONE);
+    strcpy(s.key, "00000000strip001");
+
+    /* Proxy first; the strip waits for it and is made from it. */
+    CHECK(FB_CacheRequest(&c, &s) == FB_CACHE_QUEUED);
+    CHECK(FB_CacheRequestThumbs(&c, &s) == FB_CACHE_QUEUED);
+    CHECK(FB_CacheRequestThumbs(&c, &s) == FB_CACHE_QUEUED);   /* once */
+    CHECK(FB_CacheRequestThumbs(&c, &pic) == FB_CACHE_QUEUED);
+    CHECK(c.num_tasks == 3);
+    t = FB_CacheNextJob(&c, &job);
+    CHECK(t == 0 && c.tasks[0].kind == FB_CACHE_PROXY);
+    /* One job at a time: nothing else starts while the proxy is made. */
+    CHECK(FB_CacheNextJob(&c, &job) == -1);
+    {
+        char proxy[FB_PATH_LEN];
+
+        FB_CachePath(&c, s.key, FB_CACHE_PROXY, 1, proxy, sizeof(proxy));
+        write_bytes(proxy, (const unsigned char *)"x", 1);
+        CHECK(FB_CacheFinish(&c, 1) == FB_CACHE_READY);
+    }
+    t = FB_CacheNextJob(&c, &job);
+    CHECK(t == 1 && c.tasks[1].kind == FB_CACHE_THUMBS);
+    CHECK(strstr(job.inputs[0], "00000000strip001.proxy1-320.mov") != NULL);
+    CHECK(strcmp(job.filtergraph,
+                 "[0:v]fps=fps=1000/1000:start_time=0:round=up,"
+                 "scale=86:48:force_original_aspect_ratio=increase:"
+                 "flags=fast_bilinear,crop=86:48,setsar=1,format=argb[outv]")
+          == 0);
+    CHECK(strcmp(job.video_out, "outv") == 0 && job.audio_out[0] == '\0');
+    CHECK(strcmp(job.output.vcodec, "rawvideo") == 0);
+    CHECK(strstr(job.output.path, "thumbs1-86x48-part.rgb") != NULL);
+    CHECK(job.length == 12000);
+    FB_CacheAbort(&c);
+
+    /* A still: no fps, read from the file itself. And pixels that
+     * aren't square are made square first. */
+    c.tasks[1].state = FB_CACHE_READY;
+    t = FB_CacheNextJob(&c, &job);
+    CHECK(t == 2);
+    CHECK(strcmp(job.inputs[0], "Work:p.png") == 0);
+    CHECK(strncmp(job.filtergraph, "[0:v]scale=86:48:", 17) == 0);
+    FB_CacheAbort(&c);
+    c.tasks[2].state = FB_CACHE_READY;
+    {
+        FBCacheTask task = c.tasks[0];
+
+        task.kind = FB_CACHE_THUMBS;
+        strcpy(task.key, "00000000strip003");
+        FB_SourceSetVideo(&task.source, 720, 576, 64, 45, 25, 1);
+        CHECK(FB_CacheBuildJob(&c, &task, &job) == 0);
+        CHECK(strstr(job.filtergraph, "round=up,scale=iw*sar:ih,scale=86")
+              != NULL);
+    }
+
+    /* Dropping one kind leaves the others. */
+    c.tasks[0].state = c.tasks[1].state = c.tasks[2].state = FB_CACHE_QUEUED;
+    FB_CacheDrop(&c, FB_CACHE_PROXY);
+    CHECK(c.num_tasks == 2 && c.tasks[0].kind == FB_CACHE_THUMBS &&
+          c.tasks[1].kind == FB_CACHE_THUMBS);
+    /* With its proxy gone, a strip doesn't wait any more. */
+    CHECK(FB_CacheNextJob(&c, &job) == 0);
+    FB_CacheAbort(&c);
+    remove(CACHE_DIR "/00000000strip001.proxy1-320.mov");
+}
+
+/* The thumbnail store, with hooks counting what it does. */
+static int ThumbLocks, ThumbWakes;
+static void thumb_lock(void *d) { (void)d; ThumbLocks++; }
+static void thumb_unlock(void *d) { (void)d; ThumbLocks--; }
+static void thumb_wake(void *d) { (void)d; ThumbWakes++; }
+
+static void test_thumb_store(void)
+{
+    static FBCache c;
+    static FBThumbStore st;
+    static unsigned char strip[5 * 4 * 3 * 4];
+    const unsigned char *px;
+    char path[FB_PATH_LEN];
+    const char *key = "00000000store001";
+    int i;
+
+    FB_CacheInit(&c, CACHE_DIR, 0);
+    FB_CacheSetThumbSize(&c, 4, 3);
+    /* Five frames of 4 x 3, every byte of frame k is k. */
+    for (i = 0; i < (int)sizeof(strip); i++)
+        strip[i] = (unsigned char)(i / (4 * 3 * 4));
+    FB_CachePath(&c, key, FB_CACHE_THUMBS, 0, path, sizeof(path));
+    remove(path);
+
+    memset(&st, 0, sizeof(st));
+    st.lock = thumb_lock;
+    st.unlock = thumb_unlock;
+    st.wake = thumb_wake;
+    CHECK(FB_ThumbsInit(&st, 4, 3, 2) == 0);
+    CHECK(st.lock == thumb_lock);              /* hooks kept */
+
+    CHECK(FB_ThumbsLock(&st, "", 0, &px) == FB_THUMB_NONE);
+    /* A miss is noted once, and wakes the loader once. */
+    CHECK(FB_ThumbsLock(&st, key, 2, &px) == FB_THUMB_WAIT && !px);
+    CHECK(FB_ThumbsLock(&st, key, 2, &px) == FB_THUMB_WAIT);
+    CHECK(FB_ThumbsWanted(&st) == 1 && ThumbWakes == 1);
+    CHECK(ThumbLocks == 0);
+    /* No strip yet: it's missing, and lookups wait without asking. */
+    CHECK(FB_ThumbsLoad(&st, &c) == 0);
+    CHECK(FB_ThumbsLock(&st, key, 2, &px) == FB_THUMB_WAIT);
+    CHECK(FB_ThumbsWanted(&st) == 0);
+
+    /* It's made: reset, and the lookups read it. */
+    write_bytes(path, strip, sizeof(strip));
+    FB_ThumbsReset(&st, key);
+    CHECK(FB_ThumbsLock(&st, key, 2, &px) == FB_THUMB_WAIT);
+    CHECK(FB_ThumbsLock(&st, key, 99, &px) == FB_THUMB_WAIT);
+    CHECK(FB_ThumbsLoad(&st, &c) == 2);
+    CHECK(FB_ThumbsLock(&st, key, 2, &px) == FB_THUMB_HIT);
+    CHECK(px && px[0] == 2 && px[4 * 3 * 4 - 1] == 2);
+    CHECK(ThumbLocks == 1);                    /* held while drawing */
+    FB_ThumbsUnlock(&st);
+    CHECK(ThumbLocks == 0);
+    /* Past the end is the last frame. */
+    CHECK(FB_ThumbsLock(&st, key, 99, &px) == FB_THUMB_HIT && px[0] == 4);
+    FB_ThumbsUnlock(&st);
+
+    /* Two slots: a third thumbnail pushes out the one used longest ago
+     * (frame 2, as 4 was looked at last). */
+    CHECK(FB_ThumbsLock(&st, key, 0, &px) == FB_THUMB_WAIT);
+    CHECK(FB_ThumbsLoad(&st, &c) == 1);
+    CHECK(FB_ThumbsLock(&st, key, 0, &px) == FB_THUMB_HIT && px[0] == 0);
+    FB_ThumbsUnlock(&st);
+    CHECK(FB_ThumbsLock(&st, key, 4, &px) == FB_THUMB_HIT);
+    FB_ThumbsUnlock(&st);
+    CHECK(FB_ThumbsLock(&st, key, 2, &px) == FB_THUMB_WAIT);
+
+    /* Failed: no more waiting. */
+    FB_ThumbsSetNone(&st, key);
+    CHECK(FB_ThumbsLock(&st, key, 0, &px) == FB_THUMB_NONE);
+    CHECK(ThumbLocks == 0);
+    FB_ThumbsFree(&st);
+    CHECK(FB_ThumbsLock(&st, key, 0, &px) == FB_THUMB_NONE);
+    remove(path);
+}
+
 static void test_cache_queue(void)
 {
     static FBCache c;
@@ -1980,6 +2167,8 @@ int main(void)
     test_cache_keys();
     test_cache_rules();
     test_cache_queue();
+    test_thumb_strips();
+    test_thumb_store();
     if (failures) {
         printf("%d check(s) failed\n", failures);
         return 1;

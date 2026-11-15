@@ -49,7 +49,14 @@ way. A track that should scroll on its own gets its own `FBTimebase`.
 the time in it. It must not wait: if the picture isn't ready it returns
 `FALSE` and a grey placeholder is drawn. Without a function, a dummy
 landscape is drawn whose colours follow the source and whose horizon moves
-with time, so zooming and scrolling can be tried before thumbnails exist.
+with time.
+
+The program's function (`draw_thumb()` in `src/gui/mainwindow.c`) draws
+from an in-memory `FBThumbStore` (`include/formbrod/thumbs.h`) with
+`WritePixelArray`. A miss is noted and the main loop is signalled; it
+reads the picture from the source's thumbnail strip in the cache drawer
+and redraws the film strip. The store has a semaphore, since the
+function also runs in the input task while a track is dragged.
 
 ## Tags
 
@@ -60,8 +67,8 @@ with time, so zooming and scrolling can be tried before thumbnails exist.
 | `TRACK_Playhead` | `uint32` ms | GN | Sent while dragging (`OPUF_INTERIM`) and on release. |
 | `TRACK_Redraw` | `BOOL` | S | Redraws now. |
 | `TRACK_EmptyText` | `CONST_STRPTR` | IS | Shown when the timeline is empty. |
-| `FILMSTRIP_CellWidth` | `uint32` | I | Default 48. |
-| `FILMSTRIP_CellHeight` | `uint32` | I | Default 27. |
+| `FILMSTRIP_CellWidth` | `uint32` | I | Default 88. |
+| `FILMSTRIP_CellHeight` | `uint32` | I | Default 48. |
 | `FILMSTRIP_ThumbFunc` | `FBThumbFunc` | IS | See above. |
 | `FILMSTRIP_ThumbData` | `APTR` | IS | Passed to the function. |
 | `FILMSTRIP_Pictures` | `BOOL` | IS | Default `TRUE`. `FALSE` draws each clip as a block in its file's colour with the file name, and never calls the thumbnail function. The window sets it from the `ShowPictures` setting. |
@@ -72,7 +79,7 @@ going through the same code.
 
 ## Next steps
 
-1. Real thumbnails from libav, cached on disk (or made by a render server).
+1. ~~Real thumbnails~~: done, as strips in the cache drawer (`thumbs.h`).
 2. A waveform subclass, and a clip group (header, picture, sound) per file.
 3. Several groups on one timebase, with offsets and a sync lock.
 4. Selecting clips, trim handles, mouse-wheel zoom, ARexx `ZOOM`/`GOTO`.

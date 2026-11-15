@@ -10,6 +10,7 @@
 #include "formbrod/timeline.h"
 #include "formbrod/backend.h"
 #include "formbrod/cache.h"
+#include "formbrod/thumbs.h"
 #include "formbrod/player.h"
 
 typedef struct FBApp {
@@ -25,8 +26,12 @@ typedef struct FBApp {
      * while exports stay local, or the other way round. */
     FBCache     cache;
     FBBackend  *cache_backend;
-    int         caching;       /* a cache job is running: 1 a proxy, 2 a
-                                * piece rendered in the background */
+    int         caching;       /* a cache job is running: 1 a proxy or a
+                                * thumbnail strip, 2 a piece rendered in
+                                * the background */
+    /* Film-strip thumbnails in memory, read from the strips the cache
+     * makes (thumbs.h). The GUI draws from it; App_LoadThumbs() fills it. */
+    FBThumbStore thumbs;
     unsigned    gen;           /* counts edits (render.h keys follow it) */
     /* Background rendering (render.h). */
     struct {
@@ -167,6 +172,22 @@ void App_SetProxies(int on);
 int  App_ProxyWidthSetting(void);
 int  App_ProxyWidth(void);
 void App_SetProxyWidth(int width);
+
+/* Thumbnails for the film strip. Every source with a picture gets a strip
+ * in the cache drawer, made in the background like the proxies (after its
+ * proxy, and from it), while the setting "ShowPictures" (1/0, default 1)
+ * is on. SetThumbnails changes and saves it.
+ *
+ * ThumbSize sets the size of a thumbnail (the film strip's cell) and
+ * makes the store; until then nothing is drawn from it. A lookup that
+ * misses (FB_ThumbsLock() on App.thumbs, from any task) sets the signal
+ * in ThumbsSigMask; the main loop then calls LoadThumbs, which reads them
+ * and returns how many came, so the film strip can be drawn again. */
+int  App_ThumbsEnabled(void);
+void App_SetThumbnails(int on);
+int  App_ThumbSize(int w, int h);
+unsigned long App_ThumbsSigMask(void);
+int  App_LoadThumbs(void);
 
 /* A preview from the playhead that goes on until it's stopped or the edit
  * ends. It is rendered as 10-second windows (FB_TimelineWindow), each its

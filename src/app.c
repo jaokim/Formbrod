@@ -25,6 +25,8 @@
 static void cache_start(void);
 static void cache_request(FBSource *src);
 static void cache_stop(void);
+static void thumbs_start(void);
+static void thumbs_end(void);
 
 /* Every change to the edit goes through here: it's unsaved, and what the
  * background renders (render.h) has to be looked at again. */
@@ -51,6 +53,7 @@ int App_Init(void)
     /* Proxies are made locally for now. A RemoteBackend here would make
      * them on a render server, into a cache drawer both can see. */
     App.cache_backend = FB_CreateLocalBackend();
+    thumbs_start();
     cache_start();
     App_SetStatus("%s", FB_Str(MSG_STATUS_WELCOME));
     return 0;
@@ -70,6 +73,7 @@ void App_Cleanup(void)
         App.backend->Dispose(App.backend);
         App.backend = NULL;
     }
+    thumbs_end();
 }
 
 void App_SetStatus(const char *fmt, ...)
@@ -1004,29 +1008,40 @@ static void cache_start(void)
     }
 #endif
     FB_CacheInit(&App.cache, dir, width);
+    if (App.thumbs.w > 0)
+        FB_CacheSetThumbSize(&App.cache, App.thumbs.w, App.thumbs.h);
     FB_Log(FB_LOG_INFO, "cache", "Cache in %s, proxies %d wide",
            dir, App.cache.proxy_width);
 }
 
-/* Reads the file's fingerprint if needed and asks for its proxy. */
+/* Reads the file's fingerprint if needed and asks for its proxy and its
+ * thumbnail strip, as the settings say. */
 static void cache_request(FBSource *src)
 {
+    int proxy = App_ProxiesEnabled(), thumbs = App_ThumbsEnabled();
     FBCacheState st;
 
-    if (!App.cache_backend || !App_ProxiesEnabled())
+    if (!App.cache_backend || !src->has_video || (!proxy && !thumbs))
         return;
-    if (!src->key[0] && src->has_video && !src->still &&
+    /* Stills get no proxy, but a thumbnail. */
+    if (!src->key[0] && (thumbs || !src->still) &&
         FB_CacheKey(src->path, src->key) != 0) {
         FB_Log(FB_LOG_WARNING, "cache", "%s: can't read its fingerprint",
                src->path);
         return;
     }
-    st = FB_CacheRequest(&App.cache, src);
-    if (st == FB_CACHE_QUEUED)
-        FB_Log(FB_LOG_INFO, "cache", "%s (%s): proxy queued",
-               src->path, src->key);
-    else if (st == FB_CACHE_READY)
-        FB_Log(FB_LOG_INFO, "cache", "%s (%s): proxy ready",
+    if (proxy) {
+        st = FB_CacheRequest(&App.cache, src);
+        if (st == FB_CACHE_QUEUED)
+            FB_Log(FB_LOG_INFO, "cache", "%s (%s): proxy queued",
+                   src->path, src->key);
+        else if (st == FB_CACHE_READY)
+            FB_Log(FB_LOG_INFO, "cache", "%s (%s): proxy ready",
+                   src->path, src->key);
+    }
+    if (thumbs &&
+        FB_CacheRequestThumbs(&App.cache, src) == FB_CACHE_QUEUED)
+        FB_Log(FB_LOG_INFO, "cache", "%s (%s): thumbnails queued",
                src->path, src->key);
 }
 
@@ -1202,7 +1217,7 @@ void App_SetProxies(int on)
     } else {
         /* Forget what was waiting; turning it on again asks anew. */
         cache_stop();
-        App.cache.num_tasks = 0;
+        FB_CacheDrop(&App.cache, FB_CACHE_PROXY);
     }
 }
 
@@ -1255,12 +1270,16 @@ int App_PollCache(void)
             App.caching = 2;
             return 0;
         }
-        FB_Log(FB_LOG_INFO, "cache", "Making a proxy of %s",
+        FB_Log(FB_LOG_INFO, "cache", "Making %s of %s",
+               App.cache.tasks[t].kind == FB_CACHE_THUMBS ? "thumbnails"
+                                                          : "a proxy",
                App.cache.tasks[t].source.path);
         log_job(&job);
         if (App.cache_backend->Submit(App.cache_backend, &job) != 0) {
             FB_Log(FB_LOG_WARNING, "cache", "Can't start it: %s",
                    App.cache_backend->Result(App.cache_backend).message);
+            if (App.cache.tasks[t].kind == FB_CACHE_THUMBS)
+                FB_ThumbsSetNone(&App.thumbs, App.cache.tasks[t].key);
             FB_CacheFinish(&App.cache, 0);   /* not tried again */
             return 0;
         }
@@ -1301,11 +1320,29 @@ int App_PollCache(void)
     {
         FBResult r = App.cache_backend->Result(App.cache_backend);
         int t = App.cache.current;
-        char name[FB_PATH_LEN] = "";
+        char name[FB_PATH_LEN] = "", key[FB_KEY_LEN] = "";
+        FBCacheKind kind = FB_CACHE_PROXY;
 
-        if (t >= 0)
+        if (t >= 0) {
             strcpy(name, App.cache.tasks[t].source.path);
+            strcpy(key, App.cache.tasks[t].key);
+            kind = App.cache.tasks[t].kind;
+        }
         App.caching = 0;
+        if (kind == FB_CACHE_THUMBS) {
+            /* Quietly: the film strip showing them says enough. */
+            if (FB_CacheFinish(&App.cache, r.state == FB_RENDER_DONE)
+                == FB_CACHE_READY) {
+                FB_Log(FB_LOG_INFO, "cache", "Thumbnails of %s are ready",
+                       name);
+                FB_ThumbsReset(&App.thumbs, key);
+                return 1;
+            }
+            FB_Log(FB_LOG_WARNING, "cache", "No thumbnails of %s: %s",
+                   name, r.message);
+            FB_ThumbsSetNone(&App.thumbs, key);
+            return 1;
+        }
         if (FB_CacheFinish(&App.cache, r.state == FB_RENDER_DONE)
             == FB_CACHE_READY) {
             FB_Log(FB_LOG_INFO, "cache", "Proxy of %s is ready", name);
@@ -1316,6 +1353,110 @@ int App_PollCache(void)
                r.message);
     }
     return 0;
+}
+
+/* ---- Thumbnails ------------------------------------------------------------ */
+
+/* The store is used from Intuition's input task too (the film strip is
+ * drawn there while it's dragged), so it's guarded by a semaphore, and a
+ * miss wakes the main loop with a signal of its own. */
+#ifdef __amigaos4__
+static struct SignalSemaphore ThumbSem;
+static struct Task *ThumbTask;
+static int8 ThumbSig = -1;
+
+static void thumb_lock(void *d)
+{
+    (void)d;
+    IExec->ObtainSemaphore(&ThumbSem);
+}
+
+static void thumb_unlock(void *d)
+{
+    (void)d;
+    IExec->ReleaseSemaphore(&ThumbSem);
+}
+
+static void thumb_wake(void *d)
+{
+    (void)d;
+    if (ThumbSig >= 0)
+        IExec->Signal(ThumbTask, 1UL << ThumbSig);
+}
+#endif
+
+static void thumbs_start(void)
+{
+#ifdef __amigaos4__
+    IExec->InitSemaphore(&ThumbSem);
+    ThumbTask = IExec->FindTask(NULL);
+    ThumbSig = IExec->AllocSignal(-1);
+    App.thumbs.lock = thumb_lock;
+    App.thumbs.unlock = thumb_unlock;
+    App.thumbs.wake = thumb_wake;
+#endif
+}
+
+static void thumbs_end(void)
+{
+    FB_ThumbsFree(&App.thumbs);
+#ifdef __amigaos4__
+    if (ThumbSig >= 0)
+        IExec->FreeSignal(ThumbSig);
+    ThumbSig = -1;
+#endif
+}
+
+unsigned long App_ThumbsSigMask(void)
+{
+#ifdef __amigaos4__
+    return ThumbSig >= 0 ? 1UL << ThumbSig : 0;
+#else
+    return 0;
+#endif
+}
+
+int App_ThumbsEnabled(void)
+{
+    return strcmp(Prefs_GetString("ShowPictures", "1"), "0") != 0;
+}
+
+void App_SetThumbnails(int on)
+{
+    Prefs_SetString("ShowPictures", on ? "1" : "0");
+    Prefs_Save();
+    if (on) {
+        cache_request_all();
+    } else {
+        /* Nothing more is decoded for them; turning it on asks anew. */
+        cache_stop();
+        FB_CacheDrop(&App.cache, FB_CACHE_THUMBS);
+    }
+}
+
+int App_ThumbSize(int w, int h)
+{
+    if (App.thumbs.pixels && App.thumbs.w == w && App.thumbs.h == h)
+        return 0;
+    FB_ThumbsFree(&App.thumbs);
+    if (FB_ThumbsInit(&App.thumbs, w, h, 0) != 0) {
+        FB_Log(FB_LOG_WARNING, "cache", "No memory for thumbnails");
+        return -1;
+    }
+    if (App.cache.thumb_w != w || App.cache.thumb_h != h) {
+        /* Strips of another size: the queued ones are for the old one. */
+        cache_stop();
+        FB_CacheDrop(&App.cache, FB_CACHE_THUMBS);
+        FB_CacheSetThumbSize(&App.cache, w, h);
+        cache_request_all();
+    }
+    FB_Log(FB_LOG_INFO, "cache", "Thumbnails %d x %d", w, h);
+    return 0;
+}
+
+int App_LoadThumbs(void)
+{
+    return FB_ThumbsLoad(&App.thumbs, &App.cache);
 }
 
 /* ---- Preview from the playhead -------------------------------------------- */

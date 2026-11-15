@@ -65,7 +65,8 @@ int main(int argc, char **argv)
         IDOS->Printf("%s", FB_Str(MSG_ERR_NO_AREXX));
 
     while (!App.quit) {
-        uint32 mask = MainWindow_SigMask() | ARexx_SigMask() | SIGBREAKF_CTRL_C;
+        uint32 mask = MainWindow_SigMask() | ARexx_SigMask() |
+                      (uint32)App_ThumbsSigMask() | SIGBREAKF_CTRL_C;
         uint32 sigs;
         static uint32 last_input;
 
@@ -143,6 +144,12 @@ int main(int argc, char **argv)
 
         if (sigs & SIGBREAKF_CTRL_C)
             App.quit = 1;
+        /* The film strip missed thumbnails: read them (a few small
+         * reads) and draw it again. */
+        if (sigs & App_ThumbsSigMask()) {
+            if (App_LoadThumbs())
+                MainWindow_ThumbsLoaded();
+        }
         if (sigs & ARexx_SigMask()) {
             ARexx_Handle();
             MainWindow_Refresh();

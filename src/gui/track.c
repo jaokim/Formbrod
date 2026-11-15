@@ -41,7 +41,7 @@ Class *TrackClass, *RulerClass, *FilmstripClass, *LanesClass;
 #define HOLE_W       5
 #define FILM_BAND    7           /* sprocket-hole band above and below */
 #define MAX_NAMES    32          /* file names shown at once, plain mode */
-#define FS_MAX_CELLS 160         /* 160 * 48 px is wider than any screen */
+#define FS_MAX_CELLS 160         /* 160 * 88 px is wider than any screen */
 
 void Track_SetRGB(struct RastPort *rp, uint32 rgb)
 {
