@@ -14,6 +14,9 @@ through modules and ARexx.
   these. Add an action here first, then wire it to the GUI and to ARexx.
 - `src/gui/` – ReAction. Classes are opened with `OpenClass()` and objects
   made with `NewObject(Class *, ...)`, not reaction_macros.h.
+- `src/gui/toolbar.c` – the button row: speedbar.gadget with AISS icons from
+  `TBImages:`, built from the `ToolbarButtons` table in `mainwindow.c`.
+  Button numbers are command IDs, so clicks go through `handle_gadget()`.
 - `src/arexx/` – the FORMBROD port, using arexx.class.
 - `src/prefs/` – program settings through application.library PrefsObjects
   (`Prefs_GetString`/`SetString`/`Save`). Only for settings of the program

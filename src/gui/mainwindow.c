@@ -1,10 +1,10 @@
 /*
  * mainwindow.c - the ReAction main window.
  *
- *   [Add file...] [Split] [Set in] [Set out] [Remove] [Fade] [Preview]
+ *   [Add] | [Split] [In] [Out] [Remove] | [Fade] [Xfade] | [Preview] [Export]
+ *        toolbar: speedbar.gadget with AISS icons (toolbar.c)
  *   (Preview renders from the playhead in 10 s windows, and turns into
  *   Stop while it does: App_PreviewStart())
- *   [Export...]
  *   | 0:00     | 0:05     | 0:10     | 0:15          ruler
  *   [#][#][#][#][#][#][#][#|#][#][#][#][#]          film strip
  *   [<====scroll====>                         ]
@@ -80,6 +80,7 @@
 #include "gui/clipwindow.h"
 #include "gui/playwindow.h"
 #include "gui/winprefs.h"
+#include "gui/toolbar.h"
 #include "prefs/prefs.h"
 #include "version.h"
 
@@ -89,7 +90,7 @@ enum {
     GID_RULER, GID_FILMSTRIP, GID_SCROLL, GID_ZOOM,
     GID_SET_IN, GID_SET_OUT, GID_LANES,
     GID_CLIPNAME, GID_STARTS, GID_IN, GID_LENGTH, GID_XFADE,
-    GID_CROSSFADE, GID_LAST
+    GID_CROSSFADE, GID_TOOLBAR, GID_LAST
 };
 
 /* Menu commands without a button. Menu items for button actions use the
@@ -174,14 +175,22 @@ static void update_title(void);
 
 #define CLS(i) (classes[i].cls)
 
-static Object *button(uint32 id, const char *text)
-{
-    return Gad[id] = (struct Gadget *)IIntuition->NewObject(CLS(C_BUTTON), NULL,
-        GA_ID,        id,
-        GA_RelVerify, TRUE,
-        GA_Text,      text,
-        TAG_END);
-}
+/* The toolbar, left to right. Each button's number is its command ID, so
+ * a click goes through handle_gadget() like the menu item. The AISS names
+ * are tried in turn (sets differ); with any icon missing the bar shows
+ * text. Preview turns into Stop and Export into Cancel (refresh). */
+static const ToolbarButton ToolbarButtons[] = {
+    { GID_ADD,       MSG_BTN_ADD,       "add|new|open",        FALSE, TRUE  },
+    { GID_SPLIT,     MSG_BTN_SPLIT,     "cut|split",           FALSE, FALSE },
+    { GID_SET_IN,    MSG_BTN_SET_IN,    "list_tapestart|markstart|first",     FALSE, FALSE },
+    { GID_SET_OUT,   MSG_BTN_SET_OUT,   "list_tapeend|markend|last",        FALSE, FALSE },
+    { GID_REMOVE,    MSG_BTN_REMOVE,    "delete|remove",       FALSE, TRUE  },
+    { GID_FADE,      MSG_BTN_FADE,      "fadeupleft|effects",        FALSE, FALSE },
+    { GID_CROSSFADE, MSG_BTN_CROSSFADE, "fadeupright|transition", TRUE, TRUE  },
+    { GID_PREVIEW,   MSG_BTN_PREVIEW,   "stape_play|play|preview",        FALSE, FALSE },
+    { GID_EXPORT,    MSG_BTN_EXPORT,    "save|saveas|export",  FALSE, FALSE },
+};
+#define TOOLBAR_COUNT (int)(sizeof(ToolbarButtons) / sizeof(ToolbarButtons[0]))
 
 static Object *label(const char *text)
 {
@@ -433,6 +442,7 @@ static BOOL menu_enabled(uint32 id)
     if (id >= MID_XFADE_KIND)
         return have_clips;
     switch (id) {
+    case GID_FADE:
     case GID_CROSSFADE:
     case MID_XFADE_MENU:
     case MID_CLIP_WINDOW:
@@ -1054,9 +1064,8 @@ static uint32 now_ms(void)
 void MainWindow_Refresh(void)
 {
     const FBTimeline *tl = &App.timeline;
-    fb_ms_t total = FB_TimelineDuration(tl);
     uint32 t0 = now_ms(), t_fields, t_ruler, t_film, t_lanes, t_end;
-    int sel;
+    int sel, i;
 
     if (!WinObj)
         return;
@@ -1085,24 +1094,23 @@ void MainWindow_Refresh(void)
     t_lanes = now_ms();
     sync_controls();
 
-    IIntuition->SetGadgetAttrs(Gad[GID_SPLIT], Win, NULL, GA_Disabled, total <= 0, TAG_END);
-    IIntuition->SetGadgetAttrs(Gad[GID_REMOVE], Win, NULL, GA_Disabled, total <= 0, TAG_END);
-    IIntuition->SetGadgetAttrs(Gad[GID_FADE], Win, NULL, GA_Disabled, total <= 0, TAG_END);
-    IIntuition->SetGadgetAttrs(Gad[GID_CROSSFADE], Win, NULL, GA_Disabled, total <= 0, TAG_END);
-    /* While playing, Preview turns into Stop. */
-    {
-        BOOL on = App_Playing() || App_Previewing();
+    /* The toolbar follows the menus. Crossfade stays down while the
+     * selected clip has one; Preview turns into Stop while playing, and
+     * Export into Cancel while rendering. */
+    for (i = 0; i < TOOLBAR_COUNT; i++) {
+        uint32 id = ToolbarButtons[i].id;
 
-        IIntuition->SetGadgetAttrs(Gad[GID_PREVIEW], Win, NULL,
-            GA_Text,     FB_Str(on ? MSG_BTN_STOP_PREVIEW : MSG_BTN_PREVIEW),
-            GA_Disabled, total <= 0 && !on,
-            TAG_END);
+        if (id == GID_PREVIEW && (App_Playing() || App_Previewing()))
+            Toolbar_Set(id, FALSE, FALSE, MSG_BTN_STOP_PREVIEW, "stop|cancel");
+        else if (id == GID_EXPORT && App.rendering)
+            Toolbar_Set(id, FALSE, FALSE, MSG_BTN_CANCEL, "stop|cancel");
+        else
+            Toolbar_Set(id, !menu_enabled(id),
+                        id == GID_CROSSFADE && sel >= 0 &&
+                        tl->clips[sel].xfade > 0,
+                        0, NULL);
     }
-    /* While rendering, Export turns into Cancel. */
-    IIntuition->SetGadgetAttrs(Gad[GID_EXPORT], Win, NULL,
-        GA_Text,     FB_Str(App.rendering ? MSG_BTN_CANCEL : MSG_BTN_EXPORT),
-        GA_Disabled, total <= 0 && !App.rendering,
-        TAG_END);
+    Toolbar_Apply(Win);
     IIntuition->SetGadgetAttrs(Gad[GID_STATUS], Win, NULL, GA_Text, App.status, TAG_END);
     update_title();
     sync_menus();
@@ -1292,6 +1300,11 @@ static void handle_gadget(uint32 id)
     int clip;
 
     switch (id) {
+    case GID_TOOLBAR:
+        id = Toolbar_Clicked();
+        if (id > 0 && id < GID_TOOLBAR)
+            handle_gadget(id);
+        return;
     /* The timeline controls only change the view, so they don't need the
      * full refresh below. Their final value also comes through
      * idcmp_hook(); this catches it if that notification was missed. */
@@ -1508,19 +1521,15 @@ int MainWindow_Open(void)
 
     AppPort = IExec->AllocSysObjectTags(ASOT_PORT, TAG_END);
 
-    buttons = IIntuition->NewObject(CLS(C_LAYOUT), NULL,
-        LAYOUT_Orientation, LAYOUT_ORIENT_HORIZ,
-        LAYOUT_EvenSize,    TRUE,
-        LAYOUT_AddChild, button(GID_ADD,     FB_Str(MSG_BTN_ADD)),
-        LAYOUT_AddChild, button(GID_SPLIT,   FB_Str(MSG_BTN_SPLIT)),
-        LAYOUT_AddChild, button(GID_SET_IN,  FB_Str(MSG_BTN_SET_IN)),
-        LAYOUT_AddChild, button(GID_SET_OUT, FB_Str(MSG_BTN_SET_OUT)),
-        LAYOUT_AddChild, button(GID_REMOVE,  FB_Str(MSG_BTN_REMOVE)),
-        LAYOUT_AddChild, button(GID_FADE,    FB_Str(MSG_BTN_FADE)),
-        LAYOUT_AddChild, button(GID_CROSSFADE, FB_Str(MSG_BTN_CROSSFADE)),
-        LAYOUT_AddChild, button(GID_PREVIEW, FB_Str(MSG_BTN_PREVIEW)),
-        LAYOUT_AddChild, button(GID_EXPORT,  FB_Str(MSG_BTN_EXPORT)),
-        TAG_END);
+    /* The icons are loaded for the screen the window opens on. */
+    scr = IIntuition->LockPubScreen(NULL);
+    if (!scr)
+        return -1;
+    buttons = Toolbar_New(GID_TOOLBAR, ToolbarButtons, TOOLBAR_COUNT, scr);
+    if (!buttons) {
+        IIntuition->UnlockPubScreen(NULL, scr);
+        return -1;
+    }
 
 
     /* Ruler, film strip and scroller, stacked without gaps. */
@@ -1643,9 +1652,6 @@ int MainWindow_Open(void)
     load_drawers();
     update_title();                /* no window yet: just fills Titles */
 
-    scr = IIntuition->LockPubScreen(NULL);
-    if (!scr)
-        return -1;
     if (!make_menus(scr))
         free_menus();
     placed = WinPrefs_Tags("MainWindow", scr, place);
@@ -1764,6 +1770,7 @@ void MainWindow_Close(void)
         WinObj = NULL;
         Win = NULL;
     }
+    Toolbar_Free();                          /* after the gadget is gone */
     free_menus();                            /* window.class doesn't */
     if (AppPort) {
         struct Message *m;
