@@ -40,6 +40,10 @@ through modules and ARexx.
 - `src/gui/track.c`, `src/gui/timebase.c` – the timeline gadgets (ruler,
   film strip) and the time axis they share. Their arithmetic is in the
   portable `src/timeline/timeview.c`. Notes in `gadgets/timeline/README.md`.
+- `src/cache/` – the media cache (portable): proxies (`cache.c`), rendered
+  pieces (`render.c`) and film-strip thumbnails (`thumbs.c`: raw ARGB
+  strips made by ordinary jobs, read into an in-memory store that the
+  film strip draws from without touching files).
 
 ## Design rules
 

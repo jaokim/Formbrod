@@ -33,8 +33,7 @@ Early skeleton. Working so far:
       filter, encode and mux, a few packets per GUI tick. Tested on Linux
       with ffmpeg 6.1, not yet on AmigaOS
 - [x] Timeline gadgets, first step (`gadgets/timeline/`): ruler and film
-      strip on a shared time axis, zoom, scrolling and a draggable playhead.
-      Thumbnails are dummies for now
+      strip on a shared time axis, zoom, scrolling and a draggable playhead
 - [x] Tracks: each added file gets its own track; picture tracks are laid
       on top of each other and all sound is mixed. Cutting closes gaps
 - [x] Set in / Set out at the playhead (buttons, Edit menu, I and O keys),
@@ -54,7 +53,10 @@ Early skeleton. Working so far:
       all its settings: timing, crossfade, fades, fit, volume, the file's
       picture, and its effects with a field per module parameter. It
       follows the selection. Not yet tried on AmigaOS
-- [ ] Real thumbnails, waveforms
+- [x] Real thumbnails in the film strip: a small strip of pictures per
+      file, one a second, made in the background (from the preview copy)
+      and kept in the cache drawer. Not yet tried on AmigaOS
+- [ ] Waveforms
 - [ ] Remote rendering on a render server
 
 ## Editing
@@ -331,7 +333,8 @@ can be viewed with PrefsObjectsEditor. So far they are the drawers the file
 requesters last used: `MediaDrawer`, `ProjectDrawer` and `ExportDrawer`, so
 each requester opens where it was last used, also after a restart;
 `ShowPictures` (*Settings → Show frame pictures*): `0` makes the film strip
-show plain blocks with file names and decode nothing, for slower Amigas;
+show plain blocks with file names and decode nothing, for slower Amigas
+(no thumbnails are made either);
 and for the log file `Log`, `LogFile` and `LogLevel` (see below). Without
 application.library 53 the drawers are only remembered until Formbrod quits.
 
@@ -417,6 +420,29 @@ that. Exports still read the original files.
 - Each copy has a `<key>.info` text file next to it saying which file it
   was made from. Deleting the cache drawer's contents is safe; the copies
   are made again when needed.
+
+## Thumbnails
+
+The film strip shows the edit as pictures, one per cell. They come from a
+*thumbnail strip* made for each video and still picture: one small picture
+(46 x 27, a cell's size) per second of the file, or fewer for files over
+20 minutes, so a strip has at most 1200 (an hour is under 6 MB).
+
+- **In the background, like the preview copies**, and after them: a strip
+  is made from the file's preview copy once that is ready, since reading
+  it is much quicker than reading the original. Still pictures and files
+  that need no copy are read directly.
+- **Once per file**, in the cache drawer, named by the same fingerprint as
+  the copies (`<key>.thumbs1-46x27.rgb`). The file is plain pictures one
+  after another, 8-bit ARGB, with nothing else in it, so it is easy to
+  read and the same on every machine.
+- **Drawn from memory.** The last 256 pictures used are kept in memory and
+  the rest are read from the strip when the film strip needs them, so
+  scrolling a long edit costs no more memory than a short one. A cell
+  whose picture isn't there yet is grey for a moment; a file whose strip
+  couldn't be made is a block in its colour.
+- Zoomed in to less than a second per cell, neighbouring cells show the
+  same picture.
 
 ## Log file
 

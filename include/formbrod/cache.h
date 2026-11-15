@@ -1,6 +1,9 @@
 /*
  * cache.h - the media cache: edit-friendly copies of source files.
  *
+ * (The cache also holds rendered pieces of the edit, render.h, and the
+ * film strip's thumbnail strips, thumbs.h.)
+ *
  * Camera and phone files (H.264, H.265) store most frames as differences
  * from other frames, which makes them slow to decode and to seek in on an
  * Amiga. So each video source gets a *proxy*: a small copy where every
@@ -39,6 +42,7 @@
 
 #include "timeline.h"
 #include "job.h"
+#include "thumbs.h"
 
 /* Proxies are read only for previews, which are FB_PREVIEW_WIDTH wide:
  * a wider proxy is decoded and then scaled down for every frame, for
@@ -54,6 +58,7 @@
 typedef enum {
     FB_CACHE_PROXY = 0,
     FB_CACHE_RENDER,      /* a rendered piece of the edit (render.h) */
+    FB_CACHE_THUMBS,      /* a thumbnail strip (thumbs.h), "<key>.thumbs1-46x27.rgb" */
     FB_CACHE_NUM_KINDS
 } FBCacheKind;
 
@@ -78,6 +83,7 @@ typedef struct FBCache {
     FBCacheTask tasks[FB_CACHE_MAX_TASKS];
     int         current;   /* task being made, or -1 */
     int         proxy_width;   /* proxies are at most this wide */
+    int         thumb_w, thumb_h;  /* thumbnail strips' frame size */
 } FBCache;
 
 /* The fingerprint of a file, as 16 hex digits. 0 on success, -1 if the
@@ -88,8 +94,9 @@ int  FB_CacheKey(const char *path, char key[FB_KEY_LEN]);
  * keys of uploads as they arrive). */
 void FB_CacheKeyData(const void *data, size_t len, char key[FB_KEY_LEN]);
 
-/* The recipe part of a cached file's name: "proxy1-320", or for a
- * rendered piece "render1-320" (the preview's width). */
+/* The recipe part of a cached file's name: "proxy1-320", for a rendered
+ * piece "render1-320" (the preview's width), for a thumbnail strip
+ * "thumbs1-46x27". Strips end in ".rgb", the others in ".mov". */
 void FB_CacheRecipe(const FBCache *c, FBCacheKind kind, char *out,
                     size_t len);
 
@@ -97,9 +104,17 @@ void FB_CacheRecipe(const FBCache *c, FBCacheKind kind, char *out,
  * still, and isn't already small and intra-only. */
 int  FB_CacheWantsProxy(const FBCache *c, const FBSource *src);
 
+/* Whether a probed source gets a thumbnail strip: it has a picture
+ * (stills too) and a key. */
+int  FB_CacheWantsThumbs(const FBCache *c, const FBSource *src);
+
 /* `proxy_width` 0 means FB_PROXY_WIDTH; it is made even and kept at
- * least FB_PROXY_MIN_WIDTH. */
+ * least FB_PROXY_MIN_WIDTH. Thumbnails start at FB_THUMB_W x FB_THUMB_H. */
 void FB_CacheInit(FBCache *c, const char *dir, int proxy_width);
+
+/* The thumbnail strips' frame size (the film strip's cells). Changing it
+ * changes their names, so strips of another size are left alone. */
+void FB_CacheSetThumbSize(FBCache *c, int w, int h);
 
 /* The proxy width for "auto". It was chosen from the CPU (bigger on
  * faster machines), but proxies wider than the preview only cost, so
@@ -120,6 +135,14 @@ int  FB_CacheFind(const FBCache *c, const char *key, FBCacheKind kind,
  * unless it's there, already queued or not wanted, and says which. */
 FBCacheState FB_CacheRequest(FBCache *c, const FBSource *src);
 
+/* Asks for a source's thumbnail strip, the same way. It is made after
+ * the source's proxy, if one is on its way, and from it. */
+FBCacheState FB_CacheRequestThumbs(FBCache *c, const FBSource *src);
+
+/* Forgets the queued tasks of one kind (not one being made: stop that
+ * first with FB_CacheAbort()). */
+void FB_CacheDrop(FBCache *c, FBCacheKind kind);
+
 /* The state of a key's copy, without queuing anything. */
 FBCacheState FB_CacheState(const FBCache *c, const char *key,
                            FBCacheKind kind);
@@ -130,7 +153,8 @@ int  FB_CachePending(const FBCache *c);
 /* Takes the next queued task, builds its job into `job` and marks it busy.
  * Returns the task's index, or -1 if nothing is waiting (or one is busy).
  * A task whose copy has meanwhile appeared (made by a server, say) is
- * marked ready and skipped. */
+ * marked ready and skipped, and a strip whose proxy is still to come
+ * waits for it. */
 int  FB_CacheNextJob(FBCache *c, FBJob *job);
 
 /* The job for one task: exported so a render server's tests and the app's
