@@ -61,6 +61,7 @@ SRC = src/main.c \
       src/gui/clipwindow.c \
       src/gui/playwindow.c \
       src/gui/winprefs.c \
+      src/gui/toolbar.c \
       src/locale/catalog.c \
       src/arexx/arexx.c \
       src/prefs/prefs.c \
