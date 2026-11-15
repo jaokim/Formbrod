@@ -182,12 +182,12 @@ static void update_title(void);
 static const ToolbarButton ToolbarButtons[] = {
     { GID_ADD,       MSG_BTN_ADD,       "add|new|open",        FALSE, TRUE  },
     { GID_SPLIT,     MSG_BTN_SPLIT,     "cut|split",           FALSE, FALSE },
-    { GID_SET_IN,    MSG_BTN_SET_IN,    "markstart|first",     FALSE, FALSE },
-    { GID_SET_OUT,   MSG_BTN_SET_OUT,   "markend|last",        FALSE, FALSE },
+    { GID_SET_IN,    MSG_BTN_SET_IN,    "list_tapestart|markstart|first",     FALSE, FALSE },
+    { GID_SET_OUT,   MSG_BTN_SET_OUT,   "list_tapeend|markend|last",        FALSE, FALSE },
     { GID_REMOVE,    MSG_BTN_REMOVE,    "delete|remove",       FALSE, TRUE  },
-    { GID_FADE,      MSG_BTN_FADE,      "fade|effects",        FALSE, FALSE },
-    { GID_CROSSFADE, MSG_BTN_CROSSFADE, "crossfade|transition", TRUE, TRUE  },
-    { GID_PREVIEW,   MSG_BTN_PREVIEW,   "play|preview",        FALSE, FALSE },
+    { GID_FADE,      MSG_BTN_FADE,      "fadeupleft|effects",        FALSE, FALSE },
+    { GID_CROSSFADE, MSG_BTN_CROSSFADE, "fadeupright|transition", TRUE, TRUE  },
+    { GID_PREVIEW,   MSG_BTN_PREVIEW,   "stape_play|play|preview",        FALSE, FALSE },
     { GID_EXPORT,    MSG_BTN_EXPORT,    "save|saveas|export",  FALSE, FALSE },
 };
 #define TOOLBAR_COUNT (int)(sizeof(ToolbarButtons) / sizeof(ToolbarButtons[0]))
