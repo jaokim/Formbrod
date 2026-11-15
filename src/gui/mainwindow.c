@@ -434,6 +434,77 @@ static BOOL draw_thumb(APTR data, const FBThumbRequest *r)
     return TRUE;
 }
 
+/* The lanes' FBWaveFunc: a clip's waveform from App.waves, one bar per
+ * column, mirrored about the middle. Bars are the square root of the
+ * peak (times the clip's volume), so quiet passages still show; full
+ * scale fills the lane. Runs where draw_thumb() does, with the same
+ * rules: memory only, under the store's lock. */
+#define WAVE_CHUNK 512
+
+static BOOL draw_wave(APTR data, const FBWaveRequest *r)
+{
+    static unsigned char cols[WAVE_CHUNK];   /* used under the lock */
+    static UWORD curve[256];                 /* sqrt(v / 255) * 1024 */
+    const FBTimeline *tl = &App.timeline;
+    const FBSource *src;
+    const unsigned char *peaks;
+    long count, x, from, to;
+    long vol = (long)(r->volume * 256 + 0.5);    /* 8.8 fixed point */
+    FBThumbLook look;
+
+    (void)data;
+    if (r->source < 0 || r->source >= tl->num_sources)
+        return FALSE;
+    src = &tl->sources[r->source];
+    look = FB_WavesLock(&App.waves, src->key, &peaks, &count);
+    if (look != FB_THUMB_HIT)
+        return FALSE;            /* not yet, or never: the plain line */
+    if (!curve[255]) {
+        int v;
+
+        for (v = 0; v < 256; v++) {
+            /* Integer square root of v * 1024 * 1024 / 255. */
+            unsigned long target = (unsigned long)v * 1048576UL / 255, s = 0;
+
+            while ((s + 1) * (s + 1) <= target)
+                s++;
+            curve[v] = (UWORD)s;
+        }
+    }
+    Track_SetRGB(r->rp, r->rgb);
+    from = r->clip.MinX;
+    to = r->clip.MaxX;
+    while (from <= to) {
+        int n = (int)(to - from + 1 > WAVE_CHUNK ? WAVE_CHUNK
+                                                 : to - from + 1), i;
+
+        FB_WaveColumns(peaks, count,
+                       r->source_t + (fb_us_t)(from - r->x) * r->step,
+                       r->step, n, cols);
+        for (i = 0; i < n; i++) {
+            long v = (long)cols[i] * vol >> 8, h;
+
+            if (v > 255)
+                v = 255;
+            h = r->half * curve[v] >> 10;
+            if (h <= 0)
+                continue;
+            x = from + i;
+            Track_FillClipped(r->rp, &r->clip, x, r->mid - h, x, r->mid + h);
+        }
+        from += n;
+    }
+    FB_WavesUnlock(&App.waves);
+    return TRUE;
+}
+
+void MainWindow_WavesLoaded(void)
+{
+    if (WinObj && Gad[GID_LANES])
+        IIntuition->SetGadgetAttrs(Gad[GID_LANES], Win, NULL,
+                                   TRACK_Redraw, TRUE, TAG_END);
+}
+
 void MainWindow_ThumbsLoaded(void)
 {
     if (WinObj && Gad[GID_FILMSTRIP])
@@ -1543,6 +1614,7 @@ static Object *track(Class *cls, uint32 id, CONST_STRPTR empty_text)
         TRACK_Label,     id == GID_FILMSTRIP ? FB_Str(MSG_TRACK_RESULT) : NULL,
         FILMSTRIP_Pictures, show_pictures(),
         FILMSTRIP_ThumbFunc, draw_thumb,
+        LANES_WaveFunc,  draw_wave,
         LANES_DropText,  FB_Str(MSG_TRACK_DROP),
         LANES_PictureName, FB_Str(MSG_TRACK_PICTURE),
         LANES_SoundName, FB_Str(MSG_TRACK_SOUND),

@@ -144,11 +144,13 @@ int main(int argc, char **argv)
 
         if (sigs & SIGBREAKF_CTRL_C)
             App.quit = 1;
-        /* The film strip missed thumbnails: read them (a few small
-         * reads) and draw it again. */
+        /* The film strip missed thumbnails, or the lanes a waveform:
+         * read them (small reads) and draw those again. */
         if (sigs & App_ThumbsSigMask()) {
             if (App_LoadThumbs())
                 MainWindow_ThumbsLoaded();
+            if (App_LoadWaves())
+                MainWindow_WavesLoaded();
         }
         if (sigs & ARexx_SigMask()) {
             ARexx_Handle();

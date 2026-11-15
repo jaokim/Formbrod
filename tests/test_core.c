@@ -14,6 +14,7 @@
 #include "formbrod/player.h"
 #include "formbrod/render.h"
 #include "formbrod/thumbs.h"
+#include "formbrod/waves.h"
 
 static int failures;
 
@@ -1238,6 +1239,104 @@ static void test_thumb_store(void)
     remove(path);
 }
 
+/* Sound peaks: columns, the cache's job and order, the store. */
+static void test_waves(void)
+{
+    static FBCache c;
+    static FBJob job;
+    static FBWaveStore st;
+    static const unsigned char peaks[10] = { 1, 2, 3, 9, 5, 6, 7, 8, 4, 10 };
+    unsigned char out[8];
+    const unsigned char *pk;
+    char recipe[64], path[FB_PATH_LEN];
+    long count;
+    FBSource s = cache_source("Work:a.mp4", "000000000wave001", 1920, 1080);
+    FBSource m = cache_source("Work:m.mp3", "000000000wave002", 0, 0);
+
+    /* 20 ms columns: one peak each. */
+    FB_WaveColumns(peaks, 10, 0, 20000, 4, out);
+    CHECK(out[0] == 1 && out[1] == 2 && out[2] == 3 && out[3] == 9);
+    /* 50 ms columns: the loudest of the peaks each touches. */
+    FB_WaveColumns(peaks, 10, 0, 50000, 4, out);
+    CHECK(out[0] == 3 && out[1] == 9 && out[2] == 8 && out[3] == 10);
+    /* 5 ms columns share a peak; before the start and past the end: 0. */
+    FB_WaveColumns(peaks, 10, -10000, 5000, 6, out);
+    CHECK(out[0] == 0 && out[1] == 0 && out[2] == 1 && out[5] == 1);
+    FB_WaveColumns(peaks, 10, 190000, 10000, 3, out);
+    CHECK(out[0] == 10 && out[1] == 0 && out[2] == 0);
+    FB_WaveColumns(NULL, 0, 0, 10000, 2, out);
+    CHECK(out[0] == 0 && out[1] == 0);
+
+    FB_CacheInit(&c, CACHE_DIR, 0);
+    FB_CacheRecipe(&c, FB_CACHE_WAVE, recipe, sizeof(recipe));
+    CHECK(strcmp(recipe, "wave1-50") == 0);
+    CHECK(FB_CachePath(&c, s.key, FB_CACHE_WAVE, 0, path,
+                       sizeof(path)) == 0);
+    CHECK(strcmp(path, CACHE_DIR "/000000000wave001.wave1-50.yuv") == 0);
+    m.has_video = 0;
+    CHECK(FB_CacheWantsWave(&c, &s) && FB_CacheWantsWave(&c, &m));
+    s.has_audio = 0;
+    CHECK(FB_CacheRequestWave(&c, &s) == FB_CACHE_NONE);
+    s.has_audio = 1;
+
+    /* After the proxy, from it; music on its own goes straight away. */
+    CHECK(FB_CacheRequest(&c, &s) == FB_CACHE_QUEUED);
+    CHECK(FB_CacheRequestWave(&c, &s) == FB_CACHE_QUEUED);
+    CHECK(FB_CacheRequestWave(&c, &m) == FB_CACHE_QUEUED);
+    c.tasks[0].state = FB_CACHE_FAILED;     /* pretend the proxy failed */
+    CHECK(FB_CacheNextJob(&c, &job) == 1);
+    CHECK(strcmp(job.inputs[0], "Work:a.mp4") == 0);
+    CHECK(strcmp(job.filtergraph,
+                 "[0:a]aformat=channel_layouts=mono,showvolume=r=50:w=255:"
+                 "h=1:b=0:t=0:v=0:f=0:ds=lin:m=p:c=0xffffffff,format=gray,"
+                 "avgblur=sizeX=127:sizeY=0,crop=1:1:127:0,setsar=1[outv]")
+          == 0);
+    CHECK(strcmp(job.video_out, "outv") == 0 && !job.audio_out[0]);
+    CHECK(strcmp(job.output.vcodec, "rawvideo") == 0);
+    CHECK(strstr(job.output.path, "wave1-50-part.yuv") != NULL);
+    FB_CacheAbort(&c);
+    c.tasks[0].state = FB_CACHE_QUEUED;     /* its proxy is coming again */
+    CHECK(FB_CacheNextJob(&c, &job) == 0);  /* the proxy */
+    FB_CacheAbort(&c);
+    /* While the proxy is being made (marked busy, as if by a server),
+     * a.mp4's peaks wait and the music's go ahead. */
+    c.tasks[0].state = FB_CACHE_BUSY;
+    CHECK(FB_CacheNextJob(&c, &job) == 2);
+    FB_CacheAbort(&c);
+    c.num_tasks = 0;
+
+    /* The store reads whole files. */
+    remove(path);
+    memset(&st, 0, sizeof(st));
+    st.lock = thumb_lock;
+    st.unlock = thumb_unlock;
+    st.wake = thumb_wake;
+    ThumbWakes = 0;
+    CHECK(FB_WavesLock(&st, "", &pk, &count) == FB_THUMB_NONE);
+    CHECK(FB_WavesLock(&st, s.key, &pk, &count) == FB_THUMB_WAIT);
+    CHECK(FB_WavesLock(&st, s.key, &pk, &count) == FB_THUMB_WAIT);
+    CHECK(FB_WavesWanted(&st) == 1 && ThumbWakes == 1);
+    CHECK(FB_WavesLoad(&st, &c) == 0);      /* not made yet */
+    CHECK(FB_WavesLock(&st, s.key, &pk, &count) == FB_THUMB_WAIT);
+    CHECK(FB_WavesWanted(&st) == 0);        /* missing: not asked again */
+    write_bytes(path, peaks, sizeof(peaks));
+    FB_WavesReset(&st, s.key);
+    CHECK(FB_WavesLock(&st, s.key, &pk, &count) == FB_THUMB_WAIT);
+    CHECK(FB_WavesLoad(&st, &c) == 1);
+    CHECK(st.bytes == 10);
+    CHECK(FB_WavesLock(&st, s.key, &pk, &count) == FB_THUMB_HIT);
+    CHECK(count == 10 && pk && pk[3] == 9 && ThumbLocks == 1);
+    FB_WavesUnlock(&st);
+    CHECK(ThumbLocks == 0);
+    FB_WavesReset(&st, s.key);               /* made again */
+    CHECK(st.bytes == 0);
+    FB_WavesSetNone(&st, s.key);
+    CHECK(FB_WavesLock(&st, s.key, &pk, &count) == FB_THUMB_NONE);
+    FB_WavesFree(&st);
+    CHECK(st.num == 0 && ThumbLocks == 0);
+    remove(path);
+}
+
 static void test_cache_queue(void)
 {
     static FBCache c;
@@ -2169,6 +2268,7 @@ int main(void)
     test_cache_queue();
     test_thumb_strips();
     test_thumb_store();
+    test_waves();
     if (failures) {
         printf("%d check(s) failed\n", failures);
         return 1;

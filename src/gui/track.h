@@ -13,7 +13,8 @@
  *              frame is drawn. With FILMSTRIP_Pictures off, each clip is a
  *              plain block in its file's colour with the file name.
  *
- * Later: a waveform subclass for sound, and effect/title lanes. A module
+ * The lanes draw waveforms through LANES_WaveFunc (like the film strip's
+ * thumbnails). Later: effect/title lanes. A module
  * that adds a kind of lane subclasses TrackClass the same way.
  *
  * The classes are private to the program for now. Once the interface has
@@ -72,6 +73,8 @@ struct FBTimebase;
 #define LANES_Open           (TRACK_Dummy + 213) /* N: int32 clip that was   */
                                                  /*    double-clicked, sent  */
                                                  /*    with LANES_Selected   */
+#define LANES_WaveFunc       (TRACK_Dummy + 214) /* FBWaveFunc       (IS)   */
+#define LANES_WaveData       (TRACK_Dummy + 215) /* APTR, passed to it (IS) */
 
 /* Which track is at a point in the window (for files dropped on it):
  * returns the track, -1 for the drop area below the tracks, or -2 if the
@@ -100,6 +103,26 @@ typedef struct FBThumbRequest {
 } FBThumbRequest;
 
 typedef BOOL (*FBThumbFunc)(APTR data, const FBThumbRequest *req);
+
+/* Draws a clip's waveform on a sound lane: column x (window coordinates)
+ * shows source time source_t + (x - req->x) * step in source `source`,
+ * as a bar `half` pixels at most above and below `mid`, at `volume`
+ * (1.0 = as recorded), in `rgb`. Only inside `clip`. Returns FALSE if
+ * there's no waveform yet; the lane then draws a line through the
+ * middle. Called from GM_RENDER, like FBThumbFunc: it must not wait. */
+typedef struct FBWaveRequest {
+    int               source;
+    fb_us_t           source_t;
+    fb_us_t           step;
+    long              x;
+    long              mid, half;
+    double            volume;
+    uint32            rgb;
+    struct RastPort  *rp;
+    struct Rectangle  clip;
+} FBWaveRequest;
+
+typedef BOOL (*FBWaveFunc)(APTR data, const FBWaveRequest *req);
 
 /* Method subclasses implement to draw their content. The base class has
  * already filled `box` with the background and draws the playhead on top

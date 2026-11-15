@@ -24,6 +24,7 @@
 #include "formbrod/player.h"
 #include "formbrod/render.h"
 #include "formbrod/thumbs.h"
+#include "formbrod/waves.h"
 
 static int failures;
 static char dir[400];
@@ -551,6 +552,45 @@ static void test_thumbs(void)
     FB_ThumbsFree(&st);
 }
 
+/* Sound peaks: sound in, one grey pixel per 20 ms out. a.mp4's sound
+ * is ffmpeg's sine source at its default 1/8 of full scale, so every
+ * peak should read about 255 / 8 = 31. */
+static void test_wave(void)
+{
+    static FBCache c;
+    static FBJob job;
+    static unsigned char peaks[1000];
+    char path[FB_PATH_LEN];
+    FBSource src;
+    FBResult res;
+    FILE *f;
+    long n = 0;
+    int calls;
+
+    printf("sound peaks\n");
+    FB_CacheInit(&c, dir, 0);
+    memset(&src, 0, sizeof(src));
+    in_path(src.path, "a.mp4");
+    strcpy(src.key, "000000000wave001");
+    src.duration = 5000;
+    src.has_video = 1;
+    src.has_audio = 1;
+    FB_CachePath(&c, src.key, FB_CACHE_WAVE, 0, path, sizeof(path));
+    remove(path);
+    CHECK(FB_CacheRequestWave(&c, &src) == FB_CACHE_QUEUED);
+    CHECK(FB_CacheNextJob(&c, &job) == 0);
+    CHECK(render(&job, &calls, &res) == FB_RENDER_DONE);
+    CHECK(FB_CacheFinish(&c, 1) == FB_CACHE_READY);
+    f = fopen(path, "rb");
+    if (f) {
+        n = (long)fread(peaks, 1, sizeof(peaks), f);
+        fclose(f);
+    }
+    printf("  %ld peaks, the middle one %d\n", n, n > 0 ? peaks[n / 2] : -1);
+    CHECK(n >= 248 && n <= 252);
+    CHECK(n > 0 && peaks[n / 2] >= 28 && peaks[n / 2] <= 34);
+}
+
 /* A window from the middle: inputs jump to their first frame used. */
 static void test_window_seek(void)
 {
@@ -963,6 +1003,7 @@ int main(int argc, char **argv)
     test_errors();
     test_proxy();
     test_thumbs();
+    test_wave();
     test_window_seek();
     test_play();
     test_play_player(10);
