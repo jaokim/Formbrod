@@ -12,6 +12,8 @@
 #include "timeline.h"
 
 #define FB_JOB_VERSION       1
+/* How wide previews are (FB_QUALITY_PREVIEW with no width given). */
+#define FB_PREVIEW_WIDTH     320
 #define FB_FILTERGRAPH_LEN   16384
 
 typedef enum {

@@ -856,10 +856,24 @@ int FB_TimelineWindow(FBTimeline *dst, const FBTimeline *src, fb_ms_t from,
                       fb_ms_t len)
 {
     fb_ms_t to = from + len;
-    int i, n = 0;
+    int i, n = 0, w, h, num, den;
 
+    /* The whole edit's frame size and rate, worked out before cutting:
+     * left to the window, they would come from its own first clip, and a
+     * stretch starting on a picture of another shape would come out a
+     * different size from the rest. */
+    FB_TimelineFrameSize(src, &w, &h);
+    FB_TimelineFrameRate(src, &num, &den);
     if (dst != src)
         *dst = *src;
+    if (w > 0 && h > 0) {
+        dst->format.width = w;
+        dst->format.height = h;
+    }
+    if (num > 0 && den > 0) {
+        dst->format.fps_num = num;
+        dst->format.fps_den = den;
+    }
     for (i = 0; i < dst->num_clips; i++) {
         FBClip c = dst->clips[i];
         fb_ms_t a = c.start, b = FB_ClipEnd(&c);

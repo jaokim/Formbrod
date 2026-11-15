@@ -25,7 +25,21 @@ typedef struct FBApp {
      * while exports stay local, or the other way round. */
     FBCache     cache;
     FBBackend  *cache_backend;
-    int         caching;       /* a cache job is running */
+    int         caching;       /* a cache job is running: 1 a proxy, 2 a
+                                * piece rendered in the background */
+    unsigned    gen;           /* counts edits (render.h keys follow it) */
+    /* Background rendering (render.h). */
+    struct {
+        int      piece;        /* the piece being rendered */
+        char     key[FB_KEY_LEN];
+        unsigned gen;          /* the edit it was started for */
+        unsigned keys_gen;     /* the edit the piece keys are for */
+        int      keys_valid;
+        int      pieces;
+        unsigned done_gen;     /* the edit everything was rendered for */
+        int      done_valid;
+        fb_ms_t  near;         /* render from here first (last played) */
+    } bg;
     /* A rolling preview from the playhead (App_PreviewStart). */
     struct {
         int     on;
@@ -46,6 +60,11 @@ typedef struct FBApp {
         fb_ms_t  from, end;    /* in the edit */
         FBPlayer pl;
         long long shown_at;    /* clock of the last time text */
+        int      step, steps;  /* the plan's step playing, and how many */
+        int      job_audio;    /* the edit has sound */
+        FBPlayerFeed feed;     /* the step's frames into the player */
+        long     dry_ms;       /* sound that wasn't there in time */
+        fb_ms_t  first_dry;    /* where it first ran dry, or -1 */
     } play;
 } FBApp;
 
@@ -186,6 +205,16 @@ const FBPlayFrame *App_PollPlay(long *sleep_ms);
 fb_ms_t App_PlayPosition(void);
 /* "0:12,3 of 1:05,0", for under the picture. */
 void App_PlayTimeText(char *buf, size_t len);
+
+/* Background rendering: while the window is left alone and the proxies
+ * are made, the edit is rendered in pieces into the cache drawer
+ * (render.h), from where it was last played on; playing then reads
+ * rendered pieces instead of rendering them live. Setting
+ * "BackgroundRender" (1/0, default 1). */
+int  App_BackgroundRender(void);
+void App_SetBackgroundRender(int on);
+/* How many pieces the edit has, and how many are rendered. */
+void App_RenderedPieces(int *ready, int *total);
 
 /* Media probing (src/backend/media.c). Fills duration, stream flags and
  * video size/aspect/rate of `info` (not its path). */

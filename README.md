@@ -219,6 +219,7 @@ The port is called `FORMBROD`.
 | `TRIM` | `CLIP/N/A,IN/N,OUT/N` (ms in the clip's file; left out = unchanged) | |
 | `MOVE` | `CLIP/N/A,AT/N/A,TRACK/N`: without `TRACK`, start the clip at `AT` ms (the clips after it move along); with `TRACK`, move it there like a drag: at `AT` if there's room, else in between that track's clips (`TRACK` = the number of tracks makes a new one) | the clip's new number, with `TRACK` |
 | `CROSSFADE` | `CLIP/N/A,LENGTH/N/A,KIND/K`: crossfade `LENGTH` ms from the clip before it on its track (0 = a plain cut); a gap between them closes first, then the clips overlap, so it and the ones after it move earlier. `KIND` is an ffmpeg `xfade` transition (`fade`, `fadeblack`, `wipeleft`, `slideleft`, `circleopen`, ...) | the length set (shortened if it didn't fit) |
+| `RENDERAHEAD` | `ON/S,OFF/S`: background rendering for previews | `ON\|OFF <ready> <pieces>` |
 | `PLAY` | `AT/N,STOP/S`: play in the preview window from `AT` ms to the end, or stop | |
 | `PREVIEW` | `AT/N,STOP/S`: preview from `AT` ms in 10 s windows until stopped | the playlist's path |
 | `CACHE` | `ON/S,OFF/S,WIDTH/N,AUTO/S` (preview copies) | `ON\|OFF <width> <waiting>` |
@@ -352,7 +353,20 @@ press Space or Esc in it, to stop.
 
 Only the part being played is read: each file jumps straight to the first
 frame used (to the keyframe before it). With preview copies that jump is
-instant, and playing is cheaper too.
+instant, and playing is cheaper too. Previews scale with `fast_bilinear`
+and keep their sound at 44.1 kHz (the player's rate); exports use the
+better scaler and 48 kHz. If playing can't keep up, the log says so when
+it stops, with how long the sound was missing.
+
+**Rendered ahead.** While the window is left alone (and the preview
+copies are made), Formbrod renders the edit in 10-second pieces into the
+cache drawer, starting where you last played. Playing a rendered piece
+is cheap, one small file with nothing to scale or mix, so a preview that
+is too heavy to render live still plays smoothly once it's rendered;
+pieces that aren't yet are rendered live as before. Only the pieces an
+edit touches are rendered again. *Settings → Render previews in the
+background* (setting `BackgroundRender`) turns it off; the status line
+says how many pieces are ready.
 
 The preview window can be made any size: the picture is scaled to fit,
 keeping its shape, by the graphics card where it can (compositing),
@@ -386,11 +400,13 @@ that. Exports still read the original files.
   it doesn't matter, and nor does using it in several projects. A copy is
   written under a temporary name and renamed when it is complete, so a
   copy in the cache drawer is always whole.
-- **Sized for the machine.** With `ProxyWidth` set to `auto` the width is
-  picked from the CPU: 640 pixels for an X1000 or X5000, 480 for an
-  A1222, 320 for a Sam460 or a G3/G4 machine. The width is part of the
-  file name (`<key>.proxy1-640.mov`), so changing it keeps the old copies,
-  and two Amigas can share one cache drawer.
+- **As wide as the preview.** With `ProxyWidth` set to `auto` (the
+  default) copies are 320 pixels wide, the preview's width: a wider copy
+  is only decoded and then scaled down again for every frame (measured:
+  40 % more work at 480). A width can still be chosen in *Settings →
+  Preview copy size*. The width is part of the file name
+  (`<key>.proxy1-320.mov`), so changing it keeps the old copies, and two
+  Amigas can share one cache drawer.
 - **In the background.** Copies are made a slice at a time (about 30 ms
   of work, at least one packet), one file at a time, and only once the
   window has been left alone for 1.5 s, so editing never waits for them.

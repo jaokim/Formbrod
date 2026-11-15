@@ -71,6 +71,7 @@ SRC = src/main.c \
       src/log/log.c \
       src/job/job.c \
       src/cache/cache.c \
+      src/cache/render.c \
       src/player/player.c \
       src/player/audio.c \
       src/job/module.c \

@@ -727,3 +727,14 @@ Not enough memory
 ; starts. The log says why.
 MSG_STATUS_PLAYING_SILENT (248//)
 Playing from %s, without sound (AHI can't be opened)
+;
+; In the status line when a piece of the edit has been rendered ahead in
+; the background, so the preview can play it from a file. %ld and %ld:
+; how many pieces are ready, and how many the edit has.
+MSG_STATUS_RENDERED_AHEAD (249//)
+Preview rendered ahead: %ld of %ld pieces
+;
+; Settings menu, a checkmark item: render the edit for previews in the
+; background while the window is left alone.
+MSG_MENU_BACKGROUND_RENDER (250//)
+Render previews in the background

@@ -42,8 +42,11 @@
 #include "formbrod/job.h"
 #include "formbrod/module.h"
 
-#define PREVIEW_WIDTH 320
+#define PREVIEW_WIDTH FB_PREVIEW_WIDTH
 #define FB_AUDIO_RATE 48000   /* every clip's audio is resampled to this */
+/* ...except in previews: they are played at the player's rate, so
+ * sound is resampled once (or not at all), not to 48 kHz and back. */
+#define FB_PREVIEW_AUDIO_RATE 44100
 
 typedef struct Buf {
     char  *p;
@@ -160,6 +163,7 @@ typedef struct Frame {
     int fw, fh;            /* frame size, or 0 if unknown */
     int legacy_w;          /* size unknown: scale=W:-2 per clip */
     int fps_num, fps_den;  /* 0 if unknown */
+    int arate;             /* sound rate: FB_AUDIO_RATE, or the preview's */
 } Frame;
 
 /* One clip's picture: trimmed, fitted, at the frame rate, with effects.
@@ -224,7 +228,7 @@ static FBJobError clip_video(Buf *b, const FBTimeline *tl, const FBClip *c,
 
 /* One clip's sound, or silence as long as the clip if its source has none. */
 static FBJobError clip_audio(Buf *b, const FBTimeline *tl, const FBClip *c,
-                             int in, int seg)
+                             int in, const Frame *f, int seg)
 {
     FBJobError err;
 
@@ -233,10 +237,10 @@ static FBJobError clip_audio(Buf *b, const FBTimeline *tl, const FBClip *c,
                    in, secs(c->in), secs(c->out));
     else
         buf_printf(b, "anullsrc=r=%d:cl=stereo,atrim=duration=%.3f,",
-                   FB_AUDIO_RATE, secs(c->out - c->in));
+                   f->arate, secs(c->out - c->in));
     /* one rate and layout for concat; aresample is auto-inserted */
     buf_printf(b, "aformat=sample_rates=%d:channel_layouts=stereo",
-               FB_AUDIO_RATE);
+               f->arate);
     if (c->volume != 1.0 && c->volume >= 0.0)
         buf_printf(b, ",volume=%.3f", c->volume);
     if ((err = add_effects(b, c, 1)) != FB_JOB_OK)
@@ -265,7 +269,7 @@ static void gap(Buf *b, const FBTimeline *tl, const Frame *f, fb_ms_t len,
     if (audio)
         buf_printf(b, "anullsrc=r=%d:cl=stereo,atrim=duration=%.3f,"
                    "aformat=sample_rates=%d:channel_layouts=stereo[a%d];",
-                   FB_AUDIO_RATE, secs(len), FB_AUDIO_RATE, seg);
+                   f->arate, secs(len), f->arate, seg);
 }
 
 /* The pieces a track is joined from: a clip, a gap, or clips mixed by
@@ -304,6 +308,8 @@ FBJobError FB_JobBuild(FBJob *job, const FBTimeline *tl, const FBOutput *out)
     job->version = FB_JOB_VERSION;
     job->output = *out;
     memset(&f, 0, sizeof(f));
+    f.arate = out->quality == FB_QUALITY_PREVIEW ? FB_PREVIEW_AUDIO_RATE
+                                                 : FB_AUDIO_RATE;
     memset(use, 0, sizeof(use));
 
     for (i = 0; i < FB_MAX_SOURCES; i++)
@@ -341,8 +347,8 @@ FBJobError FB_JobBuild(FBJob *job, const FBTimeline *tl, const FBOutput *out)
         if (use[t].audio)
             atracks++;
     }
-    if (vtracks == 0)
-        return FB_JOB_EMPTY;      /* nothing to see */
+    if (vtracks == 0 && atracks == 0)
+        return FB_JOB_EMPTY;      /* nothing to see or hear */
 
     for (i = 0; i < tl->num_clips; i++) {
         const FBClip *c = &tl->clips[i];
@@ -410,6 +416,11 @@ FBJobError FB_JobBuild(FBJob *job, const FBTimeline *tl, const FBOutput *out)
     } else if (out_w > 0) {
         f.legacy_w = out_w;
     }
+    /* Sound with no picture (a stretch where only the music goes on, cut
+     * from an edit): black, the edit's size. Without a known size there
+     * is nothing to show. */
+    if (vtracks == 0 && f.fw <= 0)
+        return FB_JOB_EMPTY;
     if (need_size && f.fw <= 0)
         return FB_JOB_NEED_SIZE;
     FB_TimelineFrameRate(tl, &f.fps_num, &f.fps_den);
@@ -448,7 +459,7 @@ FBJobError FB_JobBuild(FBJob *job, const FBTimeline *tl, const FBOutput *out)
                                   seg)) != FB_JOB_OK)
                 return err;
             if (pa &&
-                (err = clip_audio(&b, tl, c, input_of[c->source], seg))
+                (err = clip_audio(&b, tl, c, input_of[c->source], &f, seg))
                 != FB_JOB_OK)
                 return err;
             if (xf) {
@@ -500,6 +511,12 @@ FBJobError FB_JobBuild(FBJob *job, const FBTimeline *tl, const FBOutput *out)
         }
         buf_printf(&b, ";");
     }
+
+    if (vtracks == 0)
+        buf_printf(&b, "color=c=0x%06lX:s=%dx%d:r=%d/%d:d=%.3f,setsar=1[outv];",
+                   (unsigned long)(tl->format.pad_color & 0xFFFFFF),
+                   f.fw, f.fh, f.fps_num > 0 ? f.fps_num : 25,
+                   f.fps_num > 0 ? f.fps_den : 1, secs(length));
 
     /* Picture tracks on top of each other, bottom first. */
     if (vtracks > 1) {

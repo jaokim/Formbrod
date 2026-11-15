@@ -12,6 +12,7 @@
 #include "formbrod/project.h"
 #include "formbrod/cache.h"
 #include "formbrod/player.h"
+#include "formbrod/render.h"
 
 static int failures;
 
@@ -672,10 +673,16 @@ static void test_job_tracks(void)
     CHECK(strstr(job.filtergraph, "overlay") == NULL);
     CHECK(strstr(job.filtergraph, "concat=n=1:v=1:a=1[outv][outa]") != NULL);
 
-    /* Only sound left: nothing to see. */
+    /* Only sound left: black with the sound, like a gap. */
     tl.tracks[0].hidden = 1;
     tl.tracks[1].muted = 0;
+    CHECK(FB_JobBuild(&job, &tl, &out) == FB_JOB_OK);
+    CHECK(strstr(job.filtergraph, "color=c=") != NULL);
+    CHECK(strstr(job.filtergraph, "overlay") == NULL);
+    /* Nothing to see or hear: empty. */
+    tl.tracks[0].muted = tl.tracks[1].muted = 1;
     CHECK(FB_JobBuild(&job, &tl, &out) == FB_JOB_EMPTY);
+    tl.tracks[0].muted = tl.tracks[1].muted = 0;
     tl.tracks[0].hidden = 0;
     tl.tracks[2].hidden = 0;
 
@@ -1014,7 +1021,7 @@ static void test_cache_rules(void)
     FB_CacheInit(&c, CACHE_DIR, 0);
     CHECK(c.proxy_width == FB_PROXY_WIDTH);
     FB_CacheRecipe(&c, FB_CACHE_PROXY, recipe, sizeof(recipe));
-    CHECK(strcmp(recipe, "proxy1-640") == 0);
+    CHECK(strcmp(recipe, "proxy1-320") == 0);   /* the preview's width */
     FB_CacheInit(&c, CACHE_DIR, 33);
     CHECK(c.proxy_width == FB_PROXY_MIN_WIDTH);
     FB_CacheInit(&c, CACHE_DIR, 481);
@@ -1036,11 +1043,11 @@ static void test_cache_rules(void)
     s.key[0] = '\0';                   /* couldn't be read */
     CHECK(!FB_CacheWantsProxy(&c, &s));
 
-    CHECK(FB_CacheAutoWidth(1800, 2) == 640);   /* X1000 */
-    CHECK(FB_CacheAutoWidth(2000, 2) == 640);   /* X5000/20 */
-    CHECK(FB_CacheAutoWidth(1200, 2) == 480);   /* A1222 */
-    CHECK(FB_CacheAutoWidth(1150, 1) == 320);   /* Sam460 */
-    CHECK(FB_CacheAutoWidth(800, 1) == 320);    /* G4 */
+    /* Auto is the preview's width on every machine: wider proxies are
+     * only scaled down again (measured: 40 % more work at 480). */
+    CHECK(FB_CacheAutoWidth(1800, 2) == FB_PREVIEW_WIDTH);   /* X1000 */
+    CHECK(FB_CacheAutoWidth(1200, 2) == FB_PREVIEW_WIDTH);   /* A1222 */
+    CHECK(FB_CacheAutoWidth(800, 1) == FB_PREVIEW_WIDTH);    /* G4 */
     CHECK(FB_CacheAutoWidth(0, 0) == FB_PROXY_WIDTH);
 }
 
@@ -1116,6 +1123,23 @@ static void test_cache_queue(void)
     CHECK(FB_CacheRequest(&c, &b) == FB_CACHE_FAILED);
     CHECK(FB_CachePending(&c) == 0);
     CHECK(FB_CacheNextJob(&c, &job) == -1);
+
+    /* A rendered piece, made outside the queue: committed, or not. */
+    {
+        char part[FB_PATH_LEN];
+
+        CHECK(FB_CachePath(&c, "00000000000000ee", FB_CACHE_RENDER, 1, part,
+                           sizeof(part)) == 0);
+        CHECK(strcmp(part, CACHE_DIR "/00000000000000ee.render1-320-part.mov")
+              == 0);
+        write_bytes(part, (const unsigned char *)"x", 1);
+        CHECK(FB_CacheCommit(&c, "00000000000000ee", FB_CACHE_RENDER, 1) == 0);
+        CHECK(FB_CacheFind(&c, "00000000000000ee", FB_CACHE_RENDER, NULL, 0));
+        CHECK(!exists(part));
+        write_bytes(part, (const unsigned char *)"x", 1);
+        CHECK(FB_CacheCommit(&c, "00000000000000ef", FB_CACHE_RENDER, 0) != 0);
+        remove(CACHE_DIR "/00000000000000ee.render1-320.mov");
+    }
 
     /* A copy that appears meanwhile (from a render server) isn't made. */
     {
@@ -1347,6 +1371,15 @@ static void test_window_and_seek(void)
     CHECK(FB_JobBuild(&job, &w, &out) == FB_JOB_OK);
     CHECK(FB_JobToCommandLine(&job, text, sizeof(text)) > 0);
     CHECK(strncmp(text, "ffmpeg -y -i ", 13) == 0);
+
+    /* Previews have their sound at the player's rate (44.1 kHz), so it's
+     * resampled once at most; exports at 48 kHz. */
+    CHECK(FB_JobBuild(&job, &w, &out) == FB_JOB_OK);
+    CHECK(strstr(job.filtergraph, "aformat=sample_rates=44100") != NULL);
+    CHECK(strstr(job.filtergraph, "48000") == NULL);
+    out.quality = FB_QUALITY_FINAL;
+    CHECK(FB_JobBuild(&job, &w, &out) == FB_JOB_OK);
+    CHECK(strstr(job.filtergraph, "aformat=sample_rates=48000") != NULL);
 }
 
 /* Windows cutting into crossfades. */
@@ -1486,6 +1519,151 @@ static void test_player(void)
     CHECK(FB_PlayerPushAudio(&pl, snd, 10, 2000) == 1);
     CHECK(!FB_PlayerReady(&pl));     /* waits for pictures too */
     FB_PlayerFree(&pl);
+}
+
+/* Background rendering: pieces, their keys, their jobs. */
+static void test_render_pieces(void)
+{
+    static FBTimeline tl, t2;
+    static FBJob job;
+    FBOutput out;
+    char k0[FB_KEY_LEN], k1[FB_KEY_LEN], k2[FB_KEY_LEN], k[FB_KEY_LEN];
+    int v, m, tr;
+
+    FB_TimelineInit(&tl);
+    CHECK(FB_RenderPieces(&tl) == 0);
+    v = FB_TimelineAddSource(&tl, "v.mp4", 60000, 1, 1);
+    FB_SourceSetVideo(&tl.sources[v], 640, 360, 1, 1, 25, 1);
+    strcpy(tl.sources[v].key, "000000000000000v");
+    m = FB_TimelineAddSource(&tl, "m.mp3", 60000, 0, 1);
+    strcpy(tl.sources[m].key, "000000000000000m");
+    FB_TimelineAppendToTrack(&tl, 0, v, 0, 12000);      /* 0 - 12 s */
+    FB_TimelineAppendToTrack(&tl, 0, v, 30000, 43000);  /* 12 - 25 s */
+    tr = FB_TimelineAddTrack(&tl, FB_TRACK_AUDIO);
+    FB_TimelineAppendToTrack(&tl, tr, m, 0, 25000);
+
+    /* 25 s: three pieces, the last 5 s. */
+    CHECK(FB_RenderPieces(&tl) == 3);
+    CHECK(FB_RenderPieceStart(2) == 20000);
+    CHECK(FB_RenderPieceLength(&tl, 0) == 10000);
+    CHECK(FB_RenderPieceLength(&tl, 2) == 5000);
+    CHECK(FB_RenderPieceLength(&tl, 3) == 0);
+    CHECK(FB_RenderPieceAt(19999) == 1 && FB_RenderPieceAt(20000) == 2);
+    CHECK(FB_RenderPieceAt(-5) == 0);
+
+    /* Keys: the same edit, the same keys; pieces differ from each other. */
+    CHECK(FB_RenderPieceKey(&tl, 0, k0) == 0 && strlen(k0) == 16);
+    CHECK(FB_RenderPieceKey(&tl, 1, k1) == 0);
+    CHECK(FB_RenderPieceKey(&tl, 2, k2) == 0);
+    CHECK(strcmp(k0, k1) != 0 && strcmp(k1, k2) != 0);
+    CHECK(FB_RenderPieceKey(&tl, 0, k) == 0 && strcmp(k, k0) == 0);
+    CHECK(FB_RenderPieceKey(&tl, 3, k) == -1);
+
+    /* Every piece has the whole edit's shape, even one that starts on a
+     * picture of another shape. */
+    {
+        static FBTimeline t3, w3;
+        int p3;
+
+        t3 = tl;
+        p3 = FB_TimelineAddSource(&t3, "square.png", 0, 1, 0);
+        FB_SourceSetVideo(&t3.sources[p3], 600, 600, 1, 1, 0, 0);
+        t3.sources[p3].still = 1;
+        t3.clips[1].source = p3;            /* 12 - 25 s: the picture */
+        t3.clips[1].in = 0;
+        t3.clips[1].out = 13000;
+        CHECK(FB_TimelineWindow(&w3, &t3, 20000, 5000) == 2);
+        {
+            int ww, wh, fw, fh;
+
+            FB_TimelineFrameSize(&t3, &fw, &fh);
+            FB_TimelineFrameSize(&w3, &ww, &wh);
+            CHECK(fw == 640 && fh == 360 && ww == fw && wh == fh);
+        }
+        CHECK(FB_RenderPieceJob(&job, &t3, 2, "T:p.mov") == FB_JOB_OK);
+        CHECK(strstr(job.filtergraph, "320:180") != NULL);
+    }
+
+    /* The music goes on after the pictures end: a stretch with sound
+     * only is black, the edit's size, and its piece can be rendered. */
+    {
+        static FBTimeline t4, w4;
+
+        t4 = tl;
+        t4.clips[2].out = 32000;              /* music to 32 s */
+        CHECK(FB_RenderPieces(&t4) == 4);
+        CHECK(FB_TimelineWindow(&w4, &t4, 30000, 2000) == 1);
+        memset(&out, 0, sizeof(out));
+        strcpy(out.path, "o.mov");
+        out.quality = FB_QUALITY_PREVIEW;
+        CHECK(FB_JobBuild(&job, &w4, &out) == FB_JOB_OK);
+        CHECK(strstr(job.filtergraph, "color=c=0x000000:s=320x180:r=25/1:"
+                                      "d=2.000,setsar=1[outv]") != NULL);
+        CHECK(strstr(job.filtergraph, "[outa]") != NULL);
+        CHECK(job.length == 2000);
+        CHECK(FB_RenderPieceKey(&t4, 3, k) == 0);
+        CHECK(FB_RenderPieceJob(&job, &t4, 3, "T:p.mov") == FB_JOB_OK);
+    }
+
+    /* Trimming the second clip's end (22 s on) changes only piece 2. */
+    t2 = tl;
+    t2.clips[1].out -= 1000;
+    CHECK(FB_RenderPieceKey(&t2, 0, k) == 0 && strcmp(k, k0) == 0);
+    CHECK(FB_RenderPieceKey(&t2, 1, k) == 0 && strcmp(k, k1) == 0);
+    CHECK(FB_RenderPieceKey(&t2, 2, k) == 0 && strcmp(k, k2) != 0);
+
+    /* A file changed under the same name changes every piece it's in. */
+    t2 = tl;
+    strcpy(t2.sources[m].key, "00000000000000m2");
+    CHECK(FB_RenderPieceKey(&t2, 0, k) == 0 && strcmp(k, k0) != 0);
+
+    /* Rendering it: the piece, preview size, MJPEG and PCM at 44.1 kHz. */
+    CHECK(FB_RenderPieceJob(&job, &tl, 1, "T:p.mov") == FB_JOB_OK);
+    CHECK(strcmp(job.output.vcodec, "mjpeg") == 0);
+    CHECK(strcmp(job.output.acodec, "pcm_s16le") == 0);
+    CHECK(job.output.quality == FB_QUALITY_PREVIEW);
+    CHECK(job.length == 10000);
+    CHECK(strstr(job.filtergraph, "sample_rates=44100") != NULL);
+    CHECK(job.seek[0] == 10000);           /* v.mp4 from 10 s */
+
+    /* Playing part of a rendered piece. */
+    FB_RenderPlayJob(&job, "C:x.mov", 2500, 7500, 1);
+    CHECK(job.num_inputs == 1 && job.seek[0] == 2500 && job.length == 7500);
+    CHECK(strcmp(job.filtergraph,
+                 "[0:v]trim=start=2.500:duration=7.500,setpts=PTS-STARTPTS"
+                 "[outv];[0:a]atrim=start=2.500:duration=7.500,"
+                 "asetpts=PTS-STARTPTS[outa]") == 0);
+    FB_RenderPlayJob(&job, "C:x.mov", 0, 5000, 0);
+    CHECK(job.audio_out[0] == '\0' && !strstr(job.filtergraph, "[0:a]"));
+
+    /* Plans. Nothing rendered: one live step from 3 s to the end. */
+    {
+        FBPlayStep st[8];
+        unsigned char r[3] = { 0, 0, 0 };
+        int n = FB_RenderPlan(&tl, 3000, NULL, st, 8);
+
+        CHECK(n == 1 && st[0].piece == -1 && st[0].from == 3000 &&
+              st[0].len == 22000);
+        /* Piece 1 rendered: live 3-10, piece 1 whole, live 20-25. */
+        r[1] = 1;
+        n = FB_RenderPlan(&tl, 3000, r, st, 8);
+        CHECK(n == 3);
+        CHECK(st[0].piece == -1 && st[0].from == 3000 && st[0].len == 7000);
+        CHECK(st[1].piece == 1 && st[1].from == 10000 &&
+              st[1].len == 10000 && st[1].offset == 0);
+        CHECK(st[2].piece == -1 && st[2].from == 20000 && st[2].len == 5000);
+        /* From inside a rendered piece: its file from the offset. */
+        r[0] = r[2] = 1;
+        n = FB_RenderPlan(&tl, 13500, r, st, 8);
+        CHECK(n == 2 && st[0].piece == 1 && st[0].offset == 3500 &&
+              st[0].len == 6500 && st[1].piece == 2 && st[1].len == 5000);
+        /* All rendered from 0: three steps that add up to the edit. */
+        n = FB_RenderPlan(&tl, 0, r, st, 8);
+        CHECK(n == 3 && st[0].len + st[1].len + st[2].len == 25000);
+        /* Room for fewer steps than needed: it stops there. */
+        r[1] = 0;
+        CHECK(FB_RenderPlan(&tl, 0, r, st, 2) == 2);
+    }
 }
 
 /* Three picture tracks: each overlay reads what the one before wrote. */
@@ -1788,6 +1966,7 @@ int main(void)
     test_window_and_seek();
     test_window_crossfade();
     test_player();
+    test_render_pieces();
     test_still();
     test_job_errors();
     test_fit();

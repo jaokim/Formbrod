@@ -133,8 +133,10 @@ int FB_CacheKey(const char *path, char key[FB_KEY_LEN])
 void FB_CacheRecipe(const FBCache *c, FBCacheKind kind, char *out,
                     size_t len)
 {
-    (void)kind;   /* only proxies so far */
-    snprintf(out, len, "proxy1-%d", c->proxy_width);
+    if (kind == FB_CACHE_RENDER)
+        snprintf(out, len, "render1-%d", FB_PREVIEW_WIDTH);
+    else
+        snprintf(out, len, "proxy1-%d", c->proxy_width);
 }
 
 int FB_CacheWantsProxy(const FBCache *c, const FBSource *src)
@@ -151,17 +153,9 @@ int FB_CacheWantsProxy(const FBCache *c, const FBSource *src)
 
 int FB_CacheAutoWidth(int mhz, int cores)
 {
-    int score;
-
-    if (mhz <= 0)
-        return FB_PROXY_WIDTH;
-    /* A second core helps: libavcodec decodes on both. */
-    score = cores > 1 ? mhz * 3 / 2 : mhz;
-    if (score >= 2400)       /* X1000 (PA6T 1.8 GHz x2), X5000 */
-        return 640;
-    if (score >= 1500)       /* A1222 (1.2 GHz x2) */
-        return 480;
-    return 320;              /* Sam460, Sam440, G3/G4 machines */
+    (void)mhz;
+    (void)cores;
+    return FB_PREVIEW_WIDTH;
 }
 
 /* ---- The cache ----------------------------------------------------------- */
@@ -402,6 +396,23 @@ FBCacheState FB_CacheFinish(FBCache *c, int ok)
     remove(part);
     t->state = FB_CACHE_FAILED;
     return t->state;
+}
+
+int FB_CacheCommit(const FBCache *c, const char *key, FBCacheKind kind,
+                   int ok)
+{
+    char part[FB_PATH_LEN], done[FB_PATH_LEN];
+
+    if (FB_CachePath(c, key, kind, 1, part, sizeof(part)) != 0 ||
+        FB_CachePath(c, key, kind, 0, done, sizeof(done)) != 0)
+        return -1;
+    if (ok) {
+        remove(done);
+        if (rename(part, done) == 0)
+            return 0;
+    }
+    remove(part);
+    return -1;
 }
 
 void FB_CacheAbort(FBCache *c)

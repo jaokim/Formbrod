@@ -25,6 +25,9 @@
  *   CACHE ON/S,OFF/S,WIDTH/N,AUTO/S     preview copies: turn them on or
  *                                       off, set their width (or AUTO);
  *                                       returns "ON|OFF <width> <waiting>"
+ *   RENDERAHEAD ON/S,OFF/S              background rendering for previews:
+ *                                       turn it on or off; returns
+ *                                       "ON|OFF <ready> <pieces>"
  *   PLAY AT/N,STOP/S                    play in the preview window from AT
  *                                       ms (default: 0) to the end, or stop
  *   PREVIEW AT/N,STOP/S                 preview from AT ms (default: 0)
@@ -189,6 +192,21 @@ static void cmd_tracks(struct ARexxCmd *cmd, struct RexxMsg *rm)
 {
     (void)rm;
     snprintf(result, sizeof(result), "%d", App.timeline.num_tracks);
+    set_result(cmd, 0);
+}
+
+static void cmd_renderahead(struct ARexxCmd *cmd, struct RexxMsg *rm)
+{
+    int ready, total;
+
+    (void)rm;
+    if (cmd->ac_ArgList[0])
+        App_SetBackgroundRender(1);
+    if (cmd->ac_ArgList[1])
+        App_SetBackgroundRender(0);
+    App_RenderedPieces(&ready, &total);
+    snprintf(result, sizeof(result), "%s %d %d",
+             App_BackgroundRender() ? "ON" : "OFF", ready, total);
     set_result(cmd, 0);
 }
 
@@ -452,6 +470,7 @@ static struct ARexxCmd commands[] = {
     { "TRACKS",       18, cmd_tracks,       NULL,                0, NULL, 0, 0, NULL },
     { "TRIM",         19, cmd_trim,         "CLIP/N/A,IN/N,OUT/N", 0, NULL, 0, 0, NULL },
     { "MOVE",         20, cmd_move,         "CLIP/N/A,AT/N/A,TRACK/N", 0, NULL, 0, 0, NULL },
+    { "RENDERAHEAD",  24, cmd_renderahead,  "ON/S,OFF/S",        0, NULL, 0, 0, NULL },
     { "PLAY",         23, cmd_play,         "AT/N,STOP/S",       0, NULL, 0, 0, NULL },
     { "PREVIEW",      22, cmd_preview,      "AT/N,STOP/S",       0, NULL, 0, 0, NULL },
     { "CACHE",        21, cmd_cache,        "ON/S,OFF/S,WIDTH/N,AUTO/S", 0, NULL, 0, 0, NULL },

@@ -402,8 +402,12 @@
 #define MSG_STATUS_NO_MEMORY_STR         "Not enough memory"
 #define MSG_STATUS_PLAYING_SILENT        248
 #define MSG_STATUS_PLAYING_SILENT_STR    "Playing from %s, without sound (AHI can't be opened)"
+#define MSG_STATUS_RENDERED_AHEAD        249
+#define MSG_STATUS_RENDERED_AHEAD_STR    "Preview rendered ahead: %ld of %ld pieces"
+#define MSG_MENU_BACKGROUND_RENDER       250
+#define MSG_MENU_BACKGROUND_RENDER_STR   "Render previews in the background"
 
-#define FB_NUM_STRINGS 195
+#define FB_NUM_STRINGS 197
 
 #ifdef FB_STRINGS_ARRAY
 static const struct FBBuiltinString {
@@ -605,6 +609,8 @@ static const struct FBBuiltinString {
     { MSG_PLAY_TIME, MSG_PLAY_TIME_STR },
     { MSG_STATUS_NO_MEMORY, MSG_STATUS_NO_MEMORY_STR },
     { MSG_STATUS_PLAYING_SILENT, MSG_STATUS_PLAYING_SILENT_STR },
+    { MSG_STATUS_RENDERED_AHEAD, MSG_STATUS_RENDERED_AHEAD_STR },
+    { MSG_MENU_BACKGROUND_RENDER, MSG_MENU_BACKGROUND_RENDER_STR },
 };
 #endif
 

@@ -40,7 +40,11 @@
 #include "timeline.h"
 #include "job.h"
 
-#define FB_PROXY_WIDTH      640    /* default proxy width */
+/* Proxies are read only for previews, which are FB_PREVIEW_WIDTH wide:
+ * a wider proxy is decoded and then scaled down for every frame, for
+ * nothing. Measured (20 s, two tracks): 480-wide proxies cost 40 % more
+ * than 320-wide ones. */
+#define FB_PROXY_WIDTH      FB_PREVIEW_WIDTH
 #define FB_PROXY_MIN_WIDTH  160
 /* An intra-only source (MJPEG, DV, ProRes...) at most this wide is
  * already quick to read and gets no proxy. */
@@ -49,6 +53,7 @@
 
 typedef enum {
     FB_CACHE_PROXY = 0,
+    FB_CACHE_RENDER,      /* a rendered piece of the edit (render.h) */
     FB_CACHE_NUM_KINDS
 } FBCacheKind;
 
@@ -83,7 +88,8 @@ int  FB_CacheKey(const char *path, char key[FB_KEY_LEN]);
  * keys of uploads as they arrive). */
 void FB_CacheKeyData(const void *data, size_t len, char key[FB_KEY_LEN]);
 
-/* The recipe part of a cached file's name: "proxy1-640". */
+/* The recipe part of a cached file's name: "proxy1-320", or for a
+ * rendered piece "render1-320" (the preview's width). */
 void FB_CacheRecipe(const FBCache *c, FBCacheKind kind, char *out,
                     size_t len);
 
@@ -95,9 +101,10 @@ int  FB_CacheWantsProxy(const FBCache *c, const FBSource *src);
  * least FB_PROXY_MIN_WIDTH. */
 void FB_CacheInit(FBCache *c, const char *dir, int proxy_width);
 
-/* A proxy width that suits a computer, from its CPU clock in MHz and
- * number of cores (0 if unknown): 640 for an X1000/X5000, 480 for a
- * Sam460 or A1222, 320 for older G3/G4 machines. */
+/* The proxy width for "auto". It was chosen from the CPU (bigger on
+ * faster machines), but proxies wider than the preview only cost, so
+ * it's the preview's width on every machine now. The CPU is kept as an
+ * argument for when previews get bigger on fast machines. */
 int  FB_CacheAutoWidth(int mhz, int cores);
 
 /* The path of a cached file; `partial` gives the name it has while it's
@@ -134,6 +141,12 @@ int  FB_CacheBuildJob(const FBCache *c, const FBCacheTask *task, FBJob *job);
  * name and the .info file written (READY); otherwise it is deleted
  * (FAILED). Returns the new state. */
 FBCacheState FB_CacheFinish(FBCache *c, int ok);
+
+/* For files made outside the task queue (rendered pieces): with ok, the
+ * partial file becomes the real one; otherwise it's deleted. 0 if it's
+ * there now. */
+int  FB_CacheCommit(const FBCache *c, const char *key, FBCacheKind kind,
+                    int ok);
 
 /* Stops the busy task without counting it as failed (on quit, or when
  * the cache drawer changes): deletes the partial file and queues it
