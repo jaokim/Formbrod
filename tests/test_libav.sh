@@ -70,4 +70,8 @@ need "the proxy copy" "$p" 35
 p=$(psnr a.mp4 out_window.mp4 \
     "[0:v]trim=start=3.5:duration=1.4,setpts=PTS-STARTPTS,format=yuv420p[a];[1:v]trim=duration=1.4,setpts=PTS-STARTPTS,format=yuv420p[b];[a][b]psnr")
 need "the window" "$p" 25
+# A rendered piece (10 - 20 s of f.mp4) against f.mp4 itself.
+p=$(psnr f.mp4 piece1.render1.mov \
+    "[0:v]trim=start=10:duration=9.9,setpts=PTS-STARTPTS,scale=320:240:flags=fast_bilinear,format=yuv420p[a];[1:v]trim=duration=9.9,setpts=PTS-STARTPTS,format=yuv420p[b];[a][b]psnr")
+need "the rendered piece" "$p" 30
 echo "picture checks passed"

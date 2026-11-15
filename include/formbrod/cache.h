@@ -53,6 +53,7 @@
 
 typedef enum {
     FB_CACHE_PROXY = 0,
+    FB_CACHE_RENDER,      /* a rendered piece of the edit (render.h) */
     FB_CACHE_NUM_KINDS
 } FBCacheKind;
 
@@ -87,7 +88,8 @@ int  FB_CacheKey(const char *path, char key[FB_KEY_LEN]);
  * keys of uploads as they arrive). */
 void FB_CacheKeyData(const void *data, size_t len, char key[FB_KEY_LEN]);
 
-/* The recipe part of a cached file's name: "proxy1-640". */
+/* The recipe part of a cached file's name: "proxy1-320", or for a
+ * rendered piece "render1-320" (the preview's width). */
 void FB_CacheRecipe(const FBCache *c, FBCacheKind kind, char *out,
                     size_t len);
 
@@ -139,6 +141,12 @@ int  FB_CacheBuildJob(const FBCache *c, const FBCacheTask *task, FBJob *job);
  * name and the .info file written (READY); otherwise it is deleted
  * (FAILED). Returns the new state. */
 FBCacheState FB_CacheFinish(FBCache *c, int ok);
+
+/* For files made outside the task queue (rendered pieces): with ok, the
+ * partial file becomes the real one; otherwise it's deleted. 0 if it's
+ * there now. */
+int  FB_CacheCommit(const FBCache *c, const char *key, FBCacheKind kind,
+                    int ok);
 
 /* Stops the busy task without counting it as failed (on quit, or when
  * the cache drawer changes): deletes the partial file and queues it

@@ -219,6 +219,7 @@ The port is called `FORMBROD`.
 | `TRIM` | `CLIP/N/A,IN/N,OUT/N` (ms in the clip's file; left out = unchanged) | |
 | `MOVE` | `CLIP/N/A,AT/N/A,TRACK/N`: without `TRACK`, start the clip at `AT` ms (the clips after it move along); with `TRACK`, move it there like a drag: at `AT` if there's room, else in between that track's clips (`TRACK` = the number of tracks makes a new one) | the clip's new number, with `TRACK` |
 | `CROSSFADE` | `CLIP/N/A,LENGTH/N/A,KIND/K`: crossfade `LENGTH` ms from the clip before it on its track (0 = a plain cut); a gap between them closes first, then the clips overlap, so it and the ones after it move earlier. `KIND` is an ffmpeg `xfade` transition (`fade`, `fadeblack`, `wipeleft`, `slideleft`, `circleopen`, ...) | the length set (shortened if it didn't fit) |
+| `RENDERAHEAD` | `ON/S,OFF/S`: background rendering for previews | `ON\|OFF <ready> <pieces>` |
 | `PLAY` | `AT/N,STOP/S`: play in the preview window from `AT` ms to the end, or stop | |
 | `PREVIEW` | `AT/N,STOP/S`: preview from `AT` ms in 10 s windows until stopped | the playlist's path |
 | `CACHE` | `ON/S,OFF/S,WIDTH/N,AUTO/S` (preview copies) | `ON\|OFF <width> <waiting>` |
@@ -356,6 +357,16 @@ instant, and playing is cheaper too. Previews scale with `fast_bilinear`
 and keep their sound at 44.1 kHz (the player's rate); exports use the
 better scaler and 48 kHz. If playing can't keep up, the log says so when
 it stops, with how long the sound was missing.
+
+**Rendered ahead.** While the window is left alone (and the preview
+copies are made), Formbrod renders the edit in 10-second pieces into the
+cache drawer, starting where you last played. Playing a rendered piece
+is cheap, one small file with nothing to scale or mix, so a preview that
+is too heavy to render live still plays smoothly once it's rendered;
+pieces that aren't yet are rendered live as before. Only the pieces an
+edit touches are rendered again. *Settings → Render previews in the
+background* (setting `BackgroundRender`) turns it off; the status line
+says how many pieces are ready.
 
 The preview window can be made any size: the picture is scaled to fit,
 keeping its shape, by the graphics card where it can (compositing),

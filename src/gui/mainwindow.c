@@ -100,7 +100,7 @@ enum {
     MID_NEW, MID_OPEN, MID_SAVE, MID_SAVE_AS,
     MID_FIT_FIT, MID_FIT_FILL, MID_FIT_STRETCH, MID_SHOW_PICTURES,
     MID_WRITE_LOG, MID_TRACK_APPEND, MID_TRACK_MUTE, MID_TRACK_HIDE,
-    MID_TRACK_REMOVE, MID_PROXIES, MID_PROXY_SIZE_MENU,
+    MID_TRACK_REMOVE, MID_PROXIES, MID_BG_RENDER, MID_PROXY_SIZE_MENU,
     MID_PROXY_AUTO, MID_PROXY_320, MID_PROXY_480, MID_PROXY_640,
     MID_XFADE_MENU, MID_CLIP_WINDOW,
     MID_XFADE_KIND = 150,    /* + index in XfadeKinds */
@@ -508,6 +508,12 @@ static int update_menu_items(BOOL apply)
                     else
                         flags &= ~CHECKED;
                 }
+                if (id == MID_BG_RENDER) {
+                    if (App_BackgroundRender())
+                        flags |= CHECKED;
+                    else
+                        flags &= ~CHECKED;
+                }
                 if (id == MID_SHOW_PICTURES) {
                     if (show_pictures())
                         flags |= CHECKED;
@@ -657,6 +663,10 @@ static BOOL make_menus(struct Screen *scr)
     add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_PROXIES), NULL, MID_PROXIES);
     nm[n - 1].nm_Flags = CHECKIT | MENUTOGGLE |
                          (App_ProxiesEnabled() ? CHECKED : 0);
+    add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_BACKGROUND_RENDER), NULL,
+             MID_BG_RENDER);
+    nm[n - 1].nm_Flags = CHECKIT | MENUTOGGLE |
+                         (App_BackgroundRender() ? CHECKED : 0);
     add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_PROXY_SIZE), NULL,
              MID_PROXY_SIZE_MENU);
     for (i = 0; i < NUM_PROXY_ITEMS; i++) {
@@ -871,6 +881,9 @@ static void handle_menu(uint32 id)
     case MID_PROXIES:
         /* A toggle, like Show frame pictures below. */
         App_SetProxies(!App_ProxiesEnabled());
+        break;
+    case MID_BG_RENDER:
+        App_SetBackgroundRender(!App_BackgroundRender());
         break;
     case MID_SHOW_PICTURES:
         /* A toggle: the menu has already flipped its checkmark, and

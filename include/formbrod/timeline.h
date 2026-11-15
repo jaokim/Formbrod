@@ -285,6 +285,8 @@ fb_ms_t FB_TimelineDuration(const FBTimeline *tl);
  * `from` for `len` ms, moved to start at 0. Clips are cut to the window,
  * clips outside it left out; tracks, sources and gaps stay as they are.
  * A crossfade the window cuts into becomes what's left of the overlap.
+ * The window keeps the whole edit's frame size and rate (in `format`), so
+ * every stretch of it comes out the same shape.
  * For previews from the playhead. Effects keep their settings, so a fade
  * on a clip cut by the window is placed from the cut. Returns how many
  * clips are left. */

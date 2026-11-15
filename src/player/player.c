@@ -126,6 +126,31 @@ FBFrameSink FB_PlayerSink(FBPlayer *pl)
     return sink;
 }
 
+static int feed_video(void *ud, const unsigned char *argb, int w, int h,
+                      int stride, fb_ms_t pts)
+{
+    FBPlayerFeed *f = ud;
+
+    return FB_PlayerPushVideo(f->pl, argb, w, h, stride, pts + f->offset);
+}
+
+static int feed_audio(void *ud, const short *s, int frames, fb_ms_t pts)
+{
+    FBPlayerFeed *f = ud;
+
+    return FB_PlayerPushAudio(f->pl, s, frames, pts + f->offset);
+}
+
+FBFrameSink FB_PlayerFeedSink(FBPlayerFeed *feed)
+{
+    FBFrameSink sink;
+
+    sink.Video = feed_video;
+    sink.Audio = feed_audio;
+    sink.ud = feed;
+    return sink;
+}
+
 void FB_PlayerSetEnded(FBPlayer *pl)
 {
     pl->ended = 1;

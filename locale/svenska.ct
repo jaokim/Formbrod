@@ -590,3 +590,9 @@ Inte tillräckligt med minne
 MSG_STATUS_PLAYING_SILENT
 Spelar från %s, utan ljud (AHI går inte att öppna)
 ;
+MSG_STATUS_RENDERED_AHEAD
+Förhandsvisningen förberäknad: %ld av %ld delar
+;
+MSG_MENU_BACKGROUND_RENDER
+Förberäkna förhandsvisningar i bakgrunden
+;

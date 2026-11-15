@@ -66,6 +66,16 @@ void FB_PlayerFree(FBPlayer *pl);
 /* A sink for FBBackend.Play that fills this player. */
 FBFrameSink FB_PlayerSink(FBPlayer *pl);
 
+/* The same for a job that is one step of several (render.h): its frames'
+ * times are moved by `offset` ms, where the step starts in the player's
+ * time. The feed must live while the job runs. */
+typedef struct FBPlayerFeed {
+    FBPlayer *pl;
+    fb_ms_t   offset;
+} FBPlayerFeed;
+
+FBFrameSink FB_PlayerFeedSink(FBPlayerFeed *feed);
+
 /* Taking frames from the backend (the sink's callbacks): 0 taken, 1 full
  * (offer it again later). A picture is copied. */
 int  FB_PlayerPushVideo(FBPlayer *pl, const unsigned char *argb, int width,

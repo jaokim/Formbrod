@@ -12,6 +12,7 @@
 #include "version.h"
 #include "locale/catalog.h"
 #include "player/audio.h"
+#include "formbrod/render.h"
 
 #include <time.h>
 
@@ -24,6 +25,14 @@
 static void cache_start(void);
 static void cache_request(FBSource *src);
 static void cache_stop(void);
+
+/* Every change to the edit goes through here: it's unsaved, and what the
+ * background renders (render.h) has to be looked at again. */
+static void edited(void)
+{
+    App.modified = 1;
+    App.gen++;
+}
 static int preview_window_done(const FBResult *r);
 
 FBApp App;
@@ -147,6 +156,7 @@ int App_NewProject(void)
     FB_TimelineInit(&App.timeline);
     App.project[0] = '\0';
     App.modified = 0;
+    App.gen++;          /* another edit: pieces to render again */
     App_SetStatus("%s", FB_Str(MSG_STATUS_NEW_PROJECT));
     return 0;
 }
@@ -259,6 +269,7 @@ int App_OpenProject(const char *path)
     strncpy(App.project, path, sizeof(App.project) - 1);
     App.project[sizeof(App.project) - 1] = '\0';
     App.modified = 0;
+    App.gen++;          /* another edit: pieces to render again */
     if (missing)
         App_SetStatus(FB_Str(MSG_STATUS_OPENED_MISSING), path, missing);
     else
@@ -389,7 +400,7 @@ int App_AddFile(const char *path)
         App_SetStatus("%s", FB_Str(MSG_STATUS_TOO_MANY));
         return -1;
     }
-    App.modified = 1;
+    edited();
     App_SetStatus(FB_Str(MSG_STATUS_ADDED), path);
     return tl->num_tracks - 1;
 }
@@ -419,7 +430,7 @@ int App_AppendFile(int track, const char *path)
         App_SetStatus("%s", FB_Str(MSG_STATUS_TOO_MANY));
         return -1;
     }
-    App.modified = 1;
+    edited();
     App_SetStatus(FB_Str(MSG_STATUS_ADDED), path);
     return 0;
 }
@@ -430,7 +441,7 @@ int App_Split(int track, fb_ms_t at)
         App_SetStatus("%s", FB_Str(MSG_STATUS_NOTHING_TO_SPLIT));
         return -1;
     }
-    App.modified = 1;
+    edited();
     return 0;
 }
 
@@ -450,7 +461,7 @@ int App_RemoveTrack(int track)
     if (!valid_track(track))
         return -1;
     FB_TimelineRemoveTrack(&App.timeline, track);
-    App.modified = 1;
+    edited();
     return 0;
 }
 
@@ -459,7 +470,7 @@ int App_SetTrackMuted(int track, int muted)
     if (!valid_track(track))
         return -1;
     App.timeline.tracks[track].muted = muted != 0;
-    App.modified = 1;
+    edited();
     return 0;
 }
 
@@ -468,7 +479,7 @@ int App_SetTrackHidden(int track, int hidden)
     if (!valid_track(track))
         return -1;
     App.timeline.tracks[track].hidden = hidden != 0;
-    App.modified = 1;
+    edited();
     return 0;
 }
 
@@ -522,7 +533,7 @@ int App_MoveClip(int clip, fb_ms_t start)
         App_SetStatus(FB_Str(MSG_STATUS_TOO_EARLY), when);
         return -1;
     }
-    App.modified = 1;
+    edited();
     FB_FormatTimecode(when, sizeof(when), FB_US(start), FB_US(100), 0,
                       Locale_DecimalPoint());
     App_SetStatus(FB_Str(MSG_STATUS_MOVED),
@@ -546,7 +557,7 @@ fb_ms_t App_SetCrossfade(int clip, fb_ms_t len, const char *kind)
         App_SetStatus("%s", FB_Str(MSG_STATUS_CANT_CROSSFADE));
         return -1;
     }
-    App.modified = 1;
+    edited();
     name = file_part(tl->sources[tl->clips[clip].source].path);
     if (got == 0) {
         App_SetStatus(FB_Str(MSG_STATUS_NO_CROSSFADE), name);
@@ -581,7 +592,7 @@ int App_MoveClipTo(int clip, int track, fb_ms_t at)
         App_SetStatus(FB_Str(MSG_STATUS_WRONG_TRACK), name);
         return -1;
     }
-    App.modified = 1;
+    edited();
     FB_FormatTimecode(when, sizeof(when), FB_US(tl->clips[idx].start),
                       FB_US(100), 0, Locale_DecimalPoint());
     App_SetStatus(FB_Str(MSG_STATUS_MOVED), name, when);
@@ -598,7 +609,7 @@ int App_TrimClip(int clip, fb_ms_t in, fb_ms_t out)
         App_SetStatus("%s", FB_Str(MSG_STATUS_BAD_TRIM));
         return -1;
     }
-    App.modified = 1;
+    edited();
     trimmed_status(clip);
     return 0;
 }
@@ -655,7 +666,7 @@ int App_RemoveClip(int clip)
 {
     if (FB_TimelineRemoveClip(&App.timeline, clip) != 0)
         return -1;
-    App.modified = 1;
+    edited();
     return 0;
 }
 
@@ -674,7 +685,7 @@ int App_AddEffect(int clip, const char *module)
         return -1;
     for (i = 0; i < mod->num_params; i++)
         FB_EffectSetParam(fx, mod->params[i].name, mod->params[i].def);
-    App.modified = 1;
+    edited();
     return App.timeline.clips[clip].num_effects - 1;
 }
 
@@ -689,7 +700,7 @@ int App_SetEffectParam(int clip, int effect, const char *name, double value)
         return -1;
     if (FB_EffectSetParam(&c->effects[effect], name, value) != 0)
         return -1;
-    App.modified = 1;
+    edited();
     return 0;
 }
 
@@ -698,7 +709,7 @@ int App_RemoveEffect(int clip, int effect)
     if (clip < 0 || clip >= App.timeline.num_clips ||
         FB_ClipRemoveEffect(&App.timeline.clips[clip], effect) != 0)
         return -1;
-    App.modified = 1;
+    edited();
     return 0;
 }
 
@@ -754,7 +765,7 @@ int App_SetFades(int clip, fb_ms_t in, fb_ms_t out)
         FB_EffectSetParam(&c->effects[fx], "in", in / 1000.0);
         FB_EffectSetParam(&c->effects[fx], "out", out / 1000.0);
     }
-    App.modified = 1;
+    edited();
     return 0;
 }
 
@@ -769,7 +780,7 @@ int App_SetVolume(int clip, double volume)
     if (volume > FB_MAX_VOLUME)
         volume = FB_MAX_VOLUME;
     App.timeline.clips[clip].volume = volume;
-    App.modified = 1;
+    edited();
     return 0;
 }
 
@@ -782,7 +793,7 @@ int App_SetClipFit(int clip, int fit)
     if (fit < FB_FIT_DEFAULT || fit >= FB_FIT_COUNT)
         return -1;
     App.timeline.clips[clip].fit = (FBFit)fit;
-    App.modified = 1;
+    edited();
     return 0;
 }
 
@@ -791,7 +802,7 @@ int App_SetDefaultFit(int fit)
     if (fit <= FB_FIT_DEFAULT || fit >= FB_FIT_COUNT)
         return -1;
     App.timeline.format.fit = (FBFit)fit;
-    App.modified = 1;
+    edited();
     return 0;
 }
 
@@ -799,7 +810,7 @@ int App_SetFrameSize(int width, int height)
 {
     if (width == 0 && height == 0) {
         App.timeline.format.width = App.timeline.format.height = 0;
-        App.modified = 1;
+        edited();
         return 0;
     }
     if (width < 2 || height < 2 || width > 16384 || height > 16384)
@@ -807,7 +818,7 @@ int App_SetFrameSize(int width, int height)
     /* stored even, as the encoders need */
     App.timeline.format.width  = width & ~1;
     App.timeline.format.height = height & ~1;
-    App.modified = 1;
+    edited();
     return 0;
 }
 
@@ -815,14 +826,14 @@ int App_SetFrameRate(int num, int den)
 {
     if (num == 0 && den == 0) {
         App.timeline.format.fps_num = App.timeline.format.fps_den = 0;
-        App.modified = 1;
+        edited();
         return 0;
     }
     if (num <= 0 || den <= 0 || num / den > 1000)
         return -1;
     App.timeline.format.fps_num = num;
     App.timeline.format.fps_den = den;
-    App.modified = 1;
+    edited();
     return 0;
 }
 
@@ -1035,8 +1046,151 @@ static void cache_stop(void)
         return;
     /* Cancel closes the files at once, so the partial one can go. */
     App.cache_backend->Cancel(App.cache_backend);
-    FB_CacheAbort(&App.cache);
+    if (App.caching == 2)
+        FB_CacheCommit(&App.cache, App.bg.key, FB_CACHE_RENDER, 0);
+    else
+        FB_CacheAbort(&App.cache);
     App.caching = 0;
+}
+
+/* ---- Background rendering ------------------------------------------------ */
+
+#define MAX_PIECES 720                      /* two hours of edit */
+
+static char BgKeys[MAX_PIECES][FB_KEY_LEN]; /* each piece's key */
+static char BgOld[MAX_PIECES][FB_KEY_LEN];  /* before the last edit */
+static unsigned char BgState[MAX_PIECES];   /* 0 to do, 1 there, 2 failed */
+static FBPlayStep PlaySteps[MAX_PIECES];
+
+int App_BackgroundRender(void)
+{
+    return strcmp(Prefs_GetString("BackgroundRender", "1"), "0") != 0;
+}
+
+void App_SetBackgroundRender(int on)
+{
+    Prefs_SetString("BackgroundRender", on ? "1" : "0");
+    Prefs_Save();
+    if (!on && App.caching == 2)
+        cache_stop();
+    App.bg.done_valid = 0;
+}
+
+/* The pieces' keys and which are rendered, for the edit as it is now.
+ * Worked out again only after an edit. */
+static void bg_keys(void)
+{
+    int i, n;
+
+    if (App.bg.keys_valid && App.bg.keys_gen == App.gen)
+        return;
+    n = FB_RenderPieces(&App.timeline);
+    if (n > MAX_PIECES)
+        n = MAX_PIECES;
+    memcpy(BgOld, BgKeys, sizeof(BgKeys));
+    for (i = 0; i < n; i++) {
+        if (FB_RenderPieceKey(&App.timeline, i, BgKeys[i]) != 0)
+            BgKeys[i][0] = '\0';
+        BgState[i] = !BgKeys[i][0] ? 2 :
+                     FB_CacheFind(&App.cache, BgKeys[i], FB_CACHE_RENDER,
+                                  NULL, 0) ? 1 : 0;
+    }
+    for (; i < MAX_PIECES; i++)
+        BgKeys[i][0] = '\0';
+    App.bg.pieces = n;
+    App.bg.keys_gen = App.gen;
+    App.bg.keys_valid = 1;
+}
+
+void App_RenderedPieces(int *ready, int *total)
+{
+    int i;
+
+    bg_keys();
+    *total = App.bg.pieces;
+    *ready = 0;
+    for (i = 0; i < App.bg.pieces; i++)
+        if (BgState[i] == 1)
+            (*ready)++;
+}
+
+/* Whether there may be pieces to render (cheap: no keys worked out). */
+static int bg_wanted(void)
+{
+    return App.cache_backend && App_BackgroundRender() &&
+           FB_RenderPieces(&App.timeline) > 0 &&
+           !(App.bg.done_valid && App.bg.done_gen == App.gen);
+}
+
+/* The next piece to render, nearest after where it was last played
+ * first; its job into `job`. 0 if every piece is rendered. */
+static int bg_next(FBJob *job)
+{
+    char part[FB_PATH_LEN];
+    int k, i, n, start;
+
+    if (!bg_wanted())
+        return 0;
+    bg_keys();
+    n = App.bg.pieces;
+    start = FB_RenderPieceAt(App.bg.near);
+    if (start >= n)
+        start = 0;
+    for (k = 0; k < n; k++) {
+        i = (start + k) % n;
+        if (BgState[i] != 0)
+            continue;
+        if (FB_CacheFind(&App.cache, BgKeys[i], FB_CACHE_RENDER, NULL, 0)) {
+            BgState[i] = 1;                 /* made meanwhile */
+            continue;
+        }
+        if (FB_CachePath(&App.cache, BgKeys[i], FB_CACHE_RENDER, 1, part,
+                         sizeof(part)) != 0 ||
+            FB_RenderPieceJob(job, with_proxies(), i, part) != FB_JOB_OK) {
+            BgState[i] = 2;
+            continue;
+        }
+        App.bg.piece = i;
+        strcpy(App.bg.key, BgKeys[i]);
+        App.bg.gen = App.gen;
+        return 1;
+    }
+    App.bg.done_gen = App.gen;              /* all there, for this edit */
+    App.bg.done_valid = 1;
+    FB_Log(FB_LOG_INFO, "render", "Every piece of the edit is rendered");
+    return 0;
+}
+
+/* A piece is done (or failed): keep it, and remove the one it replaces. */
+static void bg_finished(int ok)
+{
+    int i = App.bg.piece, j;
+
+    ok = ok && FB_CacheCommit(&App.cache, App.bg.key, FB_CACHE_RENDER, 1)
+               == 0;
+    if (!ok)
+        FB_CacheCommit(&App.cache, App.bg.key, FB_CACHE_RENDER, 0);
+    if (App.bg.keys_valid && App.bg.keys_gen == App.gen && i < App.bg.pieces
+        && strcmp(BgKeys[i], App.bg.key) == 0)
+        BgState[i] = ok ? 1 : 2;
+    FB_Log(ok ? FB_LOG_INFO : FB_LOG_WARNING, "render",
+           ok ? "Piece %d (from %lld ms) rendered" : "Piece %d (from %lld ms) "
+           "couldn't be rendered", i, (long long)FB_RenderPieceStart(i));
+
+    /* What this piece was before the last edit, unless another piece
+     * still has that key: it would only fill the cache drawer. */
+    if (ok && i < MAX_PIECES && BgOld[i][0] && strcmp(BgOld[i], App.bg.key)) {
+        char old[FB_PATH_LEN];
+
+        for (j = 0; j < App.bg.pieces; j++)
+            if (strcmp(BgKeys[j], BgOld[i]) == 0)
+                break;
+        if (j == App.bg.pieces &&
+            FB_CachePath(&App.cache, BgOld[i], FB_CACHE_RENDER, 0, old,
+                         sizeof(old)) == 0)
+            remove(old);
+        BgOld[i][0] = '\0';
+    }
 }
 
 void App_SetProxies(int on)
@@ -1070,7 +1224,8 @@ void App_SetProxyWidth(int width)
 int App_CacheBusy(void)
 {
     return App.caching ||
-           (App.cache_backend && FB_CachePending(&App.cache) > 0);
+           (App.cache_backend && FB_CachePending(&App.cache) > 0) ||
+           bg_wanted();
 }
 
 int App_PollCache(void)
@@ -1085,8 +1240,21 @@ int App_PollCache(void)
     if (!App.caching) {
         int t = FB_CacheNextJob(&App.cache, &job);
 
-        if (t < 0)
+        /* Proxies first; then the edit, piece by piece. */
+        if (t < 0) {
+            if (!bg_next(&job))
+                return 0;
+            FB_Log(FB_LOG_INFO, "render", "Rendering piece %d (from %lld "
+                   "ms) in the background", App.bg.piece,
+                   (long long)FB_RenderPieceStart(App.bg.piece));
+            log_job(&job);
+            if (App.cache_backend->Submit(App.cache_backend, &job) != 0) {
+                bg_finished(0);
+                return 0;
+            }
+            App.caching = 2;
             return 0;
+        }
         FB_Log(FB_LOG_INFO, "cache", "Making a proxy of %s",
                App.cache.tasks[t].source.path);
         log_job(&job);
@@ -1100,9 +1268,36 @@ int App_PollCache(void)
         return 0;
     }
 
+    /* An edit since this piece was started: if it changed the piece,
+     * what's being rendered is already out of date. Looked at once per
+     * edit. */
+    if (App.caching == 2 && App.bg.gen != App.gen) {
+        char k[FB_KEY_LEN];
+
+        App.bg.gen = App.gen;
+        if (FB_RenderPieceKey(&App.timeline, App.bg.piece, k) != 0 ||
+            strcmp(k, App.bg.key) != 0) {
+            FB_Log(FB_LOG_INFO, "render", "Piece %d was changed: started "
+                   "again later", App.bg.piece);
+            cache_stop();
+            return 0;
+        }
+    }
+
     p = App.cache_backend->Progress(App.cache_backend);
     if (p.state == FB_RENDER_RUNNING)
         return 0;
+    if (App.caching == 2) {
+        FBResult r = App.cache_backend->Result(App.cache_backend);
+        int ready, total;
+
+        App.caching = 0;
+        bg_finished(r.state == FB_RENDER_DONE);
+        App_RenderedPieces(&ready, &total);
+        App_SetStatus(FB_Str(MSG_STATUS_RENDERED_AHEAD), (long)ready,
+                      (long)total);
+        return 1;
+    }
     {
         FBResult r = App.cache_backend->Result(App.cache_backend);
         int t = App.cache.current;
@@ -1415,14 +1610,56 @@ static long take_audio(void *ud, short *out, long frames)
     return real;
 }
 
+/* Starts step i of the play plan: a rendered piece from its file, or a
+ * stretch rendered live. Its frames go to the player at the step's
+ * place. 0, or -1 if it can't be started. */
+static int play_step(int i)
+{
+    static FBTimeline win;   /* large; keep them off the stack */
+    static FBJob job;
+    const FBPlayStep *st = &PlaySteps[i];
+    FBFrameSink sink;
+    char path[FB_PATH_LEN];
+
+    if (st->piece >= 0 &&
+        FB_CacheFind(&App.cache, BgKeys[st->piece], FB_CACHE_RENDER, path,
+                     sizeof(path))) {
+        FB_RenderPlayJob(&job, path, st->offset, st->len, App.play.job_audio);
+        FB_Log(FB_LOG_INFO, "play", "%lld ms from %lld ms: rendered piece %d",
+               (long long)st->len, (long long)st->from, st->piece);
+    } else {
+        FBOutput out;
+        FBJobError err;
+
+        FB_TimelineWindow(&win, with_proxies(), st->from, st->len);
+        memset(&out, 0, sizeof(out));
+        out.quality = FB_QUALITY_PREVIEW;
+        err = FB_JobBuild(&job, &win, &out);
+        if (err != FB_JOB_OK) {
+            FB_Log(FB_LOG_ERROR, "play", "Can't build the job: %s",
+                   FB_JobErrorString(err));
+            return -1;
+        }
+        FB_Log(FB_LOG_INFO, "play", "%lld ms from %lld ms: live",
+               (long long)st->len, (long long)st->from);
+        log_job(&job);
+    }
+    App.play.step = i;
+    App.play.feed.pl = &App.play.pl;
+    App.play.feed.offset = st->from - App.play.from;
+    sink = FB_PlayerFeedSink(&App.play.feed);
+    return App.backend->Play(App.backend, &job, &sink);
+}
+
 int App_PlayStart(fb_ms_t from)
 {
     static FBTimeline win;   /* large; keep them off the stack */
     static FBJob job;
+    static unsigned char rendered[MAX_PIECES];
     FBOutput out;
-    FBFrameSink sink;
     FBJobError err;
     char at[32];
+    int i, ready = 0;
 
     App_PlayStop();
     App_PreviewStop();
@@ -1449,7 +1686,21 @@ int App_PlayStart(fb_ms_t from)
         App_SetStatus("%s", App_JobErrorString(err));
         return -1;
     }
-    log_job(&job);
+    App.play.job_audio = job.audio_out[0] != 0;
+
+    /* The plan: rendered pieces from their files, the rest live. */
+    bg_keys();
+    for (i = 0; i < App.bg.pieces; i++) {
+        rendered[i] = BgState[i] == 1;
+        ready += rendered[i];
+    }
+    App.play.steps = FB_RenderPlan(&App.timeline, from,
+                                   App.bg.pieces ? rendered : NULL,
+                                   PlaySteps, MAX_PIECES);
+    FB_Log(FB_LOG_INFO, "play", "%d of %d pieces rendered; %d steps", ready,
+           App.bg.pieces, App.play.steps);
+    if (App.play.steps <= 0)
+        return -1;
 
     /* Sound through AHI, on the unit in the settings (AHIUnit). If it
      * can't be had, it plays silently and says so. */
@@ -1459,8 +1710,7 @@ int App_PlayStart(fb_ms_t from)
         App_SetStatus("%s", FB_Str(MSG_STATUS_NO_MEMORY));
         return -1;
     }
-    sink = FB_PlayerSink(&App.play.pl);
-    if (App.backend->Play(App.backend, &job, &sink) != 0) {
+    if (play_step(0) != 0) {
         App_SetStatus(FB_Str(MSG_STATUS_FAILED),
                       App.backend->Result(App.backend).message);
         FB_PlayerFree(&App.play.pl);
@@ -1487,6 +1737,7 @@ static void play_stop(const char *why)
     if (!App.play.on)
         return;
     FB_FormatTimeMs(at, sizeof(at), App_PlayPosition(), Locale_DecimalPoint());
+    App.bg.near = App_PlayPosition();       /* render from here on next */
     App.play.on = 0;
     if (!App.play.ended)
         App.backend->Cancel(App.backend);
@@ -1547,6 +1798,14 @@ const FBPlayFrame *App_PollPlay(long *sleep_ms)
         if (p.state != FB_RENDER_RUNNING) {
             FBResult r = App.backend->Result(App.backend);
 
+            /* That step is done: the next, if there is one. */
+            if (r.state == FB_RENDER_DONE &&
+                App.play.step + 1 < App.play.steps) {
+                if (play_step(App.play.step + 1) == 0)
+                    goto stepped;
+                r = App.backend->Result(App.backend);
+                r.state = FB_RENDER_FAILED;
+            }
             App.play.ended = 1;
             FB_PlayerSetEnded(pl);
             if (r.state == FB_RENDER_FAILED) {
@@ -1559,6 +1818,7 @@ const FBPlayFrame *App_PollPlay(long *sleep_ms)
             }
         }
     }
+stepped:
 
     now = FB_BackendClockUs();
     if (!FB_PlayerStarted(pl) && FB_PlayerReady(pl)) {
