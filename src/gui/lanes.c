@@ -113,6 +113,8 @@ struct LanesData {
     /* The last click on a clip, to see a double-click. */
     int               click_clip;
     uint32            click_secs, click_micros;
+    FBWaveFunc        wave;
+    APTR              wave_data;
 };
 
 /* ---- Rows ------------------------------------------------------------ */
@@ -131,9 +133,10 @@ static int track_has_sound(const FBTimeline *tl, int track)
 static long row_height(int kind, int font_h)
 {
     switch (kind) {
+    /* Sound rows are tall enough for a waveform. */
     case ROW_PICTURE: return font_h + 12;
-    case ROW_LINKED:  return font_h / 2 + 6;
-    default:          return font_h + 8;
+    case ROW_LINKED:  return font_h + 4;
+    default:          return font_h + 14;
     }
 }
 
@@ -407,11 +410,35 @@ static void draw_clip(const struct LanesData *ld, struct trackDraw *d,
         Track_SetRGB(rp, fill);
         Track_FillClipped(rp, &body, left + b0 + 1, top + 1, left + x1 - 1,
                           bottom - 1);
-        if (row->kind == ROW_LINKED) {
-            /* No waveform yet: a line through the middle. */
-            Track_SetRGB(rp, edge);
-            Track_FillClipped(rp, &body, left + b0 + 2, top + row->h / 2,
-                              left + x1 - 2, top + row->h / 2);
+        if (src->has_audio && row->kind != ROW_PICTURE) {
+            /* The waveform, inside the frame; until it's there, a line
+             * through the middle. */
+            FBWaveRequest req;
+            fb_ms_t in = c->in;
+
+            if ((ld->mode == MODE_TRIM_IN || ld->mode == MODE_TRIM_OUT) &&
+                clip == ld->drag_clip)
+                in = ld->drag_in;
+            req.source   = c->source;
+            req.source_t = FB_US(in);        /* at x0, see clip_span() */
+            req.step     = ld->tb->view.per_px;
+            req.x        = left + x0;
+            req.mid      = top + row->h / 2;
+            req.half     = row->h / 2 - 2;
+            req.volume   = c->volume;
+            req.rgb      = edge;
+            req.rp       = rp;
+            req.clip     = body;
+            req.clip.MinX += 1;
+            req.clip.MaxX -= 1;
+            req.clip.MinY += 1;
+            req.clip.MaxY -= 1;
+            if (req.clip.MinX > req.clip.MaxX || req.half < 1 ||
+                !ld->wave || !ld->wave(ld->wave_data, &req)) {
+                Track_SetRGB(rp, edge);
+                Track_FillClipped(rp, &body, left + b0 + 2, req.mid,
+                                  left + x1 - 2, req.mid);
+            }
         }
     }
     (void)text;                 /* the name comes last (draw_clip_name) */
@@ -1110,6 +1137,14 @@ static BOOL lanes_set(struct LanesData *ld, struct TagItem *tags)
             break;
         case LANES_SoundName:
             ld->sound_name = (CONST_STRPTR)ti->ti_Data;
+            break;
+        case LANES_WaveFunc:
+            ld->wave = (FBWaveFunc)ti->ti_Data;
+            redraw = TRUE;
+            break;
+        case LANES_WaveData:
+            ld->wave_data = (APTR)ti->ti_Data;
+            redraw = TRUE;
             break;
         }
     }
