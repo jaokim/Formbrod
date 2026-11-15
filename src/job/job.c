@@ -347,8 +347,8 @@ FBJobError FB_JobBuild(FBJob *job, const FBTimeline *tl, const FBOutput *out)
         if (use[t].audio)
             atracks++;
     }
-    if (vtracks == 0)
-        return FB_JOB_EMPTY;      /* nothing to see */
+    if (vtracks == 0 && atracks == 0)
+        return FB_JOB_EMPTY;      /* nothing to see or hear */
 
     for (i = 0; i < tl->num_clips; i++) {
         const FBClip *c = &tl->clips[i];
@@ -416,6 +416,11 @@ FBJobError FB_JobBuild(FBJob *job, const FBTimeline *tl, const FBOutput *out)
     } else if (out_w > 0) {
         f.legacy_w = out_w;
     }
+    /* Sound with no picture (a stretch where only the music goes on, cut
+     * from an edit): black, the edit's size. Without a known size there
+     * is nothing to show. */
+    if (vtracks == 0 && f.fw <= 0)
+        return FB_JOB_EMPTY;
     if (need_size && f.fw <= 0)
         return FB_JOB_NEED_SIZE;
     FB_TimelineFrameRate(tl, &f.fps_num, &f.fps_den);
@@ -506,6 +511,12 @@ FBJobError FB_JobBuild(FBJob *job, const FBTimeline *tl, const FBOutput *out)
         }
         buf_printf(&b, ";");
     }
+
+    if (vtracks == 0)
+        buf_printf(&b, "color=c=0x%06lX:s=%dx%d:r=%d/%d:d=%.3f,setsar=1[outv];",
+                   (unsigned long)(tl->format.pad_color & 0xFFFFFF),
+                   f.fw, f.fh, f.fps_num > 0 ? f.fps_num : 25,
+                   f.fps_num > 0 ? f.fps_den : 1, secs(length));
 
     /* Picture tracks on top of each other, bottom first. */
     if (vtracks > 1) {

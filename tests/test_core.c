@@ -673,10 +673,16 @@ static void test_job_tracks(void)
     CHECK(strstr(job.filtergraph, "overlay") == NULL);
     CHECK(strstr(job.filtergraph, "concat=n=1:v=1:a=1[outv][outa]") != NULL);
 
-    /* Only sound left: nothing to see. */
+    /* Only sound left: black with the sound, like a gap. */
     tl.tracks[0].hidden = 1;
     tl.tracks[1].muted = 0;
+    CHECK(FB_JobBuild(&job, &tl, &out) == FB_JOB_OK);
+    CHECK(strstr(job.filtergraph, "color=c=") != NULL);
+    CHECK(strstr(job.filtergraph, "overlay") == NULL);
+    /* Nothing to see or hear: empty. */
+    tl.tracks[0].muted = tl.tracks[1].muted = 1;
     CHECK(FB_JobBuild(&job, &tl, &out) == FB_JOB_EMPTY);
+    tl.tracks[0].muted = tl.tracks[1].muted = 0;
     tl.tracks[0].hidden = 0;
     tl.tracks[2].hidden = 0;
 
@@ -1520,6 +1526,7 @@ static void test_render_pieces(void)
 {
     static FBTimeline tl, t2;
     static FBJob job;
+    FBOutput out;
     char k0[FB_KEY_LEN], k1[FB_KEY_LEN], k2[FB_KEY_LEN], k[FB_KEY_LEN];
     int v, m, tr;
 
@@ -1575,6 +1582,27 @@ static void test_render_pieces(void)
         }
         CHECK(FB_RenderPieceJob(&job, &t3, 2, "T:p.mov") == FB_JOB_OK);
         CHECK(strstr(job.filtergraph, "320:180") != NULL);
+    }
+
+    /* The music goes on after the pictures end: a stretch with sound
+     * only is black, the edit's size, and its piece can be rendered. */
+    {
+        static FBTimeline t4, w4;
+
+        t4 = tl;
+        t4.clips[2].out = 32000;              /* music to 32 s */
+        CHECK(FB_RenderPieces(&t4) == 4);
+        CHECK(FB_TimelineWindow(&w4, &t4, 30000, 2000) == 1);
+        memset(&out, 0, sizeof(out));
+        strcpy(out.path, "o.mov");
+        out.quality = FB_QUALITY_PREVIEW;
+        CHECK(FB_JobBuild(&job, &w4, &out) == FB_JOB_OK);
+        CHECK(strstr(job.filtergraph, "color=c=0x000000:s=320x180:r=25/1:"
+                                      "d=2.000,setsar=1[outv]") != NULL);
+        CHECK(strstr(job.filtergraph, "[outa]") != NULL);
+        CHECK(job.length == 2000);
+        CHECK(FB_RenderPieceKey(&t4, 3, k) == 0);
+        CHECK(FB_RenderPieceJob(&job, &t4, 3, "T:p.mov") == FB_JOB_OK);
     }
 
     /* Trimming the second clip's end (22 s on) changes only piece 2. */
