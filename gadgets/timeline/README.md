@@ -80,7 +80,9 @@ going through the same code.
 ## Next steps
 
 1. ~~Real thumbnails~~: done, as strips in the cache drawer (`thumbs.h`).
-2. A waveform subclass, and a clip group (header, picture, sound) per file.
+2. ~~Waveforms~~: done in the lanes, through `LANES_WaveFunc` (peaks from
+   `include/formbrod/waves.h`). Still to do: a clip group (header,
+   picture, sound) per file.
 3. Several groups on one timebase, with offsets and a sync lock.
 4. Selecting clips, trim handles, mouse-wheel zoom, ARexx `ZOOM`/`GOTO`.
 5. Drawing into an offscreen bitmap and scrolling it, instead of drawing

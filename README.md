@@ -56,7 +56,8 @@ Early skeleton. Working so far:
 - [x] Real thumbnails in the film strip: a small strip of pictures per
       file, one a second, made in the background (from the preview copy)
       and kept in the cache drawer. Not yet tried on AmigaOS
-- [ ] Waveforms
+- [x] Waveforms on the sound lanes: the loudest sound of every 20 ms,
+      made in the background like the thumbnails. Not yet tried on AmigaOS
 - [ ] Remote rendering on a render server
 
 ## Editing
@@ -334,7 +335,7 @@ requesters last used: `MediaDrawer`, `ProjectDrawer` and `ExportDrawer`, so
 each requester opens where it was last used, also after a restart;
 `ShowPictures` (*Settings → Show frame pictures*): `0` makes the film strip
 show plain blocks with file names and decode nothing, for slower Amigas
-(no thumbnails are made either);
+(no thumbnails or waveforms are made either);
 and for the log file `Log`, `LogFile` and `LogLevel` (see below). Without
 application.library 53 the drawers are only remembered until Formbrod quits.
 
@@ -443,6 +444,24 @@ The film strip shows the edit as pictures, one per cell. They come from a
   couldn't be made is a block in its colour.
 - Zoomed in to less than a second per cell, neighbouring cells show the
   same picture.
+
+## Waveforms
+
+Clips on the sound lanes (a video's sound, and the sound tracks) show
+their sound as a waveform. It comes from a *peak file* made for each file
+with sound: the loudest sample of every 20 ms, one byte each (an hour is
+180 KB), named `<key>.wave1-50.yuv` in the cache drawer.
+
+- It is made in the background with the thumbnails, from the preview copy
+  when there is one (its sound is plain PCM, so there is nothing to
+  decode), else from the file. Ten minutes of AAC takes a few seconds on
+  a PC.
+- The bars are drawn as the square root of the level, so quiet passages
+  still show; the clip's volume is taken into account. Until a file's
+  peaks are there, its clips show a line through the middle.
+- The sound rows are taller than before, to make room for it.
+- *Settings → Show frame pictures* turns waveforms off along with the
+  thumbnails: then nothing is decoded for either.
 
 ## Log file
 

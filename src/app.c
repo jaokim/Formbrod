@@ -1014,17 +1014,18 @@ static void cache_start(void)
            dir, App.cache.proxy_width);
 }
 
-/* Reads the file's fingerprint if needed and asks for its proxy and its
- * thumbnail strip, as the settings say. */
+/* Reads the file's fingerprint if needed and asks for its proxy, its
+ * thumbnail strip and its sound peaks, as the settings say. */
 static void cache_request(FBSource *src)
 {
-    int proxy = App_ProxiesEnabled(), thumbs = App_ThumbsEnabled();
+    int proxy = App_ProxiesEnabled() && src->has_video && !src->still;
+    int thumbs = App_ThumbsEnabled();
     FBCacheState st;
 
-    if (!App.cache_backend || !src->has_video || (!proxy && !thumbs))
+    if (!App.cache_backend || (!proxy && !thumbs) ||
+        (!src->has_video && !src->has_audio))
         return;
-    /* Stills get no proxy, but a thumbnail. */
-    if (!src->key[0] && (thumbs || !src->still) &&
+    if (!src->key[0] &&
         FB_CacheKey(src->path, src->key) != 0) {
         FB_Log(FB_LOG_WARNING, "cache", "%s: can't read its fingerprint",
                src->path);
@@ -1042,6 +1043,10 @@ static void cache_request(FBSource *src)
     if (thumbs &&
         FB_CacheRequestThumbs(&App.cache, src) == FB_CACHE_QUEUED)
         FB_Log(FB_LOG_INFO, "cache", "%s (%s): thumbnails queued",
+               src->path, src->key);
+    if (thumbs &&
+        FB_CacheRequestWave(&App.cache, src) == FB_CACHE_QUEUED)
+        FB_Log(FB_LOG_INFO, "cache", "%s (%s): waveform queued",
                src->path, src->key);
 }
 
@@ -1271,8 +1276,9 @@ int App_PollCache(void)
             return 0;
         }
         FB_Log(FB_LOG_INFO, "cache", "Making %s of %s",
-               App.cache.tasks[t].kind == FB_CACHE_THUMBS ? "thumbnails"
-                                                          : "a proxy",
+               App.cache.tasks[t].kind == FB_CACHE_THUMBS ? "thumbnails" :
+               App.cache.tasks[t].kind == FB_CACHE_WAVE ? "the waveform"
+                                                        : "a proxy",
                App.cache.tasks[t].source.path);
         log_job(&job);
         if (App.cache_backend->Submit(App.cache_backend, &job) != 0) {
@@ -1280,6 +1286,8 @@ int App_PollCache(void)
                    App.cache_backend->Result(App.cache_backend).message);
             if (App.cache.tasks[t].kind == FB_CACHE_THUMBS)
                 FB_ThumbsSetNone(&App.thumbs, App.cache.tasks[t].key);
+            else if (App.cache.tasks[t].kind == FB_CACHE_WAVE)
+                FB_WavesSetNone(&App.waves, App.cache.tasks[t].key);
             FB_CacheFinish(&App.cache, 0);   /* not tried again */
             return 0;
         }
@@ -1343,6 +1351,19 @@ int App_PollCache(void)
             FB_ThumbsSetNone(&App.thumbs, key);
             return 1;
         }
+        if (kind == FB_CACHE_WAVE) {
+            if (FB_CacheFinish(&App.cache, r.state == FB_RENDER_DONE)
+                == FB_CACHE_READY) {
+                FB_Log(FB_LOG_INFO, "cache", "Waveform of %s is ready",
+                       name);
+                FB_WavesReset(&App.waves, key);
+                return 1;
+            }
+            FB_Log(FB_LOG_WARNING, "cache", "No waveform of %s: %s",
+                   name, r.message);
+            FB_WavesSetNone(&App.waves, key);
+            return 1;
+        }
         if (FB_CacheFinish(&App.cache, r.state == FB_RENDER_DONE)
             == FB_CACHE_READY) {
             FB_Log(FB_LOG_INFO, "cache", "Proxy of %s is ready", name);
@@ -1394,12 +1415,16 @@ static void thumbs_start(void)
     App.thumbs.lock = thumb_lock;
     App.thumbs.unlock = thumb_unlock;
     App.thumbs.wake = thumb_wake;
+    App.waves.lock = thumb_lock;
+    App.waves.unlock = thumb_unlock;
+    App.waves.wake = thumb_wake;
 #endif
 }
 
 static void thumbs_end(void)
 {
     FB_ThumbsFree(&App.thumbs);
+    FB_WavesFree(&App.waves);
 #ifdef __amigaos4__
     if (ThumbSig >= 0)
         IExec->FreeSignal(ThumbSig);
@@ -1431,6 +1456,7 @@ void App_SetThumbnails(int on)
         /* Nothing more is decoded for them; turning it on asks anew. */
         cache_stop();
         FB_CacheDrop(&App.cache, FB_CACHE_THUMBS);
+        FB_CacheDrop(&App.cache, FB_CACHE_WAVE);
     }
 }
 
@@ -1457,6 +1483,11 @@ int App_ThumbSize(int w, int h)
 int App_LoadThumbs(void)
 {
     return FB_ThumbsLoad(&App.thumbs, &App.cache);
+}
+
+int App_LoadWaves(void)
+{
+    return FB_WavesLoad(&App.waves, &App.cache);
 }
 
 /* ---- Preview from the playhead -------------------------------------------- */

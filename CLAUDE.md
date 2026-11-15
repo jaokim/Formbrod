@@ -41,9 +41,10 @@ through modules and ARexx.
   film strip) and the time axis they share. Their arithmetic is in the
   portable `src/timeline/timeview.c`. Notes in `gadgets/timeline/README.md`.
 - `src/cache/` – the media cache (portable): proxies (`cache.c`), rendered
-  pieces (`render.c`) and film-strip thumbnails (`thumbs.c`: raw ARGB
+  pieces (`render.c`), film-strip thumbnails (`thumbs.c`: raw ARGB
   strips made by ordinary jobs, read into an in-memory store that the
-  film strip draws from without touching files).
+  film strip draws from without touching files) and sound peaks for the
+  lanes' waveforms (`waves.c`, the same way: one byte per 20 ms).
 
 ## Design rules
 

@@ -29,6 +29,8 @@ void   MainWindow_Close(void);
 /* Thumbnails came into memory (App_LoadThumbs): draws the film strip
  * again. */
 void   MainWindow_ThumbsLoaded(void);
+/* The same for waveforms: draws the lanes again. */
+void   MainWindow_WavesLoaded(void);
 
 /* Moves the playhead (and the view, to keep it in sight): while playing,
  * it follows playback. */

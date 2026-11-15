@@ -43,6 +43,7 @@
 #include "timeline.h"
 #include "job.h"
 #include "thumbs.h"
+#include "waves.h"
 
 /* Proxies are read only for previews, which are FB_PREVIEW_WIDTH wide:
  * a wider proxy is decoded and then scaled down for every frame, for
@@ -53,12 +54,13 @@
 /* An intra-only source (MJPEG, DV, ProRes...) at most this wide is
  * already quick to read and gets no proxy. */
 #define FB_PROXY_SKIP_WIDTH 1024
-#define FB_CACHE_MAX_TASKS  (FB_MAX_SOURCES * 2)
+#define FB_CACHE_MAX_TASKS  (FB_MAX_SOURCES * 3)
 
 typedef enum {
     FB_CACHE_PROXY = 0,
     FB_CACHE_RENDER,      /* a rendered piece of the edit (render.h) */
     FB_CACHE_THUMBS,      /* a thumbnail strip (thumbs.h), "<key>.thumbs1-86x48.rgb" */
+    FB_CACHE_WAVE,        /* sound peaks (waves.h), "<key>.wave1-50.yuv" */
     FB_CACHE_NUM_KINDS
 } FBCacheKind;
 
@@ -96,7 +98,9 @@ void FB_CacheKeyData(const void *data, size_t len, char key[FB_KEY_LEN]);
 
 /* The recipe part of a cached file's name: "proxy1-320", for a rendered
  * piece "render1-320" (the preview's width), for a thumbnail strip
- * "thumbs1-86x48". Strips end in ".rgb", the others in ".mov". */
+ * "thumbs1-86x48", for sound peaks "wave1-50". Strips end in ".rgb" and
+ * peaks in ".yuv" (both raw video to ffmpeg; the peaks are grey, which is
+ * all Y), the others in ".mov". */
 void FB_CacheRecipe(const FBCache *c, FBCacheKind kind, char *out,
                     size_t len);
 
@@ -107,6 +111,8 @@ int  FB_CacheWantsProxy(const FBCache *c, const FBSource *src);
 /* Whether a probed source gets a thumbnail strip: it has a picture
  * (stills too) and a key. */
 int  FB_CacheWantsThumbs(const FBCache *c, const FBSource *src);
+/* Whether it gets a peak file: it has sound and a key. */
+int  FB_CacheWantsWave(const FBCache *c, const FBSource *src);
 
 /* `proxy_width` 0 means FB_PROXY_WIDTH; it is made even and kept at
  * least FB_PROXY_MIN_WIDTH. Thumbnails start at FB_THUMB_W x FB_THUMB_H. */
@@ -138,6 +144,8 @@ FBCacheState FB_CacheRequest(FBCache *c, const FBSource *src);
 /* Asks for a source's thumbnail strip, the same way. It is made after
  * the source's proxy, if one is on its way, and from it. */
 FBCacheState FB_CacheRequestThumbs(FBCache *c, const FBSource *src);
+/* And its peak file (waves.h), the same way. */
+FBCacheState FB_CacheRequestWave(FBCache *c, const FBSource *src);
 
 /* Forgets the queued tasks of one kind (not one being made: stop that
  * first with FB_CacheAbort()). */
@@ -153,8 +161,8 @@ int  FB_CachePending(const FBCache *c);
 /* Takes the next queued task, builds its job into `job` and marks it busy.
  * Returns the task's index, or -1 if nothing is waiting (or one is busy).
  * A task whose copy has meanwhile appeared (made by a server, say) is
- * marked ready and skipped, and a strip whose proxy is still to come
- * waits for it. */
+ * marked ready and skipped, and a strip or peak file whose proxy is
+ * still to come waits for it. */
 int  FB_CacheNextJob(FBCache *c, FBJob *job);
 
 /* The job for one task: exported so a render server's tests and the app's
