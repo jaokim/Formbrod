@@ -31,6 +31,8 @@
 #include <proto/dos.h>
 #include <proto/intuition.h>
 #include <proto/speedbar.h>
+#include <proto/utility.h>
+#include <intuition/icclass.h>
 
 #include <gadgets/speedbar.h>
 #include <images/bitmap.h>
@@ -213,6 +215,9 @@ Object *Toolbar_New(uint32 gadget_id, const ToolbarButton *buttons, int count,
     Bar = IIntuition->NewObject(SbClass, NULL,
         GA_ID,               gadget_id,
         GA_RelVerify,        TRUE,
+        /* Clicks are told by OM_NOTIFY (SPEEDBAR_Selected), which reaches
+         * the window as IDCMP_IDCMPUPDATE: see Toolbar_Noted(). */
+        ICA_TARGET,          ICTARGET_IDCMP,
         SPEEDBAR_Buttons,    &Buttons,
         SPEEDBAR_Orientation, SBORIENT_HORIZ,
         SPEEDBAR_ButtonType, !Icons || Style == TOOLBAR_TEXT ? SBTYPE_TEXT
@@ -223,13 +228,45 @@ Object *Toolbar_New(uint32 gadget_id, const ToolbarButton *buttons, int count,
     return Bar;
 }
 
-uint32 Toolbar_Clicked(void)
+/* A click noted but not handled yet, or ~0. */
+static uint32 Pending = (uint32)-1;
+
+static BOOL is_button(uint32 number)
 {
-    uint32 number = (uint32)-1;
     int i;
 
-    if (Bar)
-        IIntuition->GetAttr(SPEEDBAR_Selected, Bar, &number);
+    for (i = 0; i < Count; i++)
+        if (Entries[i].def->id == number)
+            return TRUE;
+    return FALSE;
+}
+
+/* speedbar.gadget tells which button was clicked only by notification:
+ * SPEEDBAR_Selected can't be read with GetAttr (it is OM_NOTIFY only).
+ * The window's IDCMP hook hands those tags here. */
+void Toolbar_Noted(struct TagItem *tags)
+{
+    struct TagItem *t = IUtility->FindTagItem(SPEEDBAR_Selected, tags);
+
+    if (t && is_button(t->ti_Data))
+        Pending = t->ti_Data;
+}
+
+/* WMHI_GADGETUP's code is the button number too, except in windows that
+ * also take IDCMP_IDCMPUPDATE (like ours), where it can be the bar's own
+ * ID; that isn't a button number, so it's ignored. */
+void Toolbar_Code(uint16 code)
+{
+    if (is_button(code))
+        Pending = code;
+}
+
+uint32 Toolbar_Clicked(void)
+{
+    uint32 number = Pending;
+    int i;
+
+    Pending = (uint32)-1;
     /* A toggle button has changed itself; Toolbar_Apply() sets it back to
      * what the timeline says. */
     for (i = 0; i < Count; i++)
