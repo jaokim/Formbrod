@@ -10,6 +10,7 @@
 #include <exec/types.h>
 #include <intuition/classusr.h>
 #include <intuition/screens.h>
+#include <utility/tagitem.h>
 
 /* One button. Filled in by the main window, which owns the command IDs. */
 typedef struct {
@@ -29,7 +30,12 @@ typedef enum { TOOLBAR_BOTH, TOOLBAR_ICONS, TOOLBAR_TEXT } ToolbarStyle;
 Object *Toolbar_New(uint32 gadget_id, const ToolbarButton *buttons, int count,
                     struct Screen *scr);
 
-/* The button number of the last click, from WMHI_GADGETUP on the bar. */
+/* A click comes two ways, in either order: the bar's notification (its
+ * tags from IDCMP_IDCMPUPDATE, GA_ID the bar's) and WMHI_GADGETUP's code.
+ * Hand both here as they come; after the window's events, Clicked gives
+ * the button number of a click not yet handled, or ~0, once. */
+void   Toolbar_Noted(struct TagItem *tags);
+void   Toolbar_Code(uint16 code);
 uint32 Toolbar_Clicked(void);
 
 /* Changes a button. Nothing is redrawn until Toolbar_Apply(), and only if

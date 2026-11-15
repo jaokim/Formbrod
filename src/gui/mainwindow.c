@@ -358,6 +358,11 @@ static uint32 idcmp_hook(struct Hook *hook, Object *winobj,
     case GID_LANES:
         lanes_changed(tags);
         break;
+    case GID_TOOLBAR:
+        /* Only noted: acted on after the window's events (MainWindow_
+         * Handle), not from inside WM_HANDLEINPUT. */
+        Toolbar_Noted(tags);
+        break;
     case GID_SCROLL:
         if (IUtility->FindTagItem(SCROLLER_Top, tags))
             scroll_to(IUtility->GetTagData(SCROLLER_Top, 0, tags));
@@ -1314,10 +1319,7 @@ static void handle_gadget(uint32 id)
 
     switch (id) {
     case GID_TOOLBAR:
-        id = Toolbar_Clicked();
-        if (id > 0 && id < GID_TOOLBAR)
-            handle_gadget(id);
-        return;
+        return;      /* clicks are handled at the end of MainWindow_Handle */
     /* The timeline controls only change the view, so they don't need the
      * full refresh below. Their final value also comes through
      * idcmp_hook(); this catches it if that notification was missed. */
@@ -1733,7 +1735,10 @@ void MainWindow_Handle(uint32 sigs)
                 App.quit = 1;
             break;
         case WMHI_GADGETUP:
-            handle_gadget(result & WMHI_GADGETMASK);
+            if ((result & WMHI_GADGETMASK) == GID_TOOLBAR)
+                Toolbar_Code(code);
+            else
+                handle_gadget(result & WMHI_GADGETMASK);
             break;
         case WMHI_VANILLAKEY:
             /* I and O: Set in and Set out at the playhead; Space plays
@@ -1758,6 +1763,14 @@ void MainWindow_Handle(uint32 sigs)
             sync_controls();
             break;
         }
+    }
+
+    /* A toolbar click, however it was told (Toolbar_Noted/Code), once. */
+    {
+        uint32 id = Toolbar_Clicked();
+
+        if (id > 0 && id < GID_TOOLBAR)
+            handle_gadget(id);
     }
 }
 
