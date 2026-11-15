@@ -30,15 +30,15 @@
 
 struct FBCache;
 
-/* The film strip's cells are 48 x 27 with a pixel on either side. */
-#define FB_THUMB_W           46
-#define FB_THUMB_H           27
+/* The film strip's cells are 88 x 48 with a pixel on either side. */
+#define FB_THUMB_W           86
+#define FB_THUMB_H           48
 /* One thumbnail a second; long files get fewer, so a strip has at most
- * FB_THUMB_MAX_FRAMES (an hour at 46 x 27 is under 6 MB). */
+ * FB_THUMB_MAX_FRAMES (an hour at 86 x 48 is under 20 MB). */
 #define FB_THUMB_STEP_MS     1000
 #define FB_THUMB_MAX_FRAMES  1200
 
-#define FB_THUMBS_SLOTS      256    /* thumbnails kept in memory */
+#define FB_THUMBS_SLOTS      128    /* thumbnails kept in memory (2 MB) */
 #define FB_THUMBS_MAX_STRIPS (FB_MAX_SOURCES * 2)
 #define FB_THUMBS_MAX_WANTS  64
 

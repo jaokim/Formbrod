@@ -44,8 +44,8 @@ struct FBTimebase;
 #define TRACK_Label          (TRACK_Dummy + 7)  /* CONST_STRPTR shown in the
                                                    inset                 (IS)  */
 
-#define FILMSTRIP_CellWidth  (TRACK_Dummy + 101) /* uint32, default 48   (I)  */
-#define FILMSTRIP_CellHeight (TRACK_Dummy + 102) /* uint32, default 27   (I)  */
+#define FILMSTRIP_CellWidth  (TRACK_Dummy + 101) /* uint32, default 88   (I)  */
+#define FILMSTRIP_CellHeight (TRACK_Dummy + 102) /* uint32, default 48   (I)  */
 #define FILMSTRIP_ThumbFunc  (TRACK_Dummy + 103) /* FBThumbFunc          (IS) */
 #define FILMSTRIP_ThumbData  (TRACK_Dummy + 104) /* APTR, passed to it   (IS) */
 #define FILMSTRIP_Pictures   (TRACK_Dummy + 105) /* BOOL, default TRUE   (IS)
@@ -83,8 +83,8 @@ struct lanesTrackAt {
     int32  lta_X, lta_Y;       /* window coordinates */
 };
 
-#define FB_CELL_W_DEFAULT 48
-#define FB_CELL_H_DEFAULT 27
+#define FB_CELL_W_DEFAULT 88
+#define FB_CELL_H_DEFAULT 48
 
 /* Draws the thumbnail for one cell: the frame at `source_t` in source
  * `source`, scaled into `cell`, drawing only inside `clip` (the cell may

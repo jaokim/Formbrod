@@ -67,8 +67,8 @@ function also runs in the input task while a track is dragged.
 | `TRACK_Playhead` | `uint32` ms | GN | Sent while dragging (`OPUF_INTERIM`) and on release. |
 | `TRACK_Redraw` | `BOOL` | S | Redraws now. |
 | `TRACK_EmptyText` | `CONST_STRPTR` | IS | Shown when the timeline is empty. |
-| `FILMSTRIP_CellWidth` | `uint32` | I | Default 48. |
-| `FILMSTRIP_CellHeight` | `uint32` | I | Default 27. |
+| `FILMSTRIP_CellWidth` | `uint32` | I | Default 88. |
+| `FILMSTRIP_CellHeight` | `uint32` | I | Default 48. |
 | `FILMSTRIP_ThumbFunc` | `FBThumbFunc` | IS | See above. |
 | `FILMSTRIP_ThumbData` | `APTR` | IS | Passed to the function. |
 | `FILMSTRIP_Pictures` | `BOOL` | IS | Default `TRUE`. `FALSE` draws each clip as a block in its file's colour with the file name, and never calls the thumbnail function. The window sets it from the `ShowPictures` setting. |

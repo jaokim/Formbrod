@@ -1078,10 +1078,10 @@ static void test_thumb_strips(void)
     FB_CacheInit(&c, CACHE_DIR, 0);
     CHECK(c.thumb_w == FB_THUMB_W && c.thumb_h == FB_THUMB_H);
     FB_CacheRecipe(&c, FB_CACHE_THUMBS, recipe, sizeof(recipe));
-    CHECK(strcmp(recipe, "thumbs1-46x27") == 0);
+    CHECK(strcmp(recipe, "thumbs1-86x48") == 0);
     CHECK(FB_CachePath(&c, s.key, FB_CACHE_THUMBS, 1, path,
                        sizeof(path)) == 0);
-    CHECK(strcmp(path, CACHE_DIR "/00000000strip001.thumbs1-46x27-part.rgb")
+    CHECK(strcmp(path, CACHE_DIR "/00000000strip001.thumbs1-86x48-part.rgb")
           == 0);
     FB_CacheSetThumbSize(&c, 62, 35);
     FB_CacheRecipe(&c, FB_CACHE_THUMBS, recipe, sizeof(recipe));
@@ -1122,12 +1122,12 @@ static void test_thumb_strips(void)
     CHECK(strstr(job.inputs[0], "00000000strip001.proxy1-320.mov") != NULL);
     CHECK(strcmp(job.filtergraph,
                  "[0:v]fps=fps=1000/1000:start_time=0:round=up,"
-                 "scale=46:27:force_original_aspect_ratio=increase:"
-                 "flags=fast_bilinear,crop=46:27,setsar=1,format=argb[outv]")
+                 "scale=86:48:force_original_aspect_ratio=increase:"
+                 "flags=fast_bilinear,crop=86:48,setsar=1,format=argb[outv]")
           == 0);
     CHECK(strcmp(job.video_out, "outv") == 0 && job.audio_out[0] == '\0');
     CHECK(strcmp(job.output.vcodec, "rawvideo") == 0);
-    CHECK(strstr(job.output.path, "thumbs1-46x27-part.rgb") != NULL);
+    CHECK(strstr(job.output.path, "thumbs1-86x48-part.rgb") != NULL);
     CHECK(job.length == 12000);
     FB_CacheAbort(&c);
 
@@ -1137,7 +1137,7 @@ static void test_thumb_strips(void)
     t = FB_CacheNextJob(&c, &job);
     CHECK(t == 2);
     CHECK(strcmp(job.inputs[0], "Work:p.png") == 0);
-    CHECK(strncmp(job.filtergraph, "[0:v]scale=46:27:", 17) == 0);
+    CHECK(strncmp(job.filtergraph, "[0:v]scale=86:48:", 17) == 0);
     FB_CacheAbort(&c);
     c.tasks[2].state = FB_CACHE_READY;
     {
@@ -1147,7 +1147,7 @@ static void test_thumb_strips(void)
         strcpy(task.key, "00000000strip003");
         FB_SourceSetVideo(&task.source, 720, 576, 64, 45, 25, 1);
         CHECK(FB_CacheBuildJob(&c, &task, &job) == 0);
-        CHECK(strstr(job.filtergraph, "round=up,scale=iw*sar:ih,scale=46")
+        CHECK(strstr(job.filtergraph, "round=up,scale=iw*sar:ih,scale=86")
               != NULL);
     }
 

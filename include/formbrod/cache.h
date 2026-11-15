@@ -58,7 +58,7 @@
 typedef enum {
     FB_CACHE_PROXY = 0,
     FB_CACHE_RENDER,      /* a rendered piece of the edit (render.h) */
-    FB_CACHE_THUMBS,      /* a thumbnail strip (thumbs.h), "<key>.thumbs1-46x27.rgb" */
+    FB_CACHE_THUMBS,      /* a thumbnail strip (thumbs.h), "<key>.thumbs1-86x48.rgb" */
     FB_CACHE_NUM_KINDS
 } FBCacheKind;
 
@@ -96,7 +96,7 @@ void FB_CacheKeyData(const void *data, size_t len, char key[FB_KEY_LEN]);
 
 /* The recipe part of a cached file's name: "proxy1-320", for a rendered
  * piece "render1-320" (the preview's width), for a thumbnail strip
- * "thumbs1-46x27". Strips end in ".rgb", the others in ".mov". */
+ * "thumbs1-86x48". Strips end in ".rgb", the others in ".mov". */
 void FB_CacheRecipe(const FBCache *c, FBCacheKind kind, char *out,
                     size_t len);
 

@@ -425,18 +425,18 @@ that. Exports still read the original files.
 
 The film strip shows the edit as pictures, one per cell. They come from a
 *thumbnail strip* made for each video and still picture: one small picture
-(46 x 27, a cell's size) per second of the file, or fewer for files over
-20 minutes, so a strip has at most 1200 (an hour is under 6 MB).
+(86 x 48, a cell's size) per second of the file, or fewer for files over
+20 minutes, so a strip has at most 1200 (an hour is under 20 MB).
 
 - **In the background, like the preview copies**, and after them: a strip
   is made from the file's preview copy once that is ready, since reading
   it is much quicker than reading the original. Still pictures and files
   that need no copy are read directly.
 - **Once per file**, in the cache drawer, named by the same fingerprint as
-  the copies (`<key>.thumbs1-46x27.rgb`). The file is plain pictures one
+  the copies (`<key>.thumbs1-86x48.rgb`). The file is plain pictures one
   after another, 8-bit ARGB, with nothing else in it, so it is easy to
   read and the same on every machine.
-- **Drawn from memory.** The last 256 pictures used are kept in memory and
+- **Drawn from memory.** The last 128 pictures used (2 MB) are kept in memory and
   the rest are read from the strip when the film strip needs them, so
   scrolling a long edit costs no more memory than a short one. A cell
   whose picture isn't there yet is grey for a moment; a file whose strip
