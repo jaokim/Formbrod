@@ -836,6 +836,25 @@ static void test_log(void)
     CHECK(FB_LogLevelFromName("warning", FB_LOG_INFO) == FB_LOG_WARNING);
     CHECK(FB_LogLevelFromName("loud", FB_LOG_INFO) == FB_LOG_INFO);
     CHECK(strcmp(FB_LogLevelName(FB_LOG_DEBUG), "debug") == 0);
+
+    /* Tracing: only at "trace", with the function's name. */
+    CHECK(FB_LogLevelFromName("trace", FB_LOG_INFO) == FB_LOG_TRACE);
+    CHECK(strcmp(FB_LogLevelName(FB_LOG_TRACE), "trace") == 0);
+    CHECK(FB_LogOpen(path, FB_LOG_DEBUG) == 0);
+    FB_ENTER("app");
+    FB_TRACE("app", "hidden %d", 1);
+    FB_LogClose();
+    read_log(path, text, sizeof(text));
+    CHECK(text[0] == '\0');
+    CHECK(FB_LogOpen(path, FB_LOG_TRACE) == 0);
+    FB_ENTER("gui");
+    FB_TRACE("gui", "window %dx%d", 320, 200);
+    FB_LEAVE("gui", "%d", 0);
+    FB_LogClose();
+    read_log(path, text, sizeof(text));
+    CHECK(strcmp(text, "trace   gui     > test_log\n"
+                       "trace   gui       window 320x200\n"
+                       "trace   gui     < test_log: 0\n") == 0);
 }
 
 static void test_still(void)

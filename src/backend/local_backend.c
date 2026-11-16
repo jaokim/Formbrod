@@ -124,6 +124,17 @@ typedef struct LocalPriv {
     AVPacket        *pkt;
     AVFrame         *frame;
     AVFrame         *held[NUM_KINDS]; /* refused by a full sink */
+    /* Counted for tracing (LogLevel "trace"): what each input has given,
+     * so a job that stalls shows where. */
+    struct {
+        unsigned long packets[FB_MAX_SOURCES];
+        unsigned long decoded[FB_MAX_SOURCES][NUM_KINDS];
+        unsigned long given[NUM_KINDS];     /* to the player (Play) */
+        unsigned long refused[NUM_KINDS];   /* offers the player refused */
+        unsigned long slices;
+        int64_t       last;                 /* last summary, us */
+        int           want;                 /* kinds the last slice read */
+    } tr;
 #endif
 } LocalPriv;
 
@@ -416,12 +427,16 @@ static int open_inputs(LocalPriv *p)
 
         in->st[KIND_VIDEO].index = in->st[KIND_AUDIO].index = -1;
         FB_Log(FB_LOG_INFO, "render", "Input %d: %s", i, p->job.inputs[i]);
+        FB_TRACE("render", "avformat_open_input");
         ret = avformat_open_input(&in->fmt, p->job.inputs[i], NULL, NULL);
         if (ret < 0)
             return fail(p, ret, "Can't open %s", p->job.inputs[i]);
+        FB_TRACE("render", "avformat_find_stream_info (%s)",
+                 in->fmt->iformat ? in->fmt->iformat->name : "?");
         ret = avformat_find_stream_info(in->fmt, NULL);
         if (ret < 0)
             return fail(p, ret, "Can't read %s", p->job.inputs[i]);
+        FB_TRACE("render", "%u streams", in->fmt->nb_streams);
         if (p->job.seek[i] > 0) {
             /* Jump to the keyframe at or before the first frame used;
              * trim drops what's before it. Times are counted from the
@@ -840,18 +855,25 @@ static int play_setup(LocalPriv *p)
         return fail(p, AVERROR(ENOMEM), "Out of memory");
     }
     p->graph->nb_threads = 1;
+    FB_TRACE("render", "playing graph:");
+    if (FB_LogWants(FB_LOG_TRACE))
+        FB_LogText(FB_LOG_TRACE, "render", graph_text);
     ret = avfilter_graph_parse2(p->graph, graph_text, &ins, &outs);
     av_free(graph_text);
     if (ret < 0)
         return fail(p, ret, "Bad filtergraph");
+    FB_TRACE("render", "graph parsed; connecting inputs and outputs");
     ret = connect_outputs(p, ins, outs, kinds);
     avfilter_inout_free(&ins);
     avfilter_inout_free(&outs);
     if (ret < 0)
         return -1;
+    FB_TRACE("render", "avfilter_graph_config");
     ret = avfilter_graph_config(p->graph, NULL);
     if (ret < 0)
         return fail(p, ret, "Can't set up the filtergraph");
+    FB_TRACE("render", "graph ready: %s", kinds > 1 ? "pictures and sound"
+                                                   : "pictures only");
     for (k = kinds; k < NUM_KINDS; k++)
         p->os[k].eof = 1;               /* no sound */
     for (k = 0; k < job->num_inputs; k++)
@@ -875,8 +897,15 @@ static int give(LocalPriv *p, int kind, AVFrame *f)
     else
         full = p->sink.Audio(p->sink.ud, (const short *)f->data[0],
                              f->nb_samples, ms);
-    if (!full && ms > p->progress.position)
-        p->progress.position = ms;
+    if (full) {
+        p->tr.refused[kind]++;
+    } else {
+        if (p->tr.given[kind]++ == 0)
+            FB_TRACE("render", "first %s to the player: %lld ms",
+                     kind_name(kind), (long long)ms);
+        if (ms > p->progress.position)
+            p->progress.position = ms;
+    }
     return full;
 }
 
@@ -1005,6 +1034,7 @@ static int local_setup(LocalPriv *p)
     if (!job->output.path[0] && !p->playing)
         return fail(p, 0, "The job has no output file");
 
+    memset(&p->tr, 0, sizeof(p->tr));
     p->pkt = av_packet_alloc();
     p->frame = av_frame_alloc();
     if (!p->pkt || !p->frame)
@@ -1081,11 +1111,13 @@ static int local_setup(LocalPriv *p)
         goto out;
     }
 
+    FB_TRACE("render", "avfilter_graph_config");
     ret = avfilter_graph_config(p->graph, NULL);
     if (ret < 0) {
         ret = fail(p, ret, "Can't set up the filtergraph");
         goto out;
     }
+    FB_TRACE("render", "graph ready");
 
     for (k = 0; k < kinds; k++) {
         if (open_encoder(p, k, codec[k], p->os[k].enc) < 0) {
@@ -1269,6 +1301,16 @@ static int decode(LocalPriv *p, InStream *is, AVPacket *pkt)
         p->frame->pts = p->frame->best_effort_timestamp;
         if (p->frame->pts != AV_NOPTS_VALUE)
             p->frame->pts -= is->ts_offset;
+        {
+            int in = (int)(((const char *)is - (const char *)p->in) /
+                           sizeof(Input));
+            int kind = is == &p->in[in].st[KIND_VIDEO] ? KIND_VIDEO
+                                                      : KIND_AUDIO;
+
+            if (p->tr.decoded[in][kind]++ == 0)
+                FB_TRACE("render", "input %d: first %s decoded, pts %lld",
+                         in, kind_name(kind), (long long)p->frame->pts);
+        }
         if (push_frame(p, is, p->frame) < 0)
             return -1;   /* p->frame is gone already */
         av_frame_unref(p->frame);
@@ -1325,6 +1367,8 @@ static int read_input(LocalPriv *p, int i)
     int k, ret = av_read_frame(in->fmt, p->pkt);
 
     if (ret == AVERROR_EOF || (ret < 0 && in->fmt->pb && avio_feof(in->fmt->pb))) {
+        FB_TRACE("render", "input %d: end, after %lu packets", i,
+                 p->tr.packets[i]);
         in->eof = 1;
         for (k = 0; k < NUM_KINDS; k++) {
             if (!in->st[k].dec)
@@ -1337,6 +1381,9 @@ static int read_input(LocalPriv *p, int i)
     }
     if (ret < 0)
         return fail(p, ret, "Can't read %s", p->job.inputs[i]);
+    if (p->tr.packets[i]++ == 0)
+        FB_TRACE("render", "input %d: first packet, stream %d, %d bytes", i,
+                 p->pkt->stream_index, p->pkt->size);
 
     for (k = 0; k < NUM_KINDS; k++) {
         if (in->st[k].dec && in->st[k].index == p->pkt->stream_index) {
@@ -1349,12 +1396,51 @@ static int read_input(LocalPriv *p, int i)
     return 0;
 }
 
+/* While tracing: once a second (or now, with `force`), what every input
+ * and output has done. */
+static void trace_slices(LocalPriv *p, int force)
+{
+    int64_t now;
+    int i, k, s;
+
+    if (!FB_LogWants(FB_LOG_TRACE))
+        return;
+    now = av_gettime_relative();
+    if (!force && now - p->tr.last < 1000000)
+        return;
+    p->tr.last = now;
+    FB_TRACE("render", "%lu slices; at %lld ms; reading %s%s", p->tr.slices,
+             (long long)p->progress.position,
+             (p->tr.want & (1 << KIND_VIDEO)) ? "pictures " : "",
+             (p->tr.want & (1 << KIND_AUDIO)) ? "sound" : "");
+    for (i = 0; i < p->job.num_inputs; i++) {
+        unsigned req = 0;
+
+        for (k = 0; k < NUM_KINDS; k++)
+            for (s = 0; s < p->in[i].st[k].num_src; s++)
+                req += av_buffersrc_get_nb_failed_requests(
+                           p->in[i].st[k].src[s]);
+        FB_TRACE("render", "input %d%s: %lu packets, %lu pictures, %lu "
+                 "sound frames decoded; graph asked %u times", i,
+                 p->in[i].eof ? " (ended)" : "", p->tr.packets[i],
+                 p->tr.decoded[i][KIND_VIDEO], p->tr.decoded[i][KIND_AUDIO],
+                 req);
+    }
+    for (k = 0; k < NUM_KINDS; k++)
+        FB_TRACE("render", "%s out%s: %lu given, refused %lu times (full)%s",
+                 kind_name(k), p->os[k].eof ? " (ended)" : "",
+                 p->tr.given[k], p->tr.refused[k],
+                 p->held[k] ? ", one held" : "");
+}
+
 static void local_slice(LocalPriv *p)
 {
     int64_t until = av_gettime_relative() +
                     (p->playing ? PLAY_SLICE_US : SLICE_US);
     int n, ret, want = (1 << KIND_VIDEO) | (1 << KIND_AUDIO);
 
+    p->tr.slices++;
+    trace_slices(p, 0);
     for (n = 0; n < MAX_SLICE_PACKETS &&
                 (n == 0 || av_gettime_relative() < until); n++) {
         int i;
@@ -1398,10 +1484,12 @@ static void local_slice(LocalPriv *p)
             finish(p, FB_RENDER_DONE, p->job.output.path);
             return;
         }
+        p->tr.want = want;
         i = next_input(p, want);
         if (i < 0 && want != ((1 << KIND_VIDEO) | (1 << KIND_AUDIO)))
             return;     /* no sound left to read: wait for playback */
         if (i < 0) {
+            FB_TRACE("render", "no input left to read, outputs not ended");
             /* Every input is flushed and the sinks still want more. */
             fail(p, 0, "The filtergraph stalled before the end");
             return;
@@ -1517,8 +1605,12 @@ static int start(FBBackend *be, const FBJob *job, const FBFrameSink *sink)
 {
     LocalPriv *p = be->priv;
 
-    if (p->progress.state == FB_RENDER_RUNNING)
+    FB_TRACE("render", "start: %s, %d inputs", sink ? "playing" : "to a file",
+             job->num_inputs);
+    if (p->progress.state == FB_RENDER_RUNNING) {
+        FB_Log(FB_LOG_WARNING, "render", "Busy: a job is already running");
         return -1;
+    }
     p->playing = sink != NULL;
     if (sink)
         p->sink = *sink;
@@ -1529,6 +1621,7 @@ static int start(FBBackend *be, const FBJob *job, const FBFrameSink *sink)
 #ifdef HAVE_LIBAV
     if (local_setup(p) < 0)
         return -1;   /* fail() has released everything and set the result */
+    FB_TRACE("render", "set up: running");
     p->progress.state = FB_RENDER_RUNNING;
     p->result.state = FB_RENDER_RUNNING;
     return 0;
@@ -1566,6 +1659,8 @@ static void local_cancel(FBBackend *be)
 
     if (p->progress.state == FB_RENDER_RUNNING) {
 #ifdef HAVE_LIBAV
+        FB_TRACE("render", "cancel at %lld ms", (long long)p->progress.position);
+        trace_slices(p, 1);
         release(p, 0);   /* closes everything, deletes the partial file */
 #endif
         finish(p, FB_RENDER_CANCELLED, "Cancelled");

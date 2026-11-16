@@ -1561,16 +1561,28 @@ int MainWindow_Open(void)
     BOOL placed;
     int i;
 
+    FB_ENTER("gui");
     for (i = 0; i < C_COUNT; i++) {
         classes[i].base = IIntuition->OpenClass(classes[i].name, 52,
                                                 &classes[i].cls);
-        if (!classes[i].base)
+        FB_TRACE("gui", "OpenClass %s: %p", classes[i].name,
+                 (void *)classes[i].base);
+        if (!classes[i].base) {
+            FB_Log(FB_LOG_ERROR, "gui", "Main window: can't open %s "
+                   "(version 52)", classes[i].name);
+            FB_LEAVE("gui", "-1");
             return -1;
+        }
     }
     /* Thumbnails fill a film-strip cell, less a pixel on either side. */
     App_ThumbSize(FB_CELL_W_DEFAULT - 2, FB_CELL_H_DEFAULT);
-    if (!Track_MakeClasses())
+    if (!Track_MakeClasses()) {
+        FB_Log(FB_LOG_ERROR, "gui", "Main window: can't make the timeline "
+               "gadget classes");
+        FB_LEAVE("gui", "-1");
         return -1;
+    }
+    FB_TRACE("gui", "timeline classes made");
     TrackClassesMade = TRUE;
     Timebase_Init(&TB, FB_CELL_W_DEFAULT);
     Inset = name_column_width();
@@ -1590,13 +1602,22 @@ int MainWindow_Open(void)
 
     /* The icons are loaded for the screen the window opens on. */
     scr = IIntuition->LockPubScreen(NULL);
-    if (!scr)
-        return -1;
-    buttons = Toolbar_New(GID_TOOLBAR, ToolbarButtons, TOOLBAR_COUNT, scr);
-    if (!buttons) {
-        IIntuition->UnlockPubScreen(NULL, scr);
+    if (!scr) {
+        FB_Log(FB_LOG_ERROR, "gui", "Main window: can't lock the default "
+               "public screen");
+        FB_LEAVE("gui", "-1");
         return -1;
     }
+    FB_TRACE("gui", "screen %p, %dx%d", (void *)scr, scr->Width,
+             scr->Height);
+    buttons = Toolbar_New(GID_TOOLBAR, ToolbarButtons, TOOLBAR_COUNT, scr);
+    if (!buttons) {
+        FB_Log(FB_LOG_ERROR, "gui", "Main window: can't make the toolbar");
+        IIntuition->UnlockPubScreen(NULL, scr);
+        FB_LEAVE("gui", "-1");
+        return -1;
+    }
+    FB_TRACE("gui", "toolbar %p", (void *)buttons);
 
 
     /* Ruler, film strip and scroller, stacked without gaps. */
@@ -1749,12 +1770,20 @@ int MainWindow_Open(void)
         WINDOW_Layout,      root,
         WINDOW_MenuStrip,   Menus,
         TAG_MORE,           place);
+    FB_TRACE("gui", "window object %p", (void *)WinObj);
     if (WinObj)
         Win = (struct Window *)IIntuition->IDoMethod(WinObj, WM_OPEN, NULL);
     IIntuition->UnlockPubScreen(NULL, scr);   /* the open window holds it */
-    if (!Win)
+    if (!Win) {
+        FB_Log(FB_LOG_ERROR, "gui", "Main window: %s",
+               WinObj ? "WM_OPEN failed" : "can't make the window object");
+        FB_LEAVE("gui", "-1");
         return -1;
+    }
+    FB_TRACE("gui", "main window %p at %d,%d %dx%d", (void *)Win,
+             Win->LeftEdge, Win->TopEdge, Win->Width, Win->Height);
     MainWindow_Refresh();
+    FB_LEAVE("gui", "0");
     return 0;
 }
 
@@ -1837,6 +1866,7 @@ void MainWindow_SetPlayhead(fb_ms_t ms)
 
 void MainWindow_Close(void)
 {
+    FB_TRACE("gui", "MainWindow_Close");
     int i;
 
     PlayWindow_Close();

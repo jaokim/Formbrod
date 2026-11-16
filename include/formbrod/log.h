@@ -23,7 +23,8 @@ typedef enum {
     FB_LOG_ERROR = 0,
     FB_LOG_WARNING,
     FB_LOG_INFO,
-    FB_LOG_DEBUG
+    FB_LOG_DEBUG,
+    FB_LOG_TRACE        /* what the program is doing, step by step */
 } FBLogLevel;
 
 /* Starts a new log at `path` (an old one is replaced), keeping lines at
@@ -50,9 +51,34 @@ void FB_LogV(FBLogLevel level, const char *area, const char *fmt, va_list ap);
  * filtergraphs are also broken after each ';' so they can be read. */
 void FB_LogText(FBLogLevel level, const char *area, const char *text);
 
-/* Level names for settings: "error", "warning", "info", "debug". FromName
- * returns `def` for anything else. */
+/* Level names for settings: "error", "warning", "info", "debug", "trace".
+ * FromName returns `def` for anything else. */
 const char *FB_LogLevelName(FBLogLevel level);
 FBLogLevel  FB_LogLevelFromName(const char *name, FBLogLevel def);
+
+/* Tracing (LogLevel "trace"): where the program goes, for finding where
+ * it stops. Used on the paths that matter (opening windows, starting and
+ * playing a preview, the backend's setup and slices), not every function.
+ * The format is only looked at when tracing is on.
+ *
+ *   FB_ENTER("play");                    -> "> App_PlayStart"
+ *   FB_LEAVE("play", "%d", rc);          -> "< App_PlayStart: 0"
+ *   FB_TRACE("play", "queue %d", n);     -> "  queue 3"
+ */
+#define FB_TRACE(area, ...) \
+    do { if (FB_LogWants(FB_LOG_TRACE)) \
+             FB_Log(FB_LOG_TRACE, area, "  " __VA_ARGS__); } while (0)
+#define FB_ENTER(area) \
+    do { if (FB_LogWants(FB_LOG_TRACE)) \
+             FB_Log(FB_LOG_TRACE, area, "> %s", __func__); } while (0)
+#define FB_LEAVE(area, ...) \
+    do { if (FB_LogWants(FB_LOG_TRACE)) \
+             FB_LogLeave(area, __func__, __VA_ARGS__); } while (0)
+/* FB_LEAVE's "< function: ..." line. */
+void FB_LogLeave(const char *area, const char *func, const char *fmt, ...)
+#ifdef __GNUC__
+    __attribute__((format(printf, 3, 4)))
+#endif
+    ;
 
 #endif

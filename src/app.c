@@ -1761,6 +1761,13 @@ static int play_step(int i)
     const FBPlayStep *st = &PlaySteps[i];
     FBFrameSink sink;
     char path[FB_PATH_LEN];
+    int rc;
+
+    FB_ENTER("play");
+    FB_TRACE("play", "step %d of %d: piece %d, %lld ms from %lld ms "
+             "(offset %lld)", i, App.play.steps, st->piece,
+             (long long)st->len, (long long)st->from,
+             (long long)st->offset);
 
     if (st->piece >= 0 &&
         FB_CacheFind(&App.cache, BgKeys[st->piece], FB_CACHE_RENDER, path,
@@ -1779,6 +1786,7 @@ static int play_step(int i)
         if (err != FB_JOB_OK) {
             FB_Log(FB_LOG_ERROR, "play", "Can't build the job: %s",
                    FB_JobErrorString(err));
+            FB_LEAVE("play", "-1 (no job)");
             return -1;
         }
         FB_Log(FB_LOG_INFO, "play", "%lld ms from %lld ms: live",
@@ -1789,10 +1797,28 @@ static int play_step(int i)
     App.play.feed.pl = &App.play.pl;
     App.play.feed.offset = st->from - App.play.from;
     sink = FB_PlayerFeedSink(&App.play.feed);
-    return App.backend->Play(App.backend, &job, &sink);
+    FB_TRACE("play", "backend Play");
+    rc = App.backend->Play(App.backend, &job, &sink);
+    FB_LEAVE("play", "%d%s%s", rc, rc ? ", " : "",
+             rc ? App.backend->Result(App.backend).message : "");
+    return rc;
 }
 
+static int play_start(fb_ms_t from);
+
 int App_PlayStart(fb_ms_t from)
+{
+    int rc;
+
+    FB_ENTER("play");
+    FB_TRACE("play", "from %lld ms; rendering %d, previewing %d, caching %d",
+             (long long)from, App.rendering, App_Previewing(), App.caching);
+    rc = play_start(from);
+    FB_LEAVE("play", "%d", rc);
+    return rc;
+}
+
+static int play_start(fb_ms_t from)
 {
     static FBTimeline win;   /* large; keep them off the stack */
     static FBJob job;
@@ -1845,8 +1871,11 @@ int App_PlayStart(fb_ms_t from)
 
     /* Sound through AHI, on the unit in the settings (AHIUnit). If it
      * can't be had, it plays silently and says so. */
+    FB_TRACE("play", "opening the sound (job has sound: %d)",
+             job.audio_out[0] != 0);
     App.play.sound = job.audio_out[0] &&
                      Audio_Open(atoi(Prefs_GetString("AHIUnit", "0"))) == 0;
+    FB_TRACE("play", "sound %s", App.play.sound ? "on" : "off");
     if (FB_PlayerInit(&App.play.pl, App.play.sound) != 0) {
         App_SetStatus("%s", FB_Str(MSG_STATUS_NO_MEMORY));
         return -1;
@@ -1877,6 +1906,13 @@ static void play_stop(const char *why)
 
     if (!App.play.on)
         return;
+    FB_TRACE("play", "stopping: step %d of %d, backend %s; queue %d "
+             "pictures, %ld ms sound, clock %s, ended %d",
+             App.play.step, App.play.steps,
+             App.play.ended ? "done" : "running", App.play.pl.count,
+             App.play.pl.audio_count * 1000 / FB_PLAY_RATE,
+             FB_PlayerStarted(&App.play.pl) ? "running" : "not started",
+             App.play.pl.ended);
     FB_FormatTimeMs(at, sizeof(at), App_PlayPosition(), Locale_DecimalPoint());
     App.bg.near = App_PlayPosition();       /* render from here on next */
     App.play.on = 0;
@@ -1921,6 +1957,33 @@ void App_PlayTimeText(char *buf, size_t len)
     snprintf(buf, len, FB_Str(MSG_PLAY_TIME), at, total);
 }
 
+/* While tracing: how playing is going, once a second, so a stall shows
+ * where it is (nothing queued = the backend gives nothing; queue full but
+ * the clock not started = waiting for sound; and so on). */
+static fb_ms_t PlayBackendAt;      /* the backend's last position */
+
+static void trace_play(const FBPlayer *pl, long long now)
+{
+    static long long last;
+    static long polls;
+
+    polls++;
+    if (!FB_LogWants(FB_LOG_TRACE) || now - last < 1000000)
+        return;
+    last = now;
+    FB_TRACE("play", "%ld polls; step %d, backend at %lld ms%s; queue %d "
+             "pictures (last %lld ms), %ld ms sound; clock %s at %lld ms; "
+             "%ld shown, %ld skipped", polls, App.play.step,
+             (long long)PlayBackendAt,
+             App.play.ended ? " (ended)" : "", pl->count,
+             (long long)pl->last_pts,
+             pl->audio_count * 1000 / FB_PLAY_RATE,
+             FB_PlayerStarted(pl) ? "running" : "not started",
+             (long long)FB_PlayerTime(pl, now), pl->num_shown,
+             pl->num_dropped);
+    polls = 0;
+}
+
 const FBPlayFrame *App_PollPlay(long *sleep_ms)
 {
     FBPlayer *pl = &App.play.pl;
@@ -1936,9 +1999,12 @@ const FBPlayFrame *App_PollPlay(long *sleep_ms)
     if (!App.play.ended) {
         FBProgress p = App.backend->Progress(App.backend);
 
+        PlayBackendAt = p.position;
         if (p.state != FB_RENDER_RUNNING) {
             FBResult r = App.backend->Result(App.backend);
 
+            FB_TRACE("play", "step %d ended: state %d, %s", App.play.step,
+                     (int)r.state, r.message);
             /* That step is done: the next, if there is one. */
             if (r.state == FB_RENDER_DONE &&
                 App.play.step + 1 < App.play.steps) {
@@ -1962,6 +2028,7 @@ const FBPlayFrame *App_PollPlay(long *sleep_ms)
 stepped:
 
     now = FB_BackendClockUs();
+    trace_play(pl, now);
     if (!FB_PlayerStarted(pl) && FB_PlayerReady(pl)) {
         FB_PlayerStart(pl, now);
         FB_Log(FB_LOG_INFO, "play", "Playing: %d pictures buffered", pl->count);
@@ -1970,6 +2037,9 @@ stepped:
         f = FB_PlayerFrame(pl, now);
         if (App.play.sound)
             Audio_Feed(take_audio, pl);
+        if (f && pl->num_shown == 1)
+            FB_TRACE("play", "first picture due: %dx%d at %lld ms",
+                     f->width, f->height, (long long)f->pts);
     }
     if (!f && FB_PlayerFinished(pl, now)) {
         play_stop(FB_Str(MSG_STATUS_PLAY_END));

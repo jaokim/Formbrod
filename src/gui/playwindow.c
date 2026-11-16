@@ -132,6 +132,8 @@ static BOOL draw_scaled(struct RastPort *rp, const struct IBox *box)
                     BMATags_PixelFormat, PIXF_A8R8G8B8,
                     BMATags_Displayable, TRUE,
                     TAG_END);
+        FB_TRACE("gui", "source bitmap %dx%d: %p", Shown.width, Shown.height,
+                 (void *)SrcBM);
         if (!SrcBM)
             return FALSE;
         SrcW = Shown.width;
@@ -158,6 +160,8 @@ static BOOL draw_scaled(struct RastPort *rp, const struct IBox *box)
                     BMATags_Friend,      rp->BitMap,
                     BMATags_Displayable, TRUE,
                     TAG_END);
+        FB_TRACE("gui", "scaled bitmap %dx%d: %p", box->Width, box->Height,
+                 (void *)DstBM);
         if (!DstBM)
             return FALSE;
         DstW = box->Width;
@@ -216,6 +220,8 @@ static void draw(struct RastPort *rp)
         return;
     while (Scaling > 0 && !draw_scaled(rp, box)) {
         Scaling--;                  /* card, then software, then none */
+        FB_TRACE("gui", "scaling now %s", Scaling == 1 ? "in software"
+                                                     : "off");
         if (Scaling == 0) {
             FB_Log(FB_LOG_WARNING, "preview",
                    "Can't scale the picture here; it's shown at its size");
@@ -238,6 +244,7 @@ static uint32 render_hook(struct Hook *hook, Object *space,
 
 static void close_window(void)
 {
+    FB_ENTER("gui");
     if (WinObj) {
         WinPrefs_Save("PreviewWindow", Win);
         IIntuition->DisposeObject(WinObj);
@@ -246,6 +253,7 @@ static void close_window(void)
     }
     memset(Gad, 0, sizeof(Gad));
     free_bitmaps();
+    FB_LEAVE("gui", "closed");
 }
 
 static BOOL open_window(int w, int h)
@@ -256,12 +264,21 @@ static BOOL open_window(int w, int h)
     BOOL placed;
     int i;
 
+    FB_ENTER("gui");
+    FB_TRACE("gui", "picture %dx%d", w, h);
     for (i = 0; i < K_COUNT; i++) {
-        if (!classes[i].base)
+        if (!classes[i].base) {
             classes[i].base = IIntuition->OpenClass(classes[i].name, 52,
                                                     &classes[i].cls);
-        if (!classes[i].base)
+            FB_TRACE("gui", "OpenClass %s: %p (class %p)", classes[i].name,
+                     (void *)classes[i].base, (void *)classes[i].cls);
+        }
+        if (!classes[i].base) {
+            FB_Log(FB_LOG_WARNING, "gui", "Preview window: can't open %s "
+                   "(version 52)", classes[i].name);
+            FB_LEAVE("gui", "FALSE (no %s)", classes[i].name);
             return FALSE;
+        }
     }
     RenderHook.h_Entry = (HOOKFUNC)render_hook;
     RenderHook.h_Data = NULL;
@@ -282,6 +299,8 @@ static BOOL open_window(int w, int h)
         GA_Text,      TimeText,
         BUTTON_BevelStyle, BVS_NONE,
         TAG_END);
+    FB_TRACE("gui", "picture gadget %p, time gadget %p",
+             (void *)Gad[PG_PICTURE], (void *)Gad[PG_TIME]);
     layout = IIntuition->NewObject(CLS(K_LAYOUT), NULL,
         LAYOUT_Orientation,   LAYOUT_ORIENT_VERT,
         LAYOUT_SpaceOuter,    TRUE,
@@ -289,15 +308,27 @@ static BOOL open_window(int w, int h)
         LAYOUT_AddChild,      Gad[PG_TIME],
         CHILD_WeightedHeight, 0,
         TAG_END);
-    if (!layout)
+    if (!layout) {
+        FB_Log(FB_LOG_WARNING, "gui", "Preview window: can't make its "
+               "layout");
+        FB_LEAVE("gui", "FALSE (no layout)");
         return FALSE;
+    }
 
     scr = IIntuition->LockPubScreen(NULL);
     if (!scr) {
+        FB_Log(FB_LOG_WARNING, "gui", "Preview window: can't lock the "
+               "default public screen");
         IIntuition->DisposeObject(layout);
+        FB_LEAVE("gui", "FALSE (no screen)");
         return FALSE;
     }
+    FB_TRACE("gui", "screen %p, %dx%d, depth %lu", (void *)scr, scr->Width,
+             scr->Height, (unsigned long)IGraphics->GetBitMapAttr(
+                 scr->RastPort.BitMap, BMA_DEPTH));
     placed = WinPrefs_Tags("PreviewWindow", scr, place);
+    if (!placed)
+        FB_TRACE("gui", "inner size %dx%d, centred", w + 16, h + 40);
     WinObj = IIntuition->NewObject(CLS(K_WINDOW), NULL,
         WA_PubScreen,    scr,
         WA_Title,        FB_Str(MSG_PLAYWIN_TITLE),
@@ -314,13 +345,22 @@ static BOOL open_window(int w, int h)
         placed ? TAG_IGNORE : WINDOW_Position, WPOS_CENTERSCREEN,
         WINDOW_Layout,   layout,
         TAG_MORE,        place);
-    if (WinObj)
+    FB_TRACE("gui", "window object %p", (void *)WinObj);
+    if (WinObj) {
+        FB_TRACE("gui", "WM_OPEN");
         Win = (struct Window *)IIntuition->IDoMethod(WinObj, WM_OPEN, NULL);
+    }
     IIntuition->UnlockPubScreen(NULL, scr);
     if (!Win) {
+        FB_Log(FB_LOG_WARNING, "gui", "Preview window: %s",
+               WinObj ? "WM_OPEN failed" : "can't make the window object");
         close_window();
+        FB_LEAVE("gui", "FALSE");
         return FALSE;
     }
+    FB_Log(FB_LOG_INFO, "gui", "Preview window open: %d,%d %dx%d",
+           Win->LeftEdge, Win->TopEdge, Win->Width, Win->Height);
+    FB_LEAVE("gui", "TRUE (window %p)", (void *)Win);
     return TRUE;
 }
 
@@ -328,16 +368,26 @@ void PlayWindow_Show(const FBPlayFrame *f)
 {
     size_t need;
 
-    if (!f || f->width <= 0 || f->height <= 0)
+    if (!f || f->width <= 0 || f->height <= 0) {
+        FB_TRACE("gui", "PlayWindow_Show: no picture (%p, %dx%d)",
+                 (const void *)f, f ? f->width : 0, f ? f->height : 0);
         return;
-    if (!Win && !open_window(f->width, f->height))
-        return;
+    }
+    if (!Win) {
+        FB_TRACE("gui", "PlayWindow_Show: first picture, %dx%d at %lld ms",
+                 f->width, f->height, (long long)f->pts);
+        if (!open_window(f->width, f->height))
+            return;
+    }
     need = (size_t)f->stride * f->height;
     if (Shown.size < need) {
         unsigned char *p = realloc(Shown.pixels, need);
 
-        if (!p)
+        if (!p) {
+            FB_Log(FB_LOG_WARNING, "gui", "Preview window: no memory for "
+                   "a %lu byte picture", (unsigned long)need);
             return;
+        }
         Shown.pixels = p;
         Shown.size = need;
     }
@@ -396,6 +446,7 @@ void PlayWindow_Handle(uint32 sigs)
         }
     }
     if (close) {
+        FB_TRACE("gui", "preview window closed by the user");
         App_PlayStop();
         close_window();
         MainWindow_Refresh();
@@ -406,6 +457,7 @@ void PlayWindow_Close(void)
 {
     int i;
 
+    FB_ENTER("gui");
     close_window();
     Have = FALSE;
     free(Shown.pixels);
@@ -415,4 +467,5 @@ void PlayWindow_Close(void)
             IIntuition->CloseClass(classes[i].base);
         classes[i].base = NULL;
     }
+    FB_LEAVE("gui", "done");
 }

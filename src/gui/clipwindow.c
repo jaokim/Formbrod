@@ -35,6 +35,7 @@
 #include <images/bevel.h>
 
 #include "app.h"
+#include "formbrod/log.h"
 #include "formbrod/module.h"
 #include "formbrod/timeview.h"
 #include "locale/catalog.h"
@@ -622,18 +623,27 @@ void ClipWindow_Open(void)
     BOOL placed;
     int i;
 
+    FB_ENTER("gui");
     if (Win) {
         IIntuition->WindowToFront(Win);
         IIntuition->ActivateWindow(Win);
         ClipWindow_Refresh();
+        FB_LEAVE("gui", "already open: to front");
         return;
     }
     for (i = 0; i < K_COUNT; i++) {
-        if (!classes[i].base)
+        if (!classes[i].base) {
             classes[i].base = IIntuition->OpenClass(classes[i].name, 52,
                                                     &classes[i].cls);
-        if (!classes[i].base)
+            FB_TRACE("gui", "OpenClass %s: %p", classes[i].name,
+                     (void *)classes[i].base);
+        }
+        if (!classes[i].base) {
+            FB_Log(FB_LOG_WARNING, "gui", "Clip window: can't open %s "
+                   "(version 52)", classes[i].name);
+            FB_LEAVE("gui", "no %s", classes[i].name);
             return;
+        }
     }
     for (i = 0; i < NUM_XFADE_KINDS; i++)
         KindLabels[i] = (STRPTR)FB_Str(XfadeKinds[i].msg);
@@ -649,8 +659,12 @@ void ClipWindow_Open(void)
     EffectPos = 0;
 
     scr = IIntuition->LockPubScreen(NULL);
-    if (!scr)
+    if (!scr) {
+        FB_Log(FB_LOG_WARNING, "gui", "Clip window: can't lock the default "
+               "public screen");
+        FB_LEAVE("gui", "no screen");
         return;
+    }
     placed = WinPrefs_Tags("ClipWindow", scr, place);
     WinObj = IIntuition->NewObject(CLS(K_WINDOW), NULL,
         WA_PubScreen,     scr,
@@ -670,12 +684,17 @@ void ClipWindow_Open(void)
         Win = (struct Window *)IIntuition->IDoMethod(WinObj, WM_OPEN, NULL);
     IIntuition->UnlockPubScreen(NULL, scr);
     if (!Win) {
+        FB_Log(FB_LOG_WARNING, "gui", "Clip window: %s",
+               WinObj ? "WM_OPEN failed" : "can't make the window object");
         if (WinObj)
             IIntuition->DisposeObject(WinObj);
         WinObj = NULL;
+        FB_LEAVE("gui", "failed");
         return;
     }
     ClipWindow_Refresh();
+    FB_LEAVE("gui", "window %p at %d,%d %dx%d", (void *)Win, Win->LeftEdge,
+             Win->TopEdge, Win->Width, Win->Height);
 }
 
 void ClipWindow_SetWorking(BOOL working)

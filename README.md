@@ -461,9 +461,18 @@ runs. It is the place to look when a render goes wrong. It holds:
 - the status line messages.
 
 *Settings → Write log file* turns it off and on. The settings `LogFile`
-(another path) and `LogLevel` (`error`, `warning`, `info` (default) or
+(another path) and `LogLevel` (`error`, `warning`, `info` (default),
 `debug`, which adds ffmpeg's detailed messages and the conversion filters
-added for the encoders) can be changed with PrefsObjectsEditor.
+added for the encoders, or `trace`) can be changed with PrefsObjectsEditor.
+
+`trace` also follows what Formbröd is doing, for finding where something
+stops: windows being opened (each class, object and screen), which part
+of the main loop runs, play starting and each step of it, and in the
+backend each input opened, the first packet and frame of every stream,
+the first picture and sound given to the player, and once a second how
+many packets, frames and refusals there have been. `>` starts a function
+and `<` ends it, with its result. The log grows quickly, so turn it back
+to `info` afterwards.
 
 ## Writing a module
 
