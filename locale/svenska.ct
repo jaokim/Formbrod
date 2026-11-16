@@ -596,3 +596,6 @@ Förhandsvisningen förberäknad: %ld av %ld delar
 MSG_MENU_BACKGROUND_RENDER
 Förberäkna förhandsvisningar i bakgrunden
 ;
+;
+MSG_PLAYWIN_PREPARING
+Förbereder förhandsvisningen...

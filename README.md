@@ -371,7 +371,10 @@ edit touches are rendered again. *Settings → Render previews in the
 background* (setting `BackgroundRender`) turns it off; the status line
 says how many pieces are ready.
 
-The preview window can be made any size: the picture is scaled to fit,
+The preview window opens as soon as Play is pressed and says *Preparing
+the preview...* until the first picture is ready; if playing stops before
+then, it shows why (the status line). It can be made any size: the
+picture is scaled to fit,
 keeping its shape, by the graphics card where it can (compositing),
 else in software, else it is shown at its own size.
 

@@ -32,6 +32,7 @@
 #include <proto/graphics.h>
 #include <graphics/gfx.h>         /* PIXF_A8R8G8B8 */
 #include <graphics/composite.h>   /* CompositeTags */
+#include <graphics/rpattr.h>      /* SetRPAttrs */
 
 #include <classes/window.h>
 #include <gadgets/layout.h>
@@ -65,6 +66,10 @@ static struct {
     { NULL, NULL, "gadgets/button.gadget" },
 };
 #define CLS(k) (classes[k].cls)
+
+/* Shown in the picture area while there is no picture: "Preparing the
+ * preview...", or why it stopped before the first one. */
+static char Message[256];
 
 static Object *WinObj;
 static struct Window *Win;
@@ -207,17 +212,47 @@ static BOOL draw_scaled(struct RastPort *rp, const struct IBox *box)
     return TRUE;
 }
 
-/* Draws the last picture into the space gadget's box. */
+/* The message, centred on black, cut to fit the box. */
+static void draw_message(struct RastPort *rp, const struct IBox *box)
+{
+    uint32 len = strlen(Message);
+    int w, x, y;
+
+    IGraphics->RectFillColor(rp, box->Left, box->Top,
+                             box->Left + box->Width - 1,
+                             box->Top + box->Height - 1, 0xFF000000);
+    if (!len || rp->TxHeight > box->Height)
+        return;
+    IGraphics->SetRPAttrs(rp, RPTAG_APenColor, 0xFFD0D0D0,
+                          RPTAG_DrMd, JAM1, TAG_END);
+    while (len > 0 && (w = IGraphics->TextLength(rp, Message, len)) >
+                      box->Width - 8)
+        len--;
+    if (!len)
+        return;
+    w = IGraphics->TextLength(rp, Message, len);
+    x = box->Left + (box->Width - w) / 2;
+    y = box->Top + (box->Height - rp->TxHeight) / 2 + rp->TxBaseline;
+    IGraphics->Move(rp, x, y);
+    IGraphics->Text(rp, Message, len);
+}
+
+/* Draws the last picture into the space gadget's box, or the message
+ * while there is none. */
 static void draw(struct RastPort *rp)
 {
     struct IBox *box = NULL;
 
-    if (!Have || !Shown.pixels || !Gad[PG_PICTURE] || !rp)
+    if (!Gad[PG_PICTURE] || !rp)
         return;
     IIntuition->GetAttr(SPACE_AreaBox, (Object *)Gad[PG_PICTURE],
                         (uint32 *)&box);
     if (!box || box->Width <= 0 || box->Height <= 0)
         return;
+    if (!Have || !Shown.pixels) {
+        draw_message(rp, box);
+        return;
+    }
     while (Scaling > 0 && !draw_scaled(rp, box)) {
         Scaling--;                  /* card, then software, then none */
         FB_TRACE("gui", "scaling now %s", Scaling == 1 ? "in software"
@@ -397,8 +432,39 @@ void PlayWindow_Show(const FBPlayFrame *f)
     Shown.stride = f->stride;
     Shown.pts = f->pts;
     Have = TRUE;
+    Message[0] = '\0';
     SrcDirty = TRUE;
     draw(Win->RPort);
+}
+
+void PlayWindow_Prepare(int w, int h)
+{
+    FB_ENTER("gui");
+    snprintf(Message, sizeof(Message), "%s", FB_Str(MSG_PLAYWIN_PREPARING));
+    Have = FALSE;                   /* not the last preview's picture */
+    if (!Win) {
+        if (!open_window(w > 0 ? w : 320, h > 0 ? h : 180)) {
+            FB_LEAVE("gui", "no window");
+            return;
+        }
+    } else {
+        IIntuition->WindowToFront(Win);
+    }
+    draw(Win->RPort);
+    FB_LEAVE("gui", "waiting for the first picture");
+}
+
+void PlayWindow_SetMessage(const char *text)
+{
+    FB_TRACE("gui", "preview window message: %s", text ? text : "");
+    snprintf(Message, sizeof(Message), "%s", text ? text : "");
+    if (Win && !Have)
+        draw(Win->RPort);
+}
+
+int PlayWindow_HasPicture(void)
+{
+    return Have;
 }
 
 void PlayWindow_SetText(const char *text)
@@ -460,6 +526,7 @@ void PlayWindow_Close(void)
     FB_ENTER("gui");
     close_window();
     Have = FALSE;
+    Message[0] = '\0';
     free(Shown.pixels);
     memset(&Shown, 0, sizeof(Shown));
     for (i = K_COUNT - 1; i >= 0; i--) {

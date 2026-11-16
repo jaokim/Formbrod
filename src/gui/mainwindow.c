@@ -1447,8 +1447,16 @@ static void handle_gadget(uint32 id)
         if (App_Playing() || App_Previewing()) {
             App_PlayStop();
             App_PreviewStop();
-        } else
-            App_PlayStart(FB_MS(TB.playhead));
+        } else {
+            int w, h;
+
+            /* The window first, so there's something to look at while
+             * the files are opened (seconds on a slow machine). */
+            App_PlaySize(&w, &h);
+            PlayWindow_Prepare(w, h);
+            if (App_PlayStart(FB_MS(TB.playhead)) != 0)
+                PlayWindow_SetMessage(App.status);
+        }
         break;
     case GID_EXPORT:
         if (App.rendering)

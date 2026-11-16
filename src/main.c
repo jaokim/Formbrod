@@ -178,6 +178,17 @@ int main(int argc, char **argv)
             last_input = now_ms();
             MainWindow_Handle(sigs);
         }
+
+        /* Playing stopped (ended, failed or stopped) before its first
+         * picture: the window still says it's being prepared; say how it
+         * stopped instead (the status line). */
+        {
+            static int was_playing;
+
+            if (was_playing && !App_Playing() && !PlayWindow_HasPicture())
+                PlayWindow_SetMessage(App.status);
+            was_playing = App_Playing();
+        }
     }
     rc = RETURN_OK;
 

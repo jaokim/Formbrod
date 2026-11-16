@@ -406,8 +406,10 @@
 #define MSG_STATUS_RENDERED_AHEAD_STR    "Preview rendered ahead: %ld of %ld pieces"
 #define MSG_MENU_BACKGROUND_RENDER       250
 #define MSG_MENU_BACKGROUND_RENDER_STR   "Render previews in the background"
+#define MSG_PLAYWIN_PREPARING            251
+#define MSG_PLAYWIN_PREPARING_STR        "Preparing the preview..."
 
-#define FB_NUM_STRINGS 197
+#define FB_NUM_STRINGS 198
 
 #ifdef FB_STRINGS_ARRAY
 static const struct FBBuiltinString {
@@ -611,6 +613,7 @@ static const struct FBBuiltinString {
     { MSG_STATUS_PLAYING_SILENT, MSG_STATUS_PLAYING_SILENT_STR },
     { MSG_STATUS_RENDERED_AHEAD, MSG_STATUS_RENDERED_AHEAD_STR },
     { MSG_MENU_BACKGROUND_RENDER, MSG_MENU_BACKGROUND_RENDER_STR },
+    { MSG_PLAYWIN_PREPARING, MSG_PLAYWIN_PREPARING_STR },
 };
 #endif
 
