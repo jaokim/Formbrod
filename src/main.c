@@ -9,6 +9,7 @@
 #include <proto/dos.h>
 
 #include "app.h"
+#include "formbrod/log.h"
 #include "gui/mainwindow.h"
 #include "gui/playwindow.h"
 #include "arexx/arexx.h"
@@ -29,6 +30,17 @@ static uint32 now_ms(void)
     return ((uint32)ds.ds_Days * 24 * 60 * 60 * TICKS_PER_SECOND +
             (uint32)ds.ds_Minute * 60 * TICKS_PER_SECOND +
             (uint32)ds.ds_Tick) * (1000 / TICKS_PER_SECOND);
+}
+
+/* While tracing: which part of the loop runs, said when it changes. */
+static void trace_branch(const char *what)
+{
+    static const char *last;
+
+    if (what != last) {
+        FB_TRACE("app", "main loop: %s", what);
+        last = what;
+    }
 }
 
 static const char USED ver[] =
@@ -57,6 +69,7 @@ int main(int argc, char **argv)
             App_AddFile(argv[i]);
     }
 
+    FB_TRACE("app", "opening the main window");
     if (MainWindow_Open() != 0) {
         IDOS->Printf("%s", FB_Str(MSG_ERR_NO_WINDOW));
         goto out;
@@ -79,11 +92,13 @@ int main(int argc, char **argv)
             const FBPlayFrame *f;
             long sleep_ms;
 
+            trace_branch("playing");
             sigs = IExec->SetSignal(0, mask) & mask;
             f = App_PollPlay(&sleep_ms);
             if (f)
                 PlayWindow_Show(f);
             if (!App_Playing()) {
+                FB_TRACE("app", "playing ended");
                 MainWindow_Refresh();           /* ended, or failed */
             } else {
                 long long now = FB_BackendClockUs();
@@ -102,6 +117,7 @@ int main(int argc, char **argv)
         } else if (App.rendering) {
             FBProgress p;
 
+            trace_branch("rendering");
             sigs = IExec->SetSignal(0, mask) & mask;
             p = App_PollRender();
             MainWindow_SetProgress(&p);
@@ -113,6 +129,7 @@ int main(int argc, char **argv)
              * while the window is left alone, as below. */
             int was = App_Previewing();
 
+            trace_branch("between preview windows");
             sigs = IExec->SetSignal(0, mask) & mask;
             App_PollPreview();
             if (App.rendering || was != App_Previewing())
@@ -125,16 +142,19 @@ int main(int argc, char **argv)
         } else if (App_CacheBusy() && now_ms() - last_input >= IDLE_MS) {
             /* Proxies are made in the background, a slice at a time,
              * between window and ARexx events, while nothing happens. */
+            trace_branch("cache work");
             sigs = IExec->SetSignal(0, mask) & mask;
             if (App_PollCache())
                 MainWindow_Refresh();
         } else if (App_CacheBusy()) {
             /* Just used: the window has the machine. Look again for
              * input every tick until it has been left alone a while. */
+            trace_branch("cache waiting for the user to pause");
             sigs = IExec->SetSignal(0, mask) & mask;
             if (!sigs)
                 IDOS->Delay(1);
         } else {
+            trace_branch("waiting for events");
             sigs = IExec->Wait(mask);
         }
 

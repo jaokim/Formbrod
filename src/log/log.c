@@ -19,11 +19,12 @@ static char       LastArea[AREA_LEN];
 static FBLogLevel LastLevel;
 static unsigned long Repeats;
 
-static const char *const Names[] = { "error", "warning", "info", "debug" };
+static const char *const Names[] = { "error", "warning", "info", "debug",
+                                      "trace" };
 
 const char *FB_LogLevelName(FBLogLevel level)
 {
-    return (level >= FB_LOG_ERROR && level <= FB_LOG_DEBUG) ? Names[level]
+    return (level >= FB_LOG_ERROR && level <= FB_LOG_TRACE) ? Names[level]
                                                             : "info";
 }
 
@@ -31,7 +32,7 @@ FBLogLevel FB_LogLevelFromName(const char *name, FBLogLevel def)
 {
     int i;
 
-    for (i = 0; name && i <= FB_LOG_DEBUG; i++)
+    for (i = 0; name && i <= FB_LOG_TRACE; i++)
         if (strcmp(name, Names[i]) == 0)
             return (FBLogLevel)i;
     return def;
@@ -142,6 +143,19 @@ void FB_Log(FBLogLevel level, const char *area, const char *fmt, ...)
     va_start(ap, fmt);
     FB_LogV(level, area, fmt, ap);
     va_end(ap);
+}
+
+void FB_LogLeave(const char *area, const char *func, const char *fmt, ...)
+{
+    char text[LINE_LEN];
+    va_list ap;
+
+    if (!FB_LogWants(FB_LOG_TRACE))
+        return;
+    va_start(ap, fmt);
+    vsnprintf(text, sizeof(text), fmt, ap);
+    va_end(ap);
+    FB_Log(FB_LOG_TRACE, area, "< %s%s%s", func, *text ? ": " : "", text);
 }
 
 void FB_LogText(FBLogLevel level, const char *area, const char *text)
