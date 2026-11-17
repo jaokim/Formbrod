@@ -11,6 +11,7 @@
 #include "formbrod/backend.h"
 #include "formbrod/cache.h"
 #include "formbrod/thumbs.h"
+#include "formbrod/waves.h"
 #include "formbrod/player.h"
 
 typedef struct FBApp {
@@ -32,6 +33,8 @@ typedef struct FBApp {
     /* Film-strip thumbnails in memory, read from the strips the cache
      * makes (thumbs.h). The GUI draws from it; App_LoadThumbs() fills it. */
     FBThumbStore thumbs;
+    /* Sound peaks for the lanes' waveforms (waves.h), the same way. */
+    FBWaveStore  waves;
     unsigned    gen;           /* counts edits (render.h keys follow it) */
     /* Background rendering (render.h). */
     struct {
@@ -173,21 +176,25 @@ int  App_ProxyWidthSetting(void);
 int  App_ProxyWidth(void);
 void App_SetProxyWidth(int width);
 
-/* Thumbnails for the film strip. Every source with a picture gets a strip
- * in the cache drawer, made in the background like the proxies (after its
- * proxy, and from it), while the setting "ShowPictures" (1/0, default 1)
- * is on. SetThumbnails changes and saves it.
+/* Thumbnails for the film strip and waveforms for the sound lanes. Every
+ * source with a picture gets a thumbnail strip, and every one with sound
+ * a peak file, in the cache drawer, made in the background like the
+ * proxies (after its proxy, and from it), while the setting
+ * "ShowPictures" (1/0, default 1) is on. SetThumbnails changes and saves
+ * it.
  *
  * ThumbSize sets the size of a thumbnail (the film strip's cell) and
  * makes the store; until then nothing is drawn from it. A lookup that
- * misses (FB_ThumbsLock() on App.thumbs, from any task) sets the signal
- * in ThumbsSigMask; the main loop then calls LoadThumbs, which reads them
- * and returns how many came, so the film strip can be drawn again. */
+ * misses (FB_ThumbsLock() on App.thumbs, or FB_WavesLock() on App.waves,
+ * from any task) sets the signal in ThumbsSigMask; the main loop then
+ * calls LoadThumbs and LoadWaves, which read them and return how many
+ * came, so the film strip or the lanes can be drawn again. */
 int  App_ThumbsEnabled(void);
 void App_SetThumbnails(int on);
 int  App_ThumbSize(int w, int h);
 unsigned long App_ThumbsSigMask(void);
 int  App_LoadThumbs(void);
+int  App_LoadWaves(void);
 
 /* A preview from the playhead that goes on until it's stopped or the edit
  * ends. It is rendered as 10-second windows (FB_TimelineWindow), each its

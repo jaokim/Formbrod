@@ -137,6 +137,8 @@ void FB_CacheRecipe(const FBCache *c, FBCacheKind kind, char *out,
         snprintf(out, len, "render1-%d", FB_PREVIEW_WIDTH);
     else if (kind == FB_CACHE_THUMBS)
         snprintf(out, len, "thumbs1-%dx%d", c->thumb_w, c->thumb_h);
+    else if (kind == FB_CACHE_WAVE)
+        snprintf(out, len, "wave1-%d", FB_WAVE_RATE);
     else
         snprintf(out, len, "proxy1-%d", c->proxy_width);
 }
@@ -157,6 +159,12 @@ int FB_CacheWantsThumbs(const FBCache *c, const FBSource *src)
 {
     (void)c;
     return src->has_video && src->key[0];
+}
+
+int FB_CacheWantsWave(const FBCache *c, const FBSource *src)
+{
+    (void)c;
+    return src->has_audio && src->key[0];
 }
 
 int FB_CacheAutoWidth(int mhz, int cores)
@@ -199,7 +207,8 @@ int FB_CachePath(const FBCache *c, const char *key, FBCacheKind kind,
     FB_CacheRecipe(c, kind, recipe, sizeof(recipe));
     if (snprintf(name, sizeof(name), "%s.%s%s.%s", key, recipe,
                  partial ? "-part" : "",
-                 kind == FB_CACHE_THUMBS ? "rgb" : "mov") >= (int)sizeof(name))
+                 kind == FB_CACHE_THUMBS ? "rgb" :
+                 kind == FB_CACHE_WAVE ? "yuv" : "mov") >= (int)sizeof(name))
         return -1;
     return FB_PathJoin(c->dir, name, out, len);
 }
@@ -308,6 +317,13 @@ FBCacheState FB_CacheRequestThumbs(FBCache *c, const FBSource *src)
     return request(c, src, FB_CACHE_THUMBS);
 }
 
+FBCacheState FB_CacheRequestWave(FBCache *c, const FBSource *src)
+{
+    if (!c->dir[0] || !FB_CacheWantsWave(c, src))
+        return FB_CACHE_NONE;
+    return request(c, src, FB_CACHE_WAVE);
+}
+
 void FB_CacheDrop(FBCache *c, FBCacheKind kind)
 {
     int i, j = 0;
@@ -374,6 +390,41 @@ static int build_thumbs_job(const FBCache *c, const FBCacheTask *task,
     return 0;
 }
 
+/* Sound peaks: showvolume draws each 1/FB_WAVE_RATE s stretch's peak
+ * (m=p, on a linear scale) as a white bar on black in a 255 x 1 picture,
+ * 255 pixels long at full scale. A box blur as wide as the picture
+ * leaves the mean of the whole row in its middle pixel, which is the
+ * bar's length as a grey level, 0-255; crop keeps that pixel. (scale
+ * with flags=area is no true average at 255:1, and reads quiet sound as
+ * silence.) showvolume's other decorations (names, values, border,
+ * fading) are turned off. Checked with ffmpeg 6.1: a sine at 0.02 of
+ * full scale reads 5, at 0.5 127, at 1.0 254, and silence 0. */
+static int build_wave_job(const FBCache *c, const FBCacheTask *task,
+                          FBJob *job)
+{
+    const FBSource *s = &task->source;
+    int n;
+
+    if (!FB_CacheFind(c, task->key, FB_CACHE_PROXY, job->inputs[0],
+                      FB_PATH_LEN))
+        copy_str(job->inputs[0], s->path, FB_PATH_LEN);
+    n = snprintf(job->filtergraph, sizeof(job->filtergraph),
+                 "[0:a]aformat=channel_layouts=mono,"
+                 "showvolume=r=%d:w=255:h=1:b=0:t=0:v=0:f=0:ds=lin:m=p:"
+                 "c=0xffffffff,format=gray,avgblur=sizeX=127:sizeY=0,"
+                 "crop=1:1:127:0,setsar=1[outv]", FB_WAVE_RATE);
+    if (n >= (int)sizeof(job->filtergraph))
+        return -1;
+    copy_str(job->video_out, "outv", sizeof(job->video_out));
+    if (FB_CachePath(c, task->key, task->kind, 1, job->output.path,
+                     sizeof(job->output.path)) != 0)
+        return -1;
+    copy_str(job->output.vcodec, "rawvideo", sizeof(job->output.vcodec));
+    job->output.quality = FB_QUALITY_PREVIEW;
+    job->length = s->duration;
+    return 0;
+}
+
 int FB_CacheBuildJob(const FBCache *c, const FBCacheTask *task, FBJob *job)
 {
     const FBSource *s = &task->source;
@@ -384,6 +435,8 @@ int FB_CacheBuildJob(const FBCache *c, const FBCacheTask *task, FBJob *job)
     job->num_inputs = 1;
     if (task->kind == FB_CACHE_THUMBS)
         return build_thumbs_job(c, task, job);
+    if (task->kind == FB_CACHE_WAVE)
+        return build_wave_job(c, task, job);
     copy_str(job->inputs[0], s->path, FB_PATH_LEN);
 
     /* Same frames and timing as the file, only smaller and every frame a
@@ -426,7 +479,7 @@ int FB_CacheNextJob(FBCache *c, FBJob *job)
 
         if (t->state != FB_CACHE_QUEUED)
             continue;
-        if (t->kind == FB_CACHE_THUMBS) {
+        if (t->kind == FB_CACHE_THUMBS || t->kind == FB_CACHE_WAVE) {
             int p = find_task(c, t->key, FB_CACHE_PROXY);
 
             /* Its proxy is coming: wait for it, it's quicker to read. */
