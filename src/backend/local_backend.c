@@ -1450,17 +1450,21 @@ static void local_slice(LocalPriv *p)
             ret = drain_to_sink(p);
             if (ret < 0)
                 return;
-            /* Both full: playback catches up first. Only the pictures
-             * full: go on reading while the sound wants more, or sound
-             * from a file of its own (music) would fall behind. */
-            if ((ret & (1 << KIND_AUDIO)) ||
-                ((ret & (1 << KIND_VIDEO)) && p->os[KIND_AUDIO].eof))
+            /* Both full: playback catches up first. One full: go on
+             * reading for the other while it wants more, from files that
+             * have that kind. Sound from a file of its own (music) would
+             * otherwise fall behind the pictures; and pictures must come
+             * while the sound is full, because playback doesn't start
+             * before it has some: a graph that makes sound without input
+             * (silence under a still picture) fills the sound first, and
+             * waiting for it to drain would wait for ever. */
+            if (ret == ((1 << KIND_VIDEO) | (1 << KIND_AUDIO)) ||
+                ((ret & (1 << KIND_VIDEO)) && p->os[KIND_AUDIO].eof) ||
+                ((ret & (1 << KIND_AUDIO)) && p->os[KIND_VIDEO].eof))
                 return;
-            /* Pictures full: read only files with sound in them, not
-             * more pictures that would only pile up. */
             want = (ret & (1 << KIND_VIDEO)) ? 1 << KIND_AUDIO
-                                             : (1 << KIND_VIDEO) |
-                                               (1 << KIND_AUDIO);
+                 : (ret & (1 << KIND_AUDIO)) ? 1 << KIND_VIDEO
+                 : (1 << KIND_VIDEO) | (1 << KIND_AUDIO);
             if (p->os[KIND_VIDEO].eof && p->os[KIND_AUDIO].eof) {
                 release(p, 1);
                 finish(p, FB_RENDER_DONE, "Played");
@@ -1487,7 +1491,7 @@ static void local_slice(LocalPriv *p)
         p->tr.want = want;
         i = next_input(p, want);
         if (i < 0 && want != ((1 << KIND_VIDEO) | (1 << KIND_AUDIO)))
-            return;     /* no sound left to read: wait for playback */
+            return;     /* nothing of that kind to read: wait for playback */
         if (i < 0) {
             FB_TRACE("render", "no input left to read, outputs not ended");
             /* Every input is flushed and the sinks still want more. */
@@ -1543,9 +1547,15 @@ static void log_callback(void *avcl, int level, const char *fmt, va_list vl)
 
 void FB_BackendLogStart(void)
 {
+    /* One per FBLogLevel. Trace is about what Formbröd does, so ffmpeg
+     * stays at verbose: its own debug and trace output (the mov demuxer
+     * logs every sample of its index) would bury it, and slow everything
+     * down on a slow machine. */
     static const int av_level[] = {
-        AV_LOG_ERROR, AV_LOG_WARNING, AV_LOG_INFO, AV_LOG_VERBOSE
+        AV_LOG_ERROR, AV_LOG_WARNING, AV_LOG_INFO, AV_LOG_VERBOSE,
+        AV_LOG_VERBOSE
     };
+    int level = FB_LogGetLevel();
     unsigned f = avformat_version(), c = avcodec_version();
     unsigned fl = avfilter_version(), u = avutil_version();
 
@@ -1560,7 +1570,11 @@ void FB_BackendLogStart(void)
            avcodec_configuration());
     if (!FB_LogIsOpen())
         return;     /* FB_BackendQuiet keeps them out of the shell */
-    av_log_set_level(av_level[FB_LogGetLevel()]);
+    if (level < 0)
+        level = 0;
+    if (level >= (int)(sizeof(av_level) / sizeof(av_level[0])))
+        level = sizeof(av_level) / sizeof(av_level[0]) - 1;
+    av_log_set_level(av_level[level]);
     av_log_set_callback(log_callback);
 }
 
