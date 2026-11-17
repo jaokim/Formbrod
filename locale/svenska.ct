@@ -599,3 +599,114 @@ Förberäkna förhandsvisningar i bakgrunden
 ;
 MSG_PLAYWIN_PREPARING
 Förbereder förhandsvisningen...
+;
+MSG_MENU_PROJECT_SETTINGS
+Projektinställningar...
+;
+MSG_PROJWIN_TITLE
+Projektinställningar
+;
+MSG_GROUP_FRAME
+Bildruta
+;
+MSG_GROUP_EXPORT_FILE
+Exportfil
+;
+MSG_LABEL_WIDTH
+Bredd
+;
+MSG_LABEL_HEIGHT
+Höjd
+;
+MSG_LABEL_FRAME_RATE
+Bildfrekvens
+;
+MSG_LABEL_BAR_COLOUR
+Kantfärg
+;
+MSG_LABEL_FILE_TYPE
+Filtyp
+;
+MSG_LABEL_ENCODER
+Kodare
+;
+MSG_LABEL_QUALITY
+Kvalitet
+;
+MSG_LABEL_BITRATE
+Bithastighet
+;
+MSG_LABEL_SAMPLE_RATE
+Samplingsfrekvens
+;
+MSG_HINT_SIZE_AUTO
+Lämna tomt för första klippets storlek
+;
+MSG_RATE_AUTO
+Som första klippet
+;
+MSG_RATE_FPS
+%s bilder/s
+;
+MSG_QUALITY_LOW
+Låg (liten fil)
+;
+MSG_QUALITY_MEDIUM
+Medel
+;
+MSG_QUALITY_HIGH
+Hög
+;
+MSG_QUALITY_BEST
+Bäst (stor fil)
+;
+MSG_VCODEC_MPEG4
+MPEG-4 Part 2
+;
+MSG_VCODEC_H264
+H.264 (x264)
+;
+MSG_VCODEC_MJPEG
+Motion JPEG
+;
+MSG_ACODEC_AAC
+AAC
+;
+MSG_ACODEC_MP3
+MP3 (LAME)
+;
+MSG_ACODEC_MP2
+MP2
+;
+MSG_ACODEC_FLAC
+FLAC (förlustfri)
+;
+MSG_ACODEC_PCM
+Okomprimerat (PCM)
+;
+MSG_TYPE_MP4
+MP4 (.mp4)
+;
+MSG_TYPE_MOV
+QuickTime (.mov)
+;
+MSG_TYPE_MKV
+Matroska (.mkv)
+;
+MSG_TYPE_AVI
+AVI (.avi)
+;
+MSG_NOT_AVAILABLE
+%s (finns inte i denna ffmpeg)
+;
+MSG_KBITS
+%ld kbit/s
+;
+MSG_KHZ
+%s kHz
+;
+MSG_STATUS_BAD_COLOUR
+%s är ingen färg: skriv RRGGBB, som 000000 för svart
+;
+MSG_STATUS_BAD_SIZE
+Bildrutan måste vara från 2 x 2 till 16384 x 16384
