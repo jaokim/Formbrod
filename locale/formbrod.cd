@@ -738,3 +738,9 @@ Preview rendered ahead: %ld of %ld pieces
 ; background while the window is left alone.
 MSG_MENU_BACKGROUND_RENDER (250//)
 Render previews in the background
+;
+; In the preview window, in the middle of the picture area, from pressing
+; Play until the first picture is ready (on a slow machine that can take
+; a while: files are opened and the edit starts rendering).
+MSG_PLAYWIN_PREPARING (251//)
+Preparing the preview...

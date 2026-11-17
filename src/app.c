@@ -1806,6 +1806,17 @@ static int play_step(int i)
 
 static int play_start(fb_ms_t from);
 
+void App_PlaySize(int *width, int *height)
+{
+    int w, h;
+
+    *width = *height = 0;
+    if (!FB_TimelineFrameSize(&App.timeline, &w, &h) || w <= 0 || h <= 0)
+        return;
+    *width = FB_PREVIEW_WIDTH;
+    *height = (int)(((long long)FB_PREVIEW_WIDTH * h + w / 2) / w) & ~1;
+}
+
 int App_PlayStart(fb_ms_t from)
 {
     int rc;

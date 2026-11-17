@@ -64,6 +64,7 @@
 #include <classes/arexx.h>
 
 #include "app.h"
+#include "gui/playwindow.h"
 #include "arexx.h"
 #include "formbrod/module.h"
 
@@ -219,9 +220,17 @@ static void cmd_play(struct ARexxCmd *cmd, struct RexxMsg *rm)
         set_result(cmd, 0);
         return;
     }
-    set_result(cmd, App_PlayStart(cmd->ac_ArgList[0]
-                                  ? *(int32 *)cmd->ac_ArgList[0] : 0)
-                    ? RC_ERROR : 0);
+    {
+        int w, h, rc;
+
+        App_PlaySize(&w, &h);
+        PlayWindow_Prepare(w, h);       /* as the Play button does */
+        rc = App_PlayStart(cmd->ac_ArgList[0]
+                           ? *(int32 *)cmd->ac_ArgList[0] : 0);
+        if (rc != 0)
+            PlayWindow_SetMessage(App.status);
+        set_result(cmd, rc ? RC_ERROR : 0);
+    }
 }
 
 static void cmd_preview(struct ARexxCmd *cmd, struct RexxMsg *rm)

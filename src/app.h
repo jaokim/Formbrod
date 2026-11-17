@@ -220,6 +220,10 @@ const char *App_PreviewPlaylist(void);
  * before the next turn. PlayPosition is where playback is in the edit,
  * for the playhead. */
 int  App_PlayStart(fb_ms_t from);
+/* The size the preview's pictures will be (FB_PREVIEW_WIDTH wide, the
+ * edit's shape), for opening the window before the first one; 0x0 if the
+ * edit's size isn't known. */
+void App_PlaySize(int *width, int *height);
 void App_PlayStop(void);
 int  App_Playing(void);
 const FBPlayFrame *App_PollPlay(long *sleep_ms);
