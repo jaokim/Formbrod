@@ -652,7 +652,8 @@ static void test_job_tracks(void)
     CHECK(strstr(job.filtergraph, "[t0v][t2v]overlay=format=auto:"
                                   "eof_action=pass[outv]") != NULL);
     CHECK(strstr(job.filtergraph, "[t0a][t1a]amix=inputs=2:duration=longest:"
-                                  "dropout_transition=0,volume=2[outa]"));
+                                  "dropout_transition=0:normalize=0,"
+                                  "alimiter=limit=1:level=0[outa]"));
     CHECK(job.filtergraph[strlen(job.filtergraph) - 1] != ';');
     CHECK(strcmp(job.audio_out, "outa") == 0);
 

@@ -19,7 +19,8 @@
  * is mixed with amix:
  *
  *   [t0v][t2v]overlay=format=auto:eof_action=pass[outv];
- *   [t0a][t1a]amix=inputs=2:duration=longest:dropout_transition=0,volume=2[outa]
+ *   [t0a][t1a]amix=inputs=2:duration=longest:dropout_transition=0:normalize=0,
+ *             alimiter=limit=1:level=0[outa]
  *
  * A clip with a crossfade is mixed into the one before it before the
  * track is joined: xfade for the picture (its offset counts from the start
@@ -541,16 +542,20 @@ FBJobError FB_JobBuild(FBJob *job, const FBTimeline *tl, const FBOutput *out)
         }
     }
 
-    /* All sound mixed. amix divides by the number of inputs; every track
-     * lasts the whole length, so multiplying back gives the plain sum. */
+    /* All sound mixed: the plain sum (normalize=0). amix's own scaling
+     * divides by the inputs still playing, so "divide, then multiply
+     * back" made the last track twice as loud once a shorter one ended
+     * (music under a video that stops first). A sum of loud tracks can
+     * go over full scale, so a limiter (attack 5 ms, no automatic
+     * levelling) keeps it there instead of clipping. */
     if (atracks > 1) {
         for (t = 0; t < tl->num_tracks; t++)
             if (use[t].audio) {
                 buf_printf(&b, "[t%da]", t);
                 adone++;
             }
-        buf_printf(&b, "amix=inputs=%d:duration=longest:dropout_transition=0,"
-                   "volume=%d[outa];", atracks, atracks);
+        buf_printf(&b, "amix=inputs=%d:duration=longest:dropout_transition=0:"
+                   "normalize=0,alimiter=limit=1:level=0[outa];", atracks);
     }
 
     /* No trailing ';' */
