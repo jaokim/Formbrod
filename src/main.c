@@ -116,9 +116,9 @@ int main(int argc, char **argv)
             }
         } else if (App_StillBusy()) {
             /* The preview window follows the playhead: a turn of work on
-             * the frame at it (on a backend of its own, so an export or
-             * proxies don't wait, but they get no turn meanwhile either:
-             * a frame takes a fraction of a second). */
+             * the frame at it, on a backend of its own. An export goes on
+             * alongside; proxies wait (a frame takes a fraction of a
+             * second). */
             const FBPlayFrame *f;
 
             trace_branch("frame at the playhead");
