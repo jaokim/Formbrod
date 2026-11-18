@@ -614,3 +614,21 @@ Visa förhandsvisningsfönstret
 ;
 MSG_REQ_SAVE_FRAME
 Spara bildrutan vid positionen
+;
+MSG_MENU_RANGE_FROM
+Intervallet börjar här
+;
+MSG_MENU_RANGE_TO
+Intervallet slutar här
+;
+MSG_MENU_RANGE_CLEAR
+Intervall: hela filmen
+;
+MSG_MENU_EXPORT_RANGE
+Exportera intervall...
+;
+MSG_REQ_EXPORT_RANGE
+Exportera intervallet som ANIM (eller .mp4, .gif...)
+;
+MSG_HINT_RULER
+Klicka eller dra för att flytta positionen. Dra flaggorna längst ner för att markera ett intervall

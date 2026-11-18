@@ -2373,6 +2373,192 @@ static void test_picture(void)
     free(argb);
 }
 
+/* The marks in the overview: kept within the edit, saved in projects. */
+static void test_range(void)
+{
+    static FBTimeline tl, back;
+    static char text[8192];
+    fb_ms_t f, t;
+    int line;
+
+    three_clips(&tl);                               /* 12 s */
+    CHECK(FB_TimelineRange(&tl, &f, &t) == 12000 && f == 0 && t == 12000);
+    FB_ProjectWrite(&tl, "", text, sizeof(text));
+    CHECK(strstr(text, "RANGE") == NULL);           /* none set: none saved */
+
+    FB_TimelineSetRange(&tl, 5000, 2000);           /* swapped */
+    CHECK(FB_TimelineRange(&tl, &f, &t) == 3000 && f == 2000 && t == 5000);
+    FB_TimelineSetRange(&tl, 3000, 99000);          /* past the end = end */
+    CHECK(tl.range_to == 0);
+    CHECK(FB_TimelineRange(&tl, &f, &t) == 9000 && f == 3000 && t == 12000);
+    FB_TimelineSetRange(&tl, -5, 0);
+    CHECK(tl.range_from == 0 && tl.range_to == 0);
+
+    FB_TimelineSetRange(&tl, 2000, 7000);
+    CHECK(FB_ProjectWrite(&tl, "", text, sizeof(text)) > 0);
+    CHECK(strstr(text, "\nRANGE 2000 7000\n") != NULL);
+    CHECK(FB_ProjectParse(&back, text, "", &line) == FB_PROJECT_OK);
+    CHECK(FB_TimelineRange(&back, &f, &t) == 5000 && f == 2000 && t == 7000);
+    CHECK(FB_ProjectParse(&back, "FORMBROD-PROJECT 2\nRANGE x\n", "",
+                          &line) == FB_PROJECT_BAD_LINE);
+
+    /* An edit cut shorter than the marks: the whole edit again. */
+    tl.range_from = 20000;
+    tl.range_to = 30000;
+    CHECK(FB_TimelineRange(&tl, &f, &t) == 12000 && f == 0 && t == 12000);
+    FB_TimelineInit(&back);
+    CHECK(FB_TimelineRange(&back, &f, &t) == 0);
+}
+
+/* IFF ANIM: write a few frames of a moving box, then play the file back
+ * here (BODY, then op-5 deltas into two buffers) and compare. */
+static void test_anim(void)
+{
+    enum { W = 70, H = 40, N = 7, S = 4 * W };
+    static unsigned char argb[S * H], want[N][W * H], buf[2][W * H];
+    static unsigned char file[200000];
+    const char *path = "build/host/test.anim";
+    FBAnimWriter *a;
+    FILE *f;
+    size_t n, at;
+    int i, x, y, frame = 0, ok = 1, rowbytes = ((W + 15) / 16) * 2;
+
+    CHECK(FB_IsMovieName("RAM:a.MP4") && FB_IsMovieName("x.gif"));
+    CHECK(!FB_IsMovieName("RAM:a.anim") && !FB_IsMovieName("RAM:dance")
+          && !FB_IsMovieName("Work:v.mp4/x") && !FB_IsMovieName("a.mp4x"));
+    CHECK(FB_AnimOpen(path, 0, H, 10, 1) == NULL);
+
+    a = FB_AnimOpen(path, W, H, 25, 2);
+    CHECK(a != NULL);
+    if (!a)
+        return;
+    for (i = 0; i < N; i++) {
+        for (y = 0; y < H; y++)
+            for (x = 0; x < W; x++) {
+                unsigned char *q = argb + y * S + 4 * x;
+                int box = x >= 6 * i && x < 6 * i + 12 && y >= 10 && y < 30;
+
+                q[0] = 255;
+                q[1] = (unsigned char)(box ? 240 : x * 3);
+                q[2] = (unsigned char)(box ? 20 : y * 6);
+                q[3] = (unsigned char)(box ? 20 : 100);
+            }
+        CHECK(FB_AnimAdd(a, argb, S) == 0);
+        FB_AnimQuantize(argb, W, H, S, want[i]);
+    }
+    CHECK(FB_AnimFrames(a) == N);
+    CHECK(FB_AnimClose(a) == 0);
+
+    f = fopen(path, "rb");
+    CHECK(f != NULL);
+    if (!f)
+        return;
+    n = fread(file, 1, sizeof(file), f);
+    fclose(f);
+    remove(path);
+    CHECK(memcmp(file, "FORM", 4) == 0 && be32(file + 4) == n - 8
+          && memcmp(file + 8, "ANIM", 4) == 0);
+
+    for (at = 12; at + 8 <= n; at += 8 + ((be32(file + at + 4) + 1) & ~1UL)) {
+        size_t end = at + 8 + be32(file + at + 4), c;
+
+        CHECK(memcmp(file + at, "FORM", 4) == 0
+              && memcmp(file + at + 8, "ILBM", 4) == 0);
+        for (c = at + 12; c + 8 <= end;
+             c += 8 + ((be32(file + c + 4) + 1) & ~1UL)) {
+            const unsigned char *d = file + c + 8;
+            unsigned char *dst = buf[frame & 1];
+            int p;
+
+            if (memcmp(file + c, "DPAN", 4) == 0)
+                CHECK(((d[2] << 8) | d[3]) == N);
+            if (memcmp(file + c, "ANHD", 4) == 0)
+                CHECK(d[0] == 5 && be32(d + 14) == 5 && d[18] == 0);
+            if (memcmp(file + c, "BODY", 4) == 0) {
+                /* ByteRun1 rows of 8 planes, into both buffers. */
+                memset(buf, 0, sizeof(buf));
+                for (y = 0; y < H; y++)
+                    for (p = 0; p < 8; p++) {
+                        unsigned char row[64];
+                        int k = 0;
+
+                        while (k < rowbytes) {
+                            int cnt = (signed char)*d++;
+
+                            if (cnt >= 0) {
+                                memcpy(row + k, d, (size_t)cnt + 1);
+                                d += cnt + 1;
+                                k += cnt + 1;
+                            } else {
+                                memset(row + k, *d++, (size_t)(1 - cnt));
+                                k += 1 - cnt;
+                            }
+                        }
+                        for (x = 0; x < W; x++)
+                            if (row[x >> 3] & (0x80 >> (x & 7))) {
+                                buf[0][y * W + x] |= (unsigned char)(1 << p);
+                                buf[1][y * W + x] |= (unsigned char)(1 << p);
+                            }
+                    }
+            }
+            if (memcmp(file + c, "DLTA", 4) == 0) {
+                /* Op 5 per plane and byte column, onto the buffer two
+                 * frames back. */
+                for (p = 0; p < 8; p++) {
+                    const unsigned char *op;
+                    int col;
+
+                    if (!be32(d + 4 * p))
+                        continue;
+                    op = d + be32(d + 4 * p);
+                    for (col = 0; col < rowbytes; col++) {
+                        int ops = *op++, row = 0;
+
+                        while (ops--) {
+                            int code = *op++, cnt, v;
+
+                            if (code == 0) {
+                                cnt = *op++;
+                                v = *op++;
+                                while (cnt--) {
+                                    for (x = 0; x < 8; x++)
+                                        if (col * 8 + x < W) {
+                                            unsigned char *px =
+                                                &dst[row * W + col * 8 + x];
+                                            *px = (unsigned char)((*px & ~(1 << p))
+                                                  | (((v >> (7 - x)) & 1) << p));
+                                        }
+                                    row++;
+                                }
+                            } else if (code & 0x80) {
+                                cnt = code & 0x7f;
+                                while (cnt--) {
+                                    v = *op++;
+                                    for (x = 0; x < 8; x++)
+                                        if (col * 8 + x < W) {
+                                            unsigned char *px =
+                                                &dst[row * W + col * 8 + x];
+                                            *px = (unsigned char)((*px & ~(1 << p))
+                                                  | (((v >> (7 - x)) & 1) << p));
+                                        }
+                                    row++;
+                                }
+                            } else {
+                                row += code;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        ok = ok && frame < N
+             && memcmp(buf[frame & 1], want[frame], W * H) == 0;
+        frame++;
+    }
+    CHECK(frame == N);
+    CHECK(ok);
+}
+
 int main(void)
 {
     FB_RegisterBuiltinModules();
@@ -2409,6 +2595,8 @@ int main(void)
     test_thumb_store();
     test_waves();
     test_picture();
+    test_range();
+    test_anim();
     if (failures) {
         printf("%d check(s) failed\n", failures);
         return 1;

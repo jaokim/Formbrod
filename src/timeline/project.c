@@ -143,6 +143,10 @@ int FB_ProjectWrite(const FBTimeline *tl, const char *project_dir,
     buf_printf(&b, "OUTPUT-FIT %s\n", FB_FitName(tl->format.fit));
     buf_printf(&b, "PAD-COLOR %06lX\n",
                (unsigned long)(tl->format.pad_color & 0xFFFFFF));
+    if (tl->range_from > 0 || tl->range_to > 0)
+        buf_printf(&b, "; the marks in the overview; 0 at the end = to "
+                   "the end\nRANGE %lld %lld\n", (long long)tl->range_from,
+                   (long long)tl->range_to);
 
     if (tl->num_sources > 0)
         buf_printf(&b, "\n");
@@ -315,6 +319,19 @@ FBProjectError FB_ProjectParse(FBTimeline *tl, const char *text,
             if (end == val || *end)
                 FAIL(FB_PROJECT_BAD_LINE);
             tl->format.pad_color = (uint32_t)(c & 0xFFFFFF);
+        } else if (strcmp(line, "RANGE") == 0) {
+            long long f, t;
+            char *end;
+
+            f = strtoll(val, &end, 10);
+            if (end == val)
+                FAIL(FB_PROJECT_BAD_LINE);
+            t = strtoll(end, &end, 10);
+            if (f < 0 || t < 0)
+                FAIL(FB_PROJECT_BAD_LINE);
+            /* Set as is: the clips (and so the end) come later. */
+            tl->range_from = (fb_ms_t)f;
+            tl->range_to = (fb_ms_t)t;
         } else if (strcmp(line, "SOURCE") == 0) {
             char path[FB_PATH_LEN];
             int num;

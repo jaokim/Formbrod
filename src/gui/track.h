@@ -44,6 +44,15 @@ struct FBTimebase;
                                                    the same              (I)   */
 #define TRACK_Label          (TRACK_Dummy + 7)  /* CONST_STRPTR shown in the
                                                    inset                 (IS)  */
+#define TRACK_Marks          (TRACK_Dummy + 8)  /* uint32: the range's marks
+                                                   (TRACK_Timeline's range):
+                                                   0 none, 1 lines, 2 lines
+                                                   plus flags and a band at
+                                                   the bottom that can be
+                                                   dragged               (I)   */
+#define TRACK_RangeFrom      (TRACK_Dummy + 9)  /* N: int32 ms: a mark was   */
+#define TRACK_RangeTo        (TRACK_Dummy + 10) /*    dragged; the range now */
+#define TRACK_RangeDone      (TRACK_Dummy + 11) /*    (Done: released)       */
 
 #define FILMSTRIP_CellWidth  (TRACK_Dummy + 101) /* uint32, default 88   (I)  */
 #define FILMSTRIP_CellHeight (TRACK_Dummy + 102) /* uint32, default 48   (I)  */

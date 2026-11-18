@@ -418,8 +418,20 @@
 #define MSG_MENU_SHOW_PREVIEW_STR        "Show preview window"
 #define MSG_REQ_SAVE_FRAME               256
 #define MSG_REQ_SAVE_FRAME_STR           "Save the frame at the playhead"
+#define MSG_MENU_RANGE_FROM              257
+#define MSG_MENU_RANGE_FROM_STR          "Range starts here"
+#define MSG_MENU_RANGE_TO                258
+#define MSG_MENU_RANGE_TO_STR            "Range ends here"
+#define MSG_MENU_RANGE_CLEAR             259
+#define MSG_MENU_RANGE_CLEAR_STR         "Range: whole edit"
+#define MSG_MENU_EXPORT_RANGE            260
+#define MSG_MENU_EXPORT_RANGE_STR        "Export range..."
+#define MSG_REQ_EXPORT_RANGE             261
+#define MSG_REQ_EXPORT_RANGE_STR         "Export the range as an ANIM (or .mp4, .gif...)"
+#define MSG_HINT_RULER                   262
+#define MSG_HINT_RULER_STR               "Click or drag to move the playhead. Drag the flags at the bottom to mark a range"
 
-#define FB_NUM_STRINGS 203
+#define FB_NUM_STRINGS 209
 
 #ifdef FB_STRINGS_ARRAY
 static const struct FBBuiltinString {
@@ -629,6 +641,12 @@ static const struct FBBuiltinString {
     { MSG_MENU_SAVE_FRAME, MSG_MENU_SAVE_FRAME_STR },
     { MSG_MENU_SHOW_PREVIEW, MSG_MENU_SHOW_PREVIEW_STR },
     { MSG_REQ_SAVE_FRAME, MSG_REQ_SAVE_FRAME_STR },
+    { MSG_MENU_RANGE_FROM, MSG_MENU_RANGE_FROM_STR },
+    { MSG_MENU_RANGE_TO, MSG_MENU_RANGE_TO_STR },
+    { MSG_MENU_RANGE_CLEAR, MSG_MENU_RANGE_CLEAR_STR },
+    { MSG_MENU_EXPORT_RANGE, MSG_MENU_EXPORT_RANGE_STR },
+    { MSG_REQ_EXPORT_RANGE, MSG_REQ_EXPORT_RANGE_STR },
+    { MSG_HINT_RULER, MSG_HINT_RULER_STR },
 };
 #endif
 
