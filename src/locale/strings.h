@@ -408,8 +408,18 @@
 #define MSG_MENU_BACKGROUND_RENDER_STR   "Render previews in the background"
 #define MSG_PLAYWIN_PREPARING            251
 #define MSG_PLAYWIN_PREPARING_STR        "Preparing the preview..."
+#define MSG_STATUS_FRAME_SAVED           252
+#define MSG_STATUS_FRAME_SAVED_STR       "Frame saved as %s"
+#define MSG_STATUS_FRAME_FAILED          253
+#define MSG_STATUS_FRAME_FAILED_STR      "Couldn't save the frame as %s"
+#define MSG_MENU_SAVE_FRAME              254
+#define MSG_MENU_SAVE_FRAME_STR          "Save frame..."
+#define MSG_MENU_SHOW_PREVIEW            255
+#define MSG_MENU_SHOW_PREVIEW_STR        "Show preview window"
+#define MSG_REQ_SAVE_FRAME               256
+#define MSG_REQ_SAVE_FRAME_STR           "Save the frame at the playhead"
 
-#define FB_NUM_STRINGS 198
+#define FB_NUM_STRINGS 203
 
 #ifdef FB_STRINGS_ARRAY
 static const struct FBBuiltinString {
@@ -614,6 +624,11 @@ static const struct FBBuiltinString {
     { MSG_STATUS_RENDERED_AHEAD, MSG_STATUS_RENDERED_AHEAD_STR },
     { MSG_MENU_BACKGROUND_RENDER, MSG_MENU_BACKGROUND_RENDER_STR },
     { MSG_PLAYWIN_PREPARING, MSG_PLAYWIN_PREPARING_STR },
+    { MSG_STATUS_FRAME_SAVED, MSG_STATUS_FRAME_SAVED_STR },
+    { MSG_STATUS_FRAME_FAILED, MSG_STATUS_FRAME_FAILED_STR },
+    { MSG_MENU_SAVE_FRAME, MSG_MENU_SAVE_FRAME_STR },
+    { MSG_MENU_SHOW_PREVIEW, MSG_MENU_SHOW_PREVIEW_STR },
+    { MSG_REQ_SAVE_FRAME, MSG_REQ_SAVE_FRAME_STR },
 };
 #endif
 

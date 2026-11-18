@@ -13,6 +13,7 @@
 #include "locale/catalog.h"
 #include "player/audio.h"
 #include "formbrod/render.h"
+#include "formbrod/picture.h"
 
 #include <time.h>
 
@@ -27,6 +28,7 @@ static void cache_request(FBSource *src);
 static void cache_stop(void);
 static void thumbs_start(void);
 static void thumbs_end(void);
+static void still_cleanup(void);
 
 /* Every change to the edit goes through here: it's unsaved, and what the
  * background renders (render.h) has to be looked at again. */
@@ -64,6 +66,7 @@ void App_Cleanup(void)
     App_PlayStop();
     Audio_Close();
     App_PreviewStop();
+    still_cleanup();
     if (App.cache_backend) {
         cache_stop();   /* no half-made proxies left behind */
         App.cache_backend->Dispose(App.cache_backend);
@@ -2096,4 +2099,297 @@ stepped:
         *sleep_ms = due < 0 || due > 40 ? 40 : due;
     }
     return f;
+}
+
+/* ---- Single frames -------------------------------------------------------- */
+
+/* A frame of the edit, made on a backend of its own, so it neither waits
+ * for nor stops an export, a preview or the proxies. The job is a short
+ * window from the frame on (FB_TimelineWindow), played into a sink that
+ * keeps the first picture. Preview frames come from a piece rendered in
+ * the background where there is one, else from proxies, at the preview's
+ * size; full frames from the original files at the edit's size. Sound is
+ * left out where it can be. */
+
+#define STILL_WINDOW_MS 200     /* enough for a frame at any rate */
+
+static int still_video(void *ud, const unsigned char *argb, int width,
+                       int height, int stride, fb_ms_t pts)
+{
+    FBPlayFrame *f = &App.still.frame;
+    size_t need = (size_t)width * 4 * height;
+    int y;
+
+    (void)ud;
+    (void)pts;
+    if (App.still.have)
+        return 1;                       /* one is all we want */
+    if (f->size < need) {
+        unsigned char *p = realloc(f->pixels, need);
+
+        if (!p)
+            return 1;
+        f->pixels = p;
+        f->size = need;
+    }
+    for (y = 0; y < height; y++)
+        memcpy(f->pixels + (size_t)y * width * 4,
+               argb + (size_t)y * stride, (size_t)width * 4);
+    f->width = width;
+    f->height = height;
+    f->stride = width * 4;
+    f->pts = App.still.at;
+    App.still.have = 1;
+    return 0;
+}
+
+static int still_audio(void *ud, const short *samples, int frames,
+                       fb_ms_t pts)
+{
+    (void)ud;
+    (void)samples;
+    (void)frames;
+    (void)pts;
+    return 0;                           /* not wanted: thrown away */
+}
+
+/* Where a frame at `at` can come from: inside the edit, a little before
+ * its end so the window has a frame in it. */
+static fb_ms_t still_clamp(fb_ms_t at)
+{
+    fb_ms_t end = FB_TimelineDuration(&App.timeline);
+
+    if (at > end - 40)
+        at = end - 40;
+    return at < 0 ? 0 : at;
+}
+
+/* Starts making the frame at `at`. 0, or -1 (status line set). */
+static int still_begin(fb_ms_t at, int full)
+{
+    static FBTimeline win;      /* large; keep them off the stack */
+    static FBJob job;
+    FBFrameSink sink;
+    FBOutput out;
+    FBJobError err = FB_JOB_EMPTY;
+    char path[FB_PATH_LEN];
+    int piece, i;
+
+    if (!App.still.backend)
+        App.still.backend = FB_CreateLocalBackend();
+    if (!App.still.backend)
+        return -1;
+    if (App.timeline.num_clips == 0) {
+        App_SetStatus("%s", App_JobErrorString(FB_JOB_EMPTY));
+        return -1;
+    }
+    at = still_clamp(at);
+    App.still.at = at;
+    App.still.full = full;
+    App.still.gen = App.gen;
+    App.still.have = 0;
+
+    /* A preview frame from a piece rendered in the background is the
+     * cheapest: one MJPEG frame, already composed. */
+    piece = full ? -1 : FB_RenderPieceAt(at);
+    if (piece >= 0) {
+        bg_keys();
+        if (piece < App.bg.pieces && BgKeys[piece][0]
+            && FB_CacheFind(&App.cache, BgKeys[piece], FB_CACHE_RENDER,
+                            path, sizeof(path))) {
+            FB_RenderPlayJob(&job, path, at - FB_RenderPieceStart(piece),
+                             STILL_WINDOW_MS, 0);
+            err = FB_JOB_OK;
+            FB_Log(FB_LOG_INFO, "still", "Frame at %lld ms from rendered "
+                   "piece %d", (long long)at, piece);
+        }
+    }
+    if (err != FB_JOB_OK) {
+        FB_TimelineWindow(&win, full ? &App.timeline : with_proxies(), at,
+                          STILL_WINDOW_MS);
+        memset(&out, 0, sizeof(out));
+        out.quality = full ? FB_QUALITY_FINAL : FB_QUALITY_PREVIEW;
+        /* Without sound, unless that leaves nothing (a stretch with only
+         * sound in it is black, but needs its sound to be a job). */
+        for (i = 0; i < win.num_tracks; i++)
+            win.tracks[i].muted = 1;
+        err = FB_JobBuild(&job, &win, &out);
+        if (err == FB_JOB_EMPTY) {
+            FB_TimelineWindow(&win, full ? &App.timeline : with_proxies(),
+                              at, STILL_WINDOW_MS);
+            err = FB_JobBuild(&job, &win, &out);
+        }
+        if (err != FB_JOB_OK) {
+            FB_Log(FB_LOG_ERROR, "still", "Frame at %lld ms: %s",
+                   (long long)at, FB_JobErrorString(err));
+            App_SetStatus("%s", App_JobErrorString(err));
+            return -1;
+        }
+        FB_Log(FB_LOG_INFO, "still", "%s frame at %lld ms", full ? "Full"
+               : "Preview", (long long)at);
+        log_job(&job);
+    }
+    sink.Video = still_video;
+    sink.Audio = still_audio;
+    sink.ud = NULL;
+    if (App.still.backend->Play(App.still.backend, &job, &sink) != 0) {
+        App_SetStatus("%s",
+                      App.still.backend->Result(App.still.backend).message);
+        return -1;
+    }
+    App.still.busy = 1;
+    return 0;
+}
+
+int App_StillBusy(void)
+{
+    return App.still.busy || App.still.want;
+}
+
+int App_StillShow(fb_ms_t at)
+{
+    if (App.still.busy) {
+        /* Finish the one under way, then this: while the playhead is
+         * dragged, the window keeps up as well as it can. */
+        App.still.want = 1;
+        App.still.want_at = at;
+        return 0;
+    }
+    App.still.want = 0;
+    return still_begin(at, 0);
+}
+
+/* A turn of work on the frame under way. 1 when it's there, -1 when it
+ * failed, 0 while it's being made. */
+static int still_turn(void)
+{
+    FBProgress p;
+
+    if (!App.still.busy)
+        return -1;
+    p = App.still.backend->Progress(App.still.backend);
+    if (App.still.have || p.state != FB_RENDER_RUNNING) {
+        if (p.state == FB_RENDER_RUNNING)
+            App.still.backend->Cancel(App.still.backend);
+        App.still.busy = 0;
+        if (!App.still.have) {
+            FBResult r = App.still.backend->Result(App.still.backend);
+
+            FB_Log(FB_LOG_ERROR, "still", "No frame at %lld ms: %s",
+                   (long long)App.still.at, r.message);
+            return -1;
+        }
+        return 1;
+    }
+    return 0;
+}
+
+const FBPlayFrame *App_PollStill(void)
+{
+    int rc;
+
+    if (!App.still.busy) {
+        if (App.still.want)
+            App_StillShow(App.still.want_at);
+        return NULL;
+    }
+    rc = still_turn();
+    if (rc == 0)
+        return NULL;
+    if (App.still.want) {
+        /* The playhead moved on meanwhile: show this one, start that. */
+        App.still.want = 0;
+        if (App.still.want_at != App.still.at || App.still.gen != App.gen) {
+            static FBPlayFrame shown;
+            size_t need = (size_t)App.still.frame.stride
+                          * App.still.frame.height;
+
+            if (rc < 0) {
+                App_StillShow(App.still.want_at);
+                return NULL;
+            }
+            /* Copy it out: the next one is made into App.still.frame. */
+            if (shown.size < need) {
+                unsigned char *p = realloc(shown.pixels, need);
+
+                if (!p)
+                    return NULL;
+                shown.pixels = p;
+                shown.size = need;
+            }
+            memcpy(shown.pixels, App.still.frame.pixels, need);
+            shown.width = App.still.frame.width;
+            shown.height = App.still.frame.height;
+            shown.stride = App.still.frame.stride;
+            shown.pts = App.still.frame.pts;
+            App_StillShow(App.still.want_at);
+            return &shown;
+        }
+    }
+    return rc > 0 ? &App.still.frame : NULL;
+}
+
+fb_ms_t App_GrabFrame(fb_ms_t at, int full, const char *path)
+{
+    int want = App.still.want, rc;
+    fb_ms_t want_at = App.still.want_at;
+
+    /* One the window asked for gives way, and is made again after. */
+    if (App.still.busy) {
+        App.still.backend->Cancel(App.still.backend);
+        while (App.still.backend->Progress(App.still.backend).state
+               == FB_RENDER_RUNNING)
+            ;
+        App.still.busy = 0;
+        want = 1;
+        want_at = App.still.at;
+    }
+    App.still.want = 0;
+    if (still_begin(at, full) != 0)
+        return -1;
+    while ((rc = still_turn()) == 0)
+        ;
+    at = App.still.at;
+    if (rc < 0) {
+        App_SetStatus(FB_Str(MSG_STATUS_FRAME_FAILED), path);
+    } else if (FB_PictureWrite(path, App.still.frame.pixels,
+                               App.still.frame.width, App.still.frame.height,
+                               App.still.frame.stride) != 0) {
+        FB_Log(FB_LOG_ERROR, "still", "Can't write %s", path);
+        App_SetStatus(FB_Str(MSG_STATUS_FRAME_FAILED), path);
+        rc = -1;
+    } else {
+        FB_Log(FB_LOG_INFO, "still", "Wrote %s: %dx%d at %lld ms", path,
+               App.still.frame.width, App.still.frame.height,
+               (long long)at);
+        App_SetStatus(FB_Str(MSG_STATUS_FRAME_SAVED), path);
+    }
+    if (want) {
+        App.still.want = 1;
+        App.still.want_at = want_at;
+    }
+    return rc < 0 ? -1 : at;
+}
+
+void App_StillTimeText(char *buf, size_t len)
+{
+    char at[32], total[32];
+
+    FB_FormatTimeMs(at, sizeof(at), App.still.frame.pts,
+                    Locale_DecimalPoint());
+    FB_FormatTimeMs(total, sizeof(total), FB_TimelineDuration(&App.timeline),
+                    Locale_DecimalPoint());
+    snprintf(buf, len, FB_Str(MSG_PLAY_TIME), at, total);
+}
+
+static void still_cleanup(void)
+{
+    if (App.still.backend) {
+        if (App.still.busy)
+            App.still.backend->Cancel(App.still.backend);
+        App.still.backend->Dispose(App.still.backend);
+        App.still.backend = NULL;
+    }
+    free(App.still.frame.pixels);
+    memset(&App.still, 0, sizeof(App.still));
 }

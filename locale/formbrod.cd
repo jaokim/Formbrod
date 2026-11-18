@@ -744,3 +744,27 @@ Render previews in the background
 ; a while: files are opened and the edit starts rendering).
 MSG_PLAYWIN_PREPARING (251//)
 Preparing the preview...
+;
+; In the status line after a frame of the edit was saved as a picture
+; (ARexx GRAB or Project > Save frame). %s: the file.
+MSG_STATUS_FRAME_SAVED (252//)
+Frame saved as %s
+;
+; In the status line when a frame couldn't be made or saved. %s: the
+; file it was meant for. The log says why.
+MSG_STATUS_FRAME_FAILED (253//)
+Couldn't save the frame as %s
+;
+; Project menu: save the frame at the playhead as a picture, full size,
+; for a paint program (PNG if the name ends in .png, else IFF ILBM).
+MSG_MENU_SAVE_FRAME (254//)
+Save frame...
+;
+; Project menu: open the preview window without playing; it then shows
+; the frame at the playhead, following it as it moves.
+MSG_MENU_SHOW_PREVIEW (255//)
+Show preview window
+;
+; Title of the file requester for Save frame.
+MSG_REQ_SAVE_FRAME (256//)
+Save the frame at the playhead

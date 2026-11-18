@@ -35,5 +35,7 @@ void   MainWindow_WavesLoaded(void);
 /* Moves the playhead (and the view, to keep it in sight): while playing,
  * it follows playback. */
 void MainWindow_SetPlayhead(fb_ms_t ms);
+/* Where the playhead is, in the edit. */
+fb_ms_t MainWindow_Playhead(void);
 
 #endif

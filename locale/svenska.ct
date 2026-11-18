@@ -599,3 +599,18 @@ Förberäkna förhandsvisningar i bakgrunden
 ;
 MSG_PLAYWIN_PREPARING
 Förbereder förhandsvisningen...
+;
+MSG_STATUS_FRAME_SAVED
+Bildrutan sparad som %s
+;
+MSG_STATUS_FRAME_FAILED
+Kunde inte spara bildrutan som %s
+;
+MSG_MENU_SAVE_FRAME
+Spara bildruta...
+;
+MSG_MENU_SHOW_PREVIEW
+Visa förhandsvisningsfönstret
+;
+MSG_REQ_SAVE_FRAME
+Spara bildrutan vid positionen

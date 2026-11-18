@@ -3,6 +3,7 @@
  * Build and run with:  make -f Makefile.host test
  */
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "formbrod/timeline.h"
 #include "formbrod/job.h"
@@ -15,6 +16,7 @@
 #include "formbrod/render.h"
 #include "formbrod/thumbs.h"
 #include "formbrod/waves.h"
+#include "formbrod/picture.h"
 
 static int failures;
 
@@ -2253,6 +2255,124 @@ static void test_looping_animation(void)
                  "setpts=N*1/(10*TB),trim=start=0.000:end=5.000") != NULL);
 }
 
+/* Pictures (picture.h): decode what was written and compare. Only what
+ * the writer makes is understood here: PNG stored blocks, ByteRun1. */
+static unsigned long be32(const unsigned char *p)
+{
+    return ((unsigned long)p[0] << 24) | ((unsigned long)p[1] << 16)
+           | ((unsigned long)p[2] << 8) | p[3];
+}
+
+static void test_picture(void)
+{
+    enum { W = 301, H = 250, S = 4 * W + 12 };
+    unsigned char *argb = calloc((size_t)S * H, 1);
+    unsigned char *buf, *raw;
+    size_t n, i, at, got;
+    int x, y, ok;
+
+    for (y = 0; y < H; y++)
+        for (x = 0; x < W; x++) {
+            unsigned char *q = argb + (size_t)y * S + 4 * x;
+
+            q[0] = 255;
+            q[1] = (unsigned char)(x * 3);
+            q[2] = (unsigned char)(y < 100 ? 7 : y);
+            q[3] = (unsigned char)(x ^ y);
+        }
+    CHECK(FB_PictureFormatFor("RAM:a.PNG") == FB_PICTURE_PNG);
+    CHECK(FB_PictureFormatFor("RAM:a.iff") == FB_PICTURE_ILBM);
+    CHECK(FB_PictureFormatFor("RAM:frame") == FB_PICTURE_ILBM);
+    CHECK(FB_PictureEncode(FB_PICTURE_PNG, argb, 0, H, S, NULL, 0) == 0);
+
+    /* PNG: chunks, then the stored blocks put back together. */
+    n = FB_PictureEncode(FB_PICTURE_PNG, argb, W, H, S, NULL, 0);
+    buf = malloc(n);
+    raw = malloc((size_t)(1 + 3 * W) * H);
+    CHECK(FB_PictureEncode(FB_PICTURE_PNG, argb, W, H, S, buf, n) == n);
+    CHECK(memcmp(buf + 1, "PNG", 3) == 0);
+    CHECK(memcmp(buf + 12, "IHDR", 4) == 0 && be32(buf + 16) == W
+          && be32(buf + 20) == H && buf[24] == 8 && buf[25] == 2);
+    at = 8 + 12 + 13;
+    CHECK(memcmp(buf + at + 4, "IDAT", 4) == 0);
+    i = at + 8 + 2;
+    got = 0;
+    for (;;) {
+        unsigned len = buf[i + 1] | (buf[i + 2] << 8);
+        int last = buf[i] & 1;
+
+        CHECK((unsigned)(buf[i + 3] | (buf[i + 4] << 8)) == (~len & 0xffff));
+        memcpy(raw + got, buf + i + 5, len);
+        got += len;
+        i += 5 + len;
+        if (last)
+            break;
+    }
+    CHECK(got == (size_t)(1 + 3 * W) * H);
+    CHECK(i + 4 == at + 8 + be32(buf + at));        /* then adler32 */
+    CHECK(memcmp(buf + n - 8, "IEND", 4) == 0);
+    ok = 1;
+    for (y = 0; y < H && ok; y++) {
+        const unsigned char *r = raw + (size_t)y * (1 + 3 * W);
+
+        ok = r[0] == 0;
+        for (x = 0; x < W && ok; x++)
+            ok = memcmp(r + 1 + 3 * x, argb + (size_t)y * S + 4 * x + 1,
+                        3) == 0;
+    }
+    CHECK(ok);
+    free(buf);
+
+    /* ILBM: FORM, BMHD, and a BODY that unpacks to the same pixels. */
+    n = FB_PictureEncode(FB_PICTURE_ILBM, argb, W, H, S, NULL, 0);
+    buf = malloc(n);
+    CHECK(FB_PictureEncode(FB_PICTURE_ILBM, argb, W, H, S, buf, n) == n);
+    CHECK(memcmp(buf, "FORM", 4) == 0 && be32(buf + 4) == n - 8
+          && memcmp(buf + 8, "ILBM", 4) == 0);
+    CHECK(memcmp(buf + 12, "BMHD", 4) == 0 && buf[28] == 24
+          && buf[30] == 1);
+    CHECK(memcmp(buf + 40, "BODY", 4) == 0);
+    {
+        int rowbytes = ((W + 15) / 16) * 2, c, bit;
+        const unsigned char *p = buf + 48;
+        unsigned char *plane = malloc((size_t)rowbytes);
+
+        ok = 1;
+        for (y = 0; y < H && ok; y++)
+            for (c = 1; c <= 3 && ok; c++)
+                for (bit = 0; bit < 8 && ok; bit++) {
+                    int k = 0;
+
+                    while (k < rowbytes) {
+                        int cnt = (signed char)*p++;
+
+                        if (cnt >= 0) {
+                            memcpy(plane + k, p, (size_t)cnt + 1);
+                            p += cnt + 1;
+                            k += cnt + 1;
+                        } else {
+                            memset(plane + k, *p++, (size_t)(1 - cnt));
+                            k += 1 - cnt;
+                        }
+                    }
+                    ok = k == rowbytes;
+                    for (x = 0; x < W && ok; x++) {
+                        int set = (plane[x >> 3] >> (7 - (x & 7))) & 1;
+                        int want = (argb[(size_t)y * S + 4 * x + c] >> bit)
+                                   & 1;
+
+                        ok = set == want;
+                    }
+                }
+        CHECK(ok);
+        CHECK((size_t)(p - buf) <= n && (size_t)(p - buf) + 1 >= n);
+        free(plane);
+    }
+    free(buf);
+    free(raw);
+    free(argb);
+}
+
 int main(void)
 {
     FB_RegisterBuiltinModules();
@@ -2288,6 +2408,7 @@ int main(void)
     test_thumb_strips();
     test_thumb_store();
     test_waves();
+    test_picture();
     if (failures) {
         printf("%d check(s) failed\n", failures);
         return 1;
