@@ -279,6 +279,7 @@ static void update_clip_fields(int clip);
 static void sync_menus(void);
 static int selected_clip(void);
 static uint32 now_ms(void);
+static void save_frame(void);
 
 /* The track editor reports a selection, a dragged edge, a dragged clip,
  * or (like the ruler) a moved playhead. */
