@@ -1078,7 +1078,8 @@ static void range_done(FBResult *r)
     }
     if (r->state == FB_RENDER_DONE) {
         r->state = ok ? FB_RENDER_DONE : FB_RENDER_FAILED;
-        snprintf(r->message, sizeof(r->message), "%s", App.range.path);
+        snprintf(r->message, sizeof(r->message), "%.*s",
+                 (int)sizeof(r->message) - 1, App.range.path);
     }
 }
 

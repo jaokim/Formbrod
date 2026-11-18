@@ -208,7 +208,7 @@ static void cmd_grab(struct ARexxCmd *cmd, struct RexxMsg *rm)
     fb_ms_t at;
 
     (void)rm;
-    result[0] = ' ';
+    result[0] = '\0';
     at = App_GrabFrame(cmd->ac_ArgList[1] ? *(int32 *)cmd->ac_ArgList[1]
                                           : MainWindow_Playhead(),
                        cmd->ac_ArgList[2] != 0,
