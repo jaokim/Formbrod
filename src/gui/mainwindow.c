@@ -185,8 +185,8 @@ static void update_title(void);
 static const ToolbarButton ToolbarButtons[] = {
     { GID_ADD,       MSG_BTN_ADD,       "add|new|open",        FALSE, TRUE  },
     { GID_SPLIT,     MSG_BTN_SPLIT,     "cut|split",           FALSE, FALSE },
-    { GID_SET_IN,    MSG_BTN_SET_IN,    "list_tapestart|markstart|first",     FALSE, FALSE },
-    { GID_SET_OUT,   MSG_BTN_SET_OUT,   "list_tapeend|markend|last",        FALSE, FALSE },
+    //{ GID_SET_IN,    MSG_BTN_SET_IN,    "list_tapestart|markstart|first",     FALSE, FALSE },
+    //{ GID_SET_OUT,   MSG_BTN_SET_OUT,   "list_tapeend|markend|last",        FALSE, FALSE },
     { GID_REMOVE,    MSG_BTN_REMOVE,    "delete|remove",       FALSE, TRUE  },
     { GID_FADE,      MSG_BTN_FADE,      "fadeupleft|effects",        FALSE, FALSE },
     { GID_CROSSFADE, MSG_BTN_CROSSFADE, "fadeupright|transition", TRUE, TRUE  },
@@ -1268,7 +1268,7 @@ void MainWindow_Refresh(void)
         uint32 id = ToolbarButtons[i].id;
 
         if (id == GID_PREVIEW && (App_Playing() || App_Previewing()))
-            Toolbar_Set(id, FALSE, FALSE, MSG_BTN_STOP_PREVIEW, "stop|cancel");
+            Toolbar_Set(id, FALSE, FALSE, MSG_BTN_STOP_PREVIEW, "stape_stop|cancel");
         else if (id == GID_EXPORT && App.rendering)
             Toolbar_Set(id, FALSE, FALSE, MSG_BTN_CANCEL, "stop|cancel");
         else
@@ -1353,6 +1353,7 @@ static int ask_file(int kind, const char *title, int save, const char *file,
     struct FileRequester *fr;
     char dir[FB_PATH_LEN];
     const char *drawer = Drawers[kind];
+    const char *pattern = kind == DRAWER_PROJECT ? "#?.smorgas" : "#?";
     int ok = 0;
 
     /* Before any file has been added, start where the project is. */
@@ -1366,6 +1367,7 @@ static int ask_file(int kind, const char *title, int save, const char *file,
         ASLFR_DoSaveMode,    save,
         ASLFR_InitialDrawer, drawer,
         ASLFR_InitialFile,   file ? file : "",
+        ASLFR_InitialPattern, pattern,
         TAG_END);
     if (!fr)
         return 0;
