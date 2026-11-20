@@ -141,6 +141,7 @@ static Object *field(uint32 id)
         GA_RelVerify,     TRUE,
         GA_TabCycle,      TRUE,
         GA_Disabled,      TRUE,
+        GA_Underscore,    0,
         STRINGA_MaxChars, sizeof(FieldText[0]) - 1,
         STRINGA_TextVal,  "",
         TAG_END));
@@ -150,9 +151,10 @@ static Object *text(uint32 id, char *buf)
 {
     return (Object *)(Gad[id] = (struct Gadget *)IIntuition->NewObject(
             CLS(K_BUTTON), NULL,
-        GA_ID,       id,
-        GA_ReadOnly, TRUE,
-        GA_Text,     buf,
+        GA_ID,          id,
+        GA_ReadOnly,    TRUE,
+        GA_Text,        buf,
+        GA_Underscore,  0,
         BUTTON_Justification, BCJ_LEFT,
         TAG_END));
 }
