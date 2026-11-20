@@ -37,6 +37,10 @@ through modules and ARexx.
 - `src/gui/clipwindow.c` – the clip window: every setting of the selected
   clip, opened by double-clicking it. Effect parameters get fields from
   the module's `FBParamDef`s, so modules need no GUI code.
+- `src/gui/projectwindow.c` – the project settings window: the frame
+  (`FBFormat`) and how it's exported (`FBExport`, in the format; turned
+  into encoder settings by `FB_VideoLevel()`/`FB_AudioBitRate()` in
+  `job.c`, which the backend and the command line both use).
 - `src/gui/track.c`, `src/gui/timebase.c` – the timeline gadgets (ruler,
   film strip) and the time axis they share. Their arithmetic is in the
   portable `src/timeline/timeview.c`. Notes in `gadgets/timeline/README.md`.

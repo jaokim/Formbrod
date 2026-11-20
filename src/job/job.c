@@ -19,7 +19,8 @@
  * is mixed with amix:
  *
  *   [t0v][t2v]overlay=format=auto:eof_action=pass[outv];
- *   [t0a][t1a]amix=inputs=2:duration=longest:dropout_transition=0,volume=2[outa]
+ *   [t0a][t1a]amix=inputs=2:duration=longest:dropout_transition=0:normalize=0,
+ *             alimiter=limit=1:level=0[outa]
  *
  * A clip with a crossfade is mixed into the one before it before the
  * track is joined: xfade for the picture (its offset counts from the start
@@ -308,8 +309,7 @@ FBJobError FB_JobBuild(FBJob *job, const FBTimeline *tl, const FBOutput *out)
     job->version = FB_JOB_VERSION;
     job->output = *out;
     memset(&f, 0, sizeof(f));
-    f.arate = out->quality == FB_QUALITY_PREVIEW ? FB_PREVIEW_AUDIO_RATE
-                                                 : FB_AUDIO_RATE;
+    f.arate = FB_AudioRate(out);
     memset(use, 0, sizeof(use));
 
     for (i = 0; i < FB_MAX_SOURCES; i++)
@@ -541,16 +541,20 @@ FBJobError FB_JobBuild(FBJob *job, const FBTimeline *tl, const FBOutput *out)
         }
     }
 
-    /* All sound mixed. amix divides by the number of inputs; every track
-     * lasts the whole length, so multiplying back gives the plain sum. */
+    /* All sound mixed: the plain sum (normalize=0). amix's own scaling
+     * divides by the inputs still playing, so "divide, then multiply
+     * back" made the last track twice as loud once a shorter one ended
+     * (music under a video that stops first). A sum of loud tracks can
+     * go over full scale, so a limiter (attack 5 ms, no automatic
+     * levelling) keeps it there instead of clipping. */
     if (atracks > 1) {
         for (t = 0; t < tl->num_tracks; t++)
             if (use[t].audio) {
                 buf_printf(&b, "[t%da]", t);
                 adone++;
             }
-        buf_printf(&b, "amix=inputs=%d:duration=longest:dropout_transition=0,"
-                   "volume=%d[outa];", atracks, atracks);
+        buf_printf(&b, "amix=inputs=%d:duration=longest:dropout_transition=0:"
+                   "normalize=0,alimiter=limit=1:level=0[outa];", atracks);
     }
 
     /* No trailing ';' */
@@ -624,6 +628,12 @@ int FB_JobWrite(const FBJob *job, char *out, size_t len)
         buf_printf(&b, "ACODEC %s\n", job->output.acodec);
     buf_printf(&b, "SIZE %d %d\n", job->output.width, job->output.height);
     buf_printf(&b, "QUALITY %d\n", (int)job->output.quality);
+    if (job->output.vquality > 0)
+        buf_printf(&b, "VQUALITY %d\n", job->output.vquality);
+    if (job->output.abitrate > 0)
+        buf_printf(&b, "ABITRATE %d\n", job->output.abitrate);
+    if (job->output.arate > 0)
+        buf_printf(&b, "ARATE %d\n", job->output.arate);
     if (job->length > 0)
         buf_printf(&b, "LENGTH %lld\n", (long long)job->length);
     buf_printf(&b, "END\n");
@@ -704,6 +714,18 @@ int FB_JobParse(FBJob *job, const char *text)
         } else if (strcmp(line, "QUALITY") == 0) {
             job->output.quality = atoi(val) ? FB_QUALITY_FINAL
                                             : FB_QUALITY_PREVIEW;
+        } else if (strcmp(line, "VQUALITY") == 0) {
+            job->output.vquality = atoi(val);
+            if (job->output.vquality < 0 || job->output.vquality >= FB_VQ_COUNT)
+                job->output.vquality = 0;
+        } else if (strcmp(line, "ABITRATE") == 0) {
+            job->output.abitrate = atoi(val);
+            if (job->output.abitrate < 0 || job->output.abitrate > 640)
+                job->output.abitrate = 0;
+        } else if (strcmp(line, "ARATE") == 0) {
+            job->output.arate = atoi(val);
+            if (job->output.arate < 0 || job->output.arate > 192000)
+                job->output.arate = 0;
         } else if (strcmp(line, "LENGTH") == 0) {
             job->length = (fb_ms_t)strtoll(val, NULL, 10);
             if (job->length < 0)
@@ -758,10 +780,23 @@ int FB_JobToCommandLine(const FBJob *job, char *out, size_t len)
     buf_printf(&b, " -map \"[%s]\"", job->video_out);
     if (job->audio_out[0])
         buf_printf(&b, " -map \"[%s]\"", job->audio_out);
-    if (job->output.vcodec[0])
+    if (job->output.vcodec[0]) {
+        FBVideoLevel lv = FB_VideoLevel(&job->output);
+
         buf_printf(&b, " -c:v %s", job->output.vcodec);
-    if (job->output.acodec[0])
+        if (FB_EncoderTakesQScale(job->output.vcodec))
+            buf_printf(&b, " -q:v %d", lv.qscale);
+        else if (FB_EncoderTakesCRF(job->output.vcodec))
+            buf_printf(&b, " -crf %d", lv.crf);
+        else if (job->output.width > 0 && job->output.height > 0)
+            buf_printf(&b, " -b:v %ld", (long)job->output.width *
+                       job->output.height * lv.bits_per_pixel);
+    }
+    if (job->output.acodec[0]) {
         buf_printf(&b, " -c:a %s", job->output.acodec);
+        if (!FB_EncoderLossless(job->output.acodec))
+            buf_printf(&b, " -b:a %ld", FB_AudioBitRate(&job->output));
+    }
     buf_printf(&b, " ");
     buf_quoted(&b, job->output.path);
 
@@ -821,4 +856,68 @@ fb_ms_t FB_JobEstimateLength(const FBJob *job)
         }
     }
     return found ? total : 0;
+}
+
+/* ---- Encoder settings ------------------------------------------------------ */
+
+FBVideoLevel FB_VideoLevel(const FBOutput *out)
+{
+    /* The preview's first: what previews always used. High is what final
+     * renders always used (quantiser 3, crf 20). */
+    static const FBVideoLevel levels[FB_VQ_COUNT] = {
+        { 8, 30, 2 },     /* preview */
+        { 6, 28, 3 },     /* low */
+        { 4, 24, 4 },     /* medium */
+        { 3, 20, 6 },     /* high */
+        { 2, 17, 10 },    /* best */
+    };
+    int q = out->vquality;
+
+    if (q <= 0 || q >= FB_VQ_COUNT)
+        q = out->quality == FB_QUALITY_FINAL ? FB_VQ_HIGH : 0;
+    return levels[q];
+}
+
+long FB_AudioBitRate(const FBOutput *out)
+{
+    if (out->abitrate > 0)
+        return out->abitrate * 1000L;
+    return out->quality == FB_QUALITY_FINAL ? 160000L : 96000L;
+}
+
+int FB_AudioRate(const FBOutput *out)
+{
+    if (out->arate > 0)
+        return out->arate;
+    return out->quality == FB_QUALITY_PREVIEW ? FB_PREVIEW_AUDIO_RATE
+                                              : FB_AUDIO_RATE;
+}
+
+static int in_list(const char *name, const char *const *list)
+{
+    for (; *list; list++)
+        if (strcmp(name, *list) == 0)
+            return 1;
+    return 0;
+}
+
+int FB_EncoderTakesQScale(const char *name)
+{
+    static const char *const l[] = {
+        "mpeg4", "mpeg2video", "mpeg1video", "mjpeg", "h263p", "msmpeg4",
+        "msmpeg4v2", NULL };
+    return in_list(name, l);
+}
+
+int FB_EncoderTakesCRF(const char *name)
+{
+    static const char *const l[] = { "libx264", "libx265", "libx264rgb",
+                                     NULL };
+    return in_list(name, l);
+}
+
+int FB_EncoderLossless(const char *name)
+{
+    return strncmp(name, "pcm_", 4) == 0 || strcmp(name, "flac") == 0 ||
+           strcmp(name, "alac") == 0;
 }

@@ -157,6 +157,13 @@ int  App_SetClipFit(int clip, int fit);          /* FB_FIT_DEFAULT = global */
 int  App_SetDefaultFit(int fit);                 /* not FB_FIT_DEFAULT */
 int  App_SetFrameSize(int width, int height);    /* 0 0 = first clip's */
 int  App_SetFrameRate(int num, int den);         /* 0 0 = first clip's */
+int  App_SetPadColor(unsigned long rgb);         /* 0xRRGGBB, the bars */
+/* How the project is exported (encoders, quality, file suffix). -1 if
+ * FB_ExportValid() says no. */
+int  App_SetExport(const FBExport *e);
+/* A name for the export file: the project's name with the export suffix
+ * ("Holiday.mp4"), or "Formbrod.mp4" for a project never saved. */
+void App_ExportFileName(char *buf, size_t len);
 int  App_Export(const char *path, int preview);
 void App_CancelRender(void);
 
@@ -294,6 +301,10 @@ typedef enum {
 } FBProbeResult;
 
 /* `why` receives ffmpeg's error text for FB_PROBE_CANT_OPEN (English). */
+/* Whether this build of ffmpeg has an encoder of that name: 1 or 0, or -1
+ * without libav (then nothing can be told). */
+int FB_HaveEncoder(const char *name);
+
 FBProbeResult FB_ProbeMedia(const char *path, FBSource *info,
                             char *why, size_t why_len);
 

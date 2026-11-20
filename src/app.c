@@ -844,6 +844,50 @@ int App_SetFrameRate(int num, int den)
     return 0;
 }
 
+int App_SetPadColor(unsigned long rgb)
+{
+    if (rgb > 0xFFFFFFUL)
+        return -1;
+    App.timeline.format.pad_color = (uint32_t)rgb;
+    edited();
+    return 0;
+}
+
+int App_SetExport(const FBExport *e)
+{
+    if (!FB_ExportValid(e))
+        return -1;
+    if (memcmp(e, &App.timeline.format.encode, sizeof(*e)) != 0) {
+        App.timeline.format.encode = *e;
+        edited();
+    }
+    return 0;
+}
+
+void App_ExportFileName(char *buf, size_t len)
+{
+    const char *type = App.timeline.format.encode.filetype;
+    const char *name = "Formbrod";
+    char base[FB_PATH_LEN];
+    char *dot;
+
+    if (App.project[0]) {
+        const char *p = App.project, *s;
+
+        /* The last part of the path, without its suffix. */
+        for (s = p; *s; s++)
+            if (*s == '/' || *s == ':')
+                p = s + 1;
+        snprintf(base, sizeof(base), "%s", p);
+        dot = strrchr(base, '.');
+        if (dot && dot != base)
+            *dot = '\0';
+        if (base[0])
+            name = base;
+    }
+    snprintf(buf, len, "%s.%s", name, type);
+}
+
 /* FB_JobErrorString() stays in English for logs and render servers; this is
  * the translated version for the window. */
 const char *App_JobErrorString(FBJobError err)
@@ -902,9 +946,23 @@ int App_Export(const char *path, int preview)
 
     memset(&out, 0, sizeof(out));
     strncpy(out.path, path, sizeof(out.path) - 1);
-    strcpy(out.vcodec, "mpeg4");
-    strcpy(out.acodec, "aac");
     out.quality = preview ? FB_QUALITY_PREVIEW : FB_QUALITY_FINAL;
+    if (preview) {
+        strcpy(out.vcodec, "mpeg4");
+        strcpy(out.acodec, "aac");
+    } else {
+        /* The project's settings (Project > Settings). */
+        const FBExport *e = &App.timeline.format.encode;
+
+        strcpy(out.vcodec, e->vcodec);
+        strcpy(out.acodec, e->acodec);
+        out.vquality = e->vquality;
+        out.abitrate = e->abitrate;
+        out.arate = e->arate;
+        FB_Log(FB_LOG_INFO, "job", "Export: %s (%s), %s %d kbit/s %d Hz",
+               e->vcodec, FB_VideoQualityName(e->vquality), e->acodec,
+               e->abitrate, e->arate);
+    }
 
     err = FB_JobBuild(&job, preview ? with_proxies() : &App.timeline, &out);
     if (err != FB_JOB_OK) {

@@ -562,6 +562,132 @@ static void test_project_roundtrip(void)
     CHECK(strcmp(back.sources[0].path, "DH1:Moved/clips/intro.mp4") == 0);
 }
 
+/* Export settings: defaults, checks, the project file, the job. */
+static void test_export_settings(void)
+{
+    static FBTimeline tl, back;
+    static FBJob job, parsed;
+    static char text[16384], cmd[20000];
+    FBExport e;
+    FBOutput out;
+    FBVideoLevel lv;
+    int line;
+
+    /* What export always was. */
+    FB_TimelineInit(&tl);
+    e = tl.format.encode;
+    CHECK(strcmp(e.vcodec, "mpeg4") == 0 && e.vquality == FB_VQ_HIGH);
+    CHECK(strcmp(e.acodec, "aac") == 0 && e.abitrate == 160 &&
+          e.arate == 48000 && strcmp(e.filetype, "mp4") == 0);
+    CHECK(FB_ExportValid(&e));
+    CHECK(strcmp(FB_VideoQualityName(FB_VQ_BEST), "best") == 0);
+    CHECK(FB_VideoQualityFromName("low") == FB_VQ_LOW);
+    CHECK(FB_VideoQualityFromName("ultra") == -1);
+
+    /* What isn't accepted. */
+    e = tl.format.encode;
+    strcpy(e.vcodec, "lib x264");
+    CHECK(!FB_ExportValid(&e));
+    e = tl.format.encode;
+    strcpy(e.acodec, "");
+    CHECK(!FB_ExportValid(&e));
+    e = tl.format.encode;
+    e.vquality = 0;
+    CHECK(!FB_ExportValid(&e));
+    e = tl.format.encode;
+    e.abitrate = 4;
+    CHECK(!FB_ExportValid(&e));
+    e = tl.format.encode;
+    e.arate = 1000;
+    CHECK(!FB_ExportValid(&e));
+    e = tl.format.encode;
+    strcpy(e.filetype, ".mp4");
+    CHECK(!FB_ExportValid(&e));
+    e = tl.format.encode;
+    strcpy(e.vcodec, "libx264");
+    strcpy(e.acodec, "pcm_s16le");
+    CHECK(FB_ExportValid(&e));
+
+    /* Saved and read back. */
+    FB_TimelineAddSource(&tl, "Work:a.mp4", 8000, 1, 1);
+    FB_TimelineAppendClip(&tl, 0, 0, 8000);
+    strcpy(tl.format.encode.vcodec, "libx264");
+    tl.format.encode.vquality = FB_VQ_BEST;
+    strcpy(tl.format.encode.acodec, "libmp3lame");
+    tl.format.encode.abitrate = 256;
+    tl.format.encode.arate = 44100;
+    strcpy(tl.format.encode.filetype, "mkv");
+    CHECK(FB_ProjectWrite(&tl, "Work:", text, sizeof(text)) > 0);
+    CHECK(strstr(text, "EXPORT-VIDEO libx264 best\n") != NULL);
+    CHECK(strstr(text, "EXPORT-SOUND libmp3lame 256 44100\n") != NULL);
+    CHECK(strstr(text, "EXPORT-TYPE mkv\n") != NULL);
+    CHECK(FB_ProjectParse(&back, text, "Work:", &line) == FB_PROJECT_OK);
+    CHECK(memcmp(&back.format.encode, &tl.format.encode,
+                 sizeof(FBExport)) == 0);
+
+    /* Projects from before have the defaults; bad lines are refused. */
+    CHECK(FB_ProjectParse(&back, "FORMBROD-PROJECT 2\n", "", &line)
+          == FB_PROJECT_OK);
+    CHECK(strcmp(back.format.encode.vcodec, "mpeg4") == 0);
+    CHECK(FB_ProjectParse(&back, "FORMBROD-PROJECT 2\n"
+                          "EXPORT-VIDEO libx264 ultra\n", "", &line)
+          == FB_PROJECT_BAD_LINE && line == 2);
+    CHECK(FB_ProjectParse(&back, "FORMBROD-PROJECT 2\n"
+                          "EXPORT-SOUND aac 128\n", "", &line)
+          == FB_PROJECT_BAD_LINE);
+    CHECK(FB_ProjectParse(&back, "FORMBROD-PROJECT 2\n"
+                          "EXPORT-TYPE m/p4\n", "", &line)
+          == FB_PROJECT_BAD_LINE);
+
+    /* Quality levels: high is what final renders always were, a preview
+     * keeps its own. */
+    memset(&out, 0, sizeof(out));
+    out.quality = FB_QUALITY_FINAL;
+    lv = FB_VideoLevel(&out);
+    CHECK(lv.qscale == 3 && lv.crf == 20 && lv.bits_per_pixel == 6);
+    CHECK(FB_AudioBitRate(&out) == 160000 && FB_AudioRate(&out) == 48000);
+    out.quality = FB_QUALITY_PREVIEW;
+    lv = FB_VideoLevel(&out);
+    CHECK(lv.qscale == 8 && lv.crf == 30);
+    CHECK(FB_AudioBitRate(&out) == 96000 && FB_AudioRate(&out) == 44100);
+    out.vquality = FB_VQ_LOW;
+    out.abitrate = 128;
+    out.arate = 32000;
+    CHECK(FB_VideoLevel(&out).qscale == 6);
+    CHECK(FB_AudioBitRate(&out) == 128000 && FB_AudioRate(&out) == 32000);
+    CHECK(FB_EncoderTakesQScale("mpeg4") && FB_EncoderTakesCRF("libx264"));
+    CHECK(!FB_EncoderTakesQScale("libx264") && !FB_EncoderTakesCRF("mpeg4"));
+    CHECK(FB_EncoderLossless("pcm_s16le") && FB_EncoderLossless("flac") &&
+          !FB_EncoderLossless("aac"));
+
+    /* In the job: its sound made at the rate asked for, the keys written
+     * and read, and the command line saying the same. */
+    memset(&out, 0, sizeof(out));
+    strcpy(out.path, "RAM:out.mkv");
+    strcpy(out.vcodec, "libx264");
+    strcpy(out.acodec, "libmp3lame");
+    out.quality = FB_QUALITY_FINAL;
+    out.vquality = FB_VQ_BEST;
+    out.abitrate = 256;
+    out.arate = 44100;
+    CHECK(FB_JobBuild(&job, &tl, &out) == FB_JOB_OK);
+    CHECK(strstr(job.filtergraph, "aformat=sample_rates=44100:") != NULL);
+    CHECK(FB_JobWrite(&job, text, sizeof(text)) > 0);
+    CHECK(strstr(text, "VQUALITY 4\n") && strstr(text, "ABITRATE 256\n") &&
+          strstr(text, "ARATE 44100\n"));
+    CHECK(FB_JobParse(&parsed, text) == 0);
+    CHECK(parsed.output.vquality == FB_VQ_BEST &&
+          parsed.output.abitrate == 256 && parsed.output.arate == 44100);
+    CHECK(FB_JobToCommandLine(&job, cmd, sizeof(cmd)) > 0);
+    CHECK(strstr(cmd, " -c:v libx264 -crf 17") != NULL);
+    CHECK(strstr(cmd, " -c:a libmp3lame -b:a 256000") != NULL);
+    strcpy(job.output.vcodec, "mpeg4");
+    strcpy(job.output.acodec, "pcm_s16le");
+    CHECK(FB_JobToCommandLine(&job, cmd, sizeof(cmd)) > 0);
+    CHECK(strstr(cmd, " -c:v mpeg4 -q:v 2") != NULL);
+    CHECK(strstr(cmd, " -c:a pcm_s16le \"") != NULL);     /* no bit rate */
+}
+
 static void test_project_hand_edited(void)
 {
     static FBTimeline tl;
@@ -654,7 +780,8 @@ static void test_job_tracks(void)
     CHECK(strstr(job.filtergraph, "[t0v][t2v]overlay=format=auto:"
                                   "eof_action=pass[outv]") != NULL);
     CHECK(strstr(job.filtergraph, "[t0a][t1a]amix=inputs=2:duration=longest:"
-                                  "dropout_transition=0,volume=2[outa]"));
+                                  "dropout_transition=0:normalize=0,"
+                                  "alimiter=limit=1:level=0[outa]"));
     CHECK(job.filtergraph[strlen(job.filtergraph) - 1] != ';');
     CHECK(strcmp(job.audio_out, "outa") == 0);
 
@@ -2400,6 +2527,7 @@ int main(void)
     test_time_text();
     test_paths();
     test_project_roundtrip();
+    test_export_settings();
     test_project_hand_edited();
     test_project_tracks();
     test_cache_keys();

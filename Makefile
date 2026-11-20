@@ -59,6 +59,7 @@ SRC = src/main.c \
       src/gui/track.c \
       src/gui/lanes.c \
       src/gui/clipwindow.c \
+      src/gui/projectwindow.c \
       src/gui/playwindow.c \
       src/gui/winprefs.c \
       src/gui/toolbar.c \
