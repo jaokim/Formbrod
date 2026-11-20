@@ -17,6 +17,10 @@ through modules and ARexx.
 - `src/gui/toolbar.c` – the button row: speedbar.gadget with AISS icons from
   `TBImages:`, built from the `ToolbarButtons` table in `mainwindow.c`.
   Button numbers are command IDs, so clicks go through `handle_gadget()`.
+  Each button has a `MSG_HELP_*` hover hint.
+- Hover hints: every window lists its gadgets in a `HintMsgs` table
+  (gadget ID → `MSG_HINT_*`), filled in by `Hints_Fill()` (`src/gui/hints.h`).
+  A new gadget gets a hint there too.
 - `src/arexx/` – the FORMBROD port, using arexx.class.
 - `src/prefs/` – program settings through application.library PrefsObjects
   (`Prefs_GetString`/`SetString`/`Save`). Only for settings of the program

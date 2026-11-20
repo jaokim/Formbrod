@@ -42,6 +42,7 @@
 #include "locale/catalog.h"
 #include "gui/projectwindow.h"
 #include "gui/mainwindow.h"
+#include "gui/hints.h"
 #include "gui/winprefs.h"
 
 enum {
@@ -73,6 +74,23 @@ static Object *WinObj;
 static struct Window *Win;
 static struct Gadget *Gad[PG_LAST];
 static BOOL Working;
+
+/* Hover hints. */
+static const HintMsg HintMsgs[] = {
+    { PG_WIDTH,   MSG_HINT_WIDTH },
+    { PG_HEIGHT,  MSG_HINT_HEIGHT },
+    { PG_HINT,    MSG_HINT_SIZE_AUTO },
+    { PG_RATE,    MSG_HINT_RATE },
+    { PG_FIT,     MSG_HINT_PROJECT_FIT },
+    { PG_PAD,     MSG_HINT_BAR_COLOUR },
+    { PG_TYPE,    MSG_HINT_FILE_TYPE },
+    { PG_VCODEC,  MSG_HINT_VCODEC },
+    { PG_QUALITY, MSG_HINT_QUALITY },
+    { PG_ACODEC,  MSG_HINT_ACODEC },
+    { PG_BITRATE, MSG_HINT_BITRATE },
+    { PG_ARATE,   MSG_HINT_SAMPLE_RATE },
+};
+static struct HintInfo Hints[HINT_COUNT(HintMsgs) + 1];
 
 /* ---- The choices ------------------------------------------------------- */
 
@@ -654,6 +672,7 @@ static void open_window(void)
     BOOL placed;
 
     make_choices();
+    Hints_Fill(Hints, HintMsgs, HINT_COUNT(HintMsgs));
     scr = IIntuition->LockPubScreen(NULL);
     if (!scr) {
         FB_Log(FB_LOG_WARNING, "gui", "Project window: can't lock the "
@@ -670,9 +689,11 @@ static void open_window(void)
         WA_CloseGadget,   TRUE,
         WA_SizeGadget,    TRUE,
         WA_IDCMP,         IDCMP_GADGETUP | IDCMP_CLOSEWINDOW |
-                          IDCMP_VANILLAKEY,
+                          IDCMP_VANILLAKEY | IDCMP_GADGETHELP,
         WA_PointerType,   Working ? FB_WORKING_POINTER : POINTERTYPE_NORMAL,
         placed ? TAG_IGNORE : WINDOW_Position, WPOS_CENTERMOUSE,
+        WINDOW_GadgetHelp, TRUE,
+        WINDOW_HintInfo,  Hints,
         WINDOW_Layout,    make_layout(),
         TAG_MORE,         place);
     if (WinObj)

@@ -47,6 +47,7 @@
 #include "locale/catalog.h"
 #include "gui/playwindow.h"
 #include "gui/mainwindow.h"
+#include "gui/hints.h"
 #include "gui/winprefs.h"
 
 #define MIN_W 160                   /* the picture area at its smallest */
@@ -76,6 +77,13 @@ static struct Window *Win;
 static struct Gadget *Gad[PG_LAST];
 static char TimeText[64];
 static struct Hook RenderHook;
+
+/* Hover hints (shown once the window is made active). */
+static const HintMsg HintMsgs[] = {
+    { PG_PICTURE, MSG_HINT_PLAY_PICTURE },
+    { PG_TIME,    MSG_HINT_PLAY_TIME },
+};
+static struct HintInfo Hints[HINT_COUNT(HintMsgs) + 1];
 
 /* The last picture shown, a copy of its own: it is still drawn when the
  * window refreshes after the preview has stopped. */
@@ -315,6 +323,7 @@ static BOOL open_window(int w, int h)
             return FALSE;
         }
     }
+    Hints_Fill(Hints, HintMsgs, HINT_COUNT(HintMsgs));
     RenderHook.h_Entry = (HOOKFUNC)render_hook;
     RenderHook.h_Data = NULL;
 
@@ -374,11 +383,13 @@ static BOOL open_window(int w, int h)
         WA_SizeGadget,   TRUE,
         WA_SmartRefresh, TRUE,
         WA_IDCMP,        IDCMP_CLOSEWINDOW | IDCMP_VANILLAKEY |
-                         IDCMP_NEWSIZE,
+                         IDCMP_NEWSIZE | IDCMP_GADGETHELP,
         placed ? TAG_IGNORE : WA_InnerWidth,  w + 16,
         placed ? TAG_IGNORE : WA_InnerHeight, h + 40,
         placed ? TAG_IGNORE : WINDOW_Position, WPOS_CENTERSCREEN,
         WINDOW_Layout,   layout,
+        WINDOW_GadgetHelp, TRUE,
+        WINDOW_HintInfo, Hints,
         TAG_MORE,        place);
     FB_TRACE("gui", "window object %p", (void *)WinObj);
     if (WinObj) {

@@ -16,6 +16,7 @@
 typedef struct {
     uint32      id;          /* command ID (a GID_*), also the node number */
     uint32      text;        /* MSG_BTN_* label; '_' is dropped */
+    uint32      help;        /* MSG_HELP_* hint shown on hover */
     const char *icons;       /* AISS names to try, '|'-separated: "cut|scissors" */
     BOOL        toggle;      /* stays down while selected (Crossfade) */
     BOOL        space_after; /* a gap after it, to group the buttons */
@@ -39,10 +40,11 @@ void   Toolbar_Code(uint16 code);
 uint32 Toolbar_Clicked(void);
 
 /* Changes a button. Nothing is redrawn until Toolbar_Apply(), and only if
- * something changed. `alt_text`/`alt_icons` replace the label and icon
- * (Export turning into Cancel); pass 0/NULL for the normal ones. */
+ * something changed. `alt_text`/`alt_help`/`alt_icons` replace the label,
+ * hint and icon (Export turning into Cancel); pass 0/0/NULL for the normal
+ * ones. */
 void Toolbar_Set(uint32 id, BOOL disabled, BOOL selected,
-                 uint32 alt_text, const char *alt_icons);
+                 uint32 alt_text, uint32 alt_help, const char *alt_icons);
 void Toolbar_Apply(struct Window *win);
 
 /* After the window object is disposed: frees nodes and images. */

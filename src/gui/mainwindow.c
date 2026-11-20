@@ -83,6 +83,7 @@
 #include "gui/playwindow.h"
 #include "gui/winprefs.h"
 #include "gui/toolbar.h"
+#include "gui/hints.h"
 #include "prefs/prefs.h"
 #include "version.h"
 
@@ -147,18 +148,24 @@ static FBTimebase TB;
 static struct Hook IdcmpHook;
 static char PositionText[32];
 /* Shown when the pointer rests on a gadget (WINDOW_GadgetHelp). The texts
- * are filled in from the catalog when the window opens. */
-static struct HintInfo Hints[] = {
-    { GID_ZOOM,      -1, NULL, 0 },
-    { GID_RULER,     -1, NULL, 0 },
-    { GID_FILMSTRIP, -1, NULL, 0 },
-    { GID_IN,        -1, NULL, 0 },
-    { GID_LENGTH,    -1, NULL, 0 },
-    { GID_STARTS,    -1, NULL, 0 },
-    { GID_LANES,     -1, NULL, 0 },
-    { GID_XFADE,     -1, NULL, 0 },
-    { -1, -1, NULL, 0 }
+ * are filled in from HintMsgs when the window opens. The toolbar's buttons
+ * have their own (ToolbarButtons). */
+static const HintMsg HintMsgs[] = {
+    { GID_RULER,     MSG_HINT_RULER },
+    { GID_FILMSTRIP, MSG_HINT_PLAYHEAD },
+    { GID_LANES,     MSG_HINT_LANES },
+    { GID_SCROLL,    MSG_HINT_SCROLL },
+    { GID_POSITION,  MSG_HINT_POSITION },
+    { GID_ZOOM,      MSG_HINT_ZOOM },
+    { GID_CLIPNAME,  MSG_HINT_CLIPNAME },
+    { GID_STARTS,    MSG_HINT_STARTS },
+    { GID_IN,        MSG_HINT_FROM_FILE },
+    { GID_LENGTH,    MSG_HINT_LENGTH },
+    { GID_XFADE,     MSG_HINT_CROSSFADE },
+    { GID_PROGRESS,  MSG_HINT_PROGRESS },
+    { GID_STATUS,    MSG_HINT_STATUS },
 };
+static struct HintInfo Hints[HINT_COUNT(HintMsgs) + 1];
 static BOOL TrackClassesMade;
 static struct Menu *Menus;
 static APTR VisualInfo;
@@ -184,15 +191,24 @@ static void update_title(void);
  * are tried in turn (sets differ); with any icon missing the bar shows
  * text. Preview turns into Stop and Export into Cancel (refresh). */
 static const ToolbarButton ToolbarButtons[] = {
-    { GID_ADD,       MSG_BTN_ADD,       "add|new|open",        FALSE, TRUE  },
-    { GID_SPLIT,     MSG_BTN_SPLIT,     "cut|split",           FALSE, FALSE },
-    //{ GID_SET_IN,    MSG_BTN_SET_IN,    "list_tapestart|markstart|first",     FALSE, FALSE },
-    //{ GID_SET_OUT,   MSG_BTN_SET_OUT,   "list_tapeend|markend|last",        FALSE, FALSE },
-    { GID_REMOVE,    MSG_BTN_REMOVE,    "delete|remove",       FALSE, TRUE  },
-    { GID_FADE,      MSG_BTN_FADE,      "fadeupleft|effects",        FALSE, FALSE },
-    { GID_CROSSFADE, MSG_BTN_CROSSFADE, "fadeupright|transition", TRUE, TRUE  },
-    { GID_PREVIEW,   MSG_BTN_PREVIEW,   "stape_play|play|preview",        FALSE, FALSE },
-    { GID_EXPORT,    MSG_BTN_EXPORT,    "save|saveas|export",  FALSE, FALSE },
+    { GID_ADD,       MSG_BTN_ADD,       MSG_HELP_ADD,
+      "add|new|open",                     FALSE, TRUE  },
+    { GID_SPLIT,     MSG_BTN_SPLIT,     MSG_HELP_SPLIT,
+      "cut|split",                        FALSE, FALSE },
+    //{ GID_SET_IN,    MSG_BTN_SET_IN,    MSG_HELP_SET_IN,
+    //  "list_tapestart|markstart|first",   FALSE, FALSE },
+    //{ GID_SET_OUT,   MSG_BTN_SET_OUT,   MSG_HELP_SET_OUT,
+    //  "list_tapeend|markend|last",        FALSE, FALSE },
+    { GID_REMOVE,    MSG_BTN_REMOVE,    MSG_HELP_REMOVE,
+      "delete|remove",                    FALSE, TRUE  },
+    { GID_FADE,      MSG_BTN_FADE,      MSG_HELP_FADE,
+      "fadeupleft|effects",               FALSE, FALSE },
+    { GID_CROSSFADE, MSG_BTN_CROSSFADE, MSG_HELP_CROSSFADE,
+      "fadeupright|transition",           TRUE,  TRUE  },
+    { GID_PREVIEW,   MSG_BTN_PREVIEW,   MSG_HELP_PREVIEW,
+      "stape_play|play|preview",          FALSE, FALSE },
+    { GID_EXPORT,    MSG_BTN_EXPORT,    MSG_HELP_EXPORT,
+      "save|saveas|export",               FALSE, FALSE },
 };
 #define TOOLBAR_COUNT (int)(sizeof(ToolbarButtons) / sizeof(ToolbarButtons[0]))
 
@@ -1308,14 +1324,16 @@ void MainWindow_Refresh(void)
         uint32 id = ToolbarButtons[i].id;
 
         if (id == GID_PREVIEW && (App_Playing() || App_Previewing()))
-            Toolbar_Set(id, FALSE, FALSE, MSG_BTN_STOP_PREVIEW, "stape_stop|cancel");
+            Toolbar_Set(id, FALSE, FALSE, MSG_BTN_STOP_PREVIEW,
+                        MSG_HELP_STOP_PREVIEW, "stape_stop|cancel");
         else if (id == GID_EXPORT && App.rendering)
-            Toolbar_Set(id, FALSE, FALSE, MSG_BTN_CANCEL, "stop|cancel");
+            Toolbar_Set(id, FALSE, FALSE, MSG_BTN_CANCEL,
+                        MSG_HELP_CANCEL_EXPORT, "stop|cancel");
         else
             Toolbar_Set(id, !menu_enabled(id),
                         id == GID_CROSSFADE && sel >= 0 &&
                         tl->clips[sel].xfade > 0,
-                        0, NULL);
+                        0, 0, NULL);
     }
     Toolbar_Apply(Win);
     IIntuition->SetGadgetAttrs(Gad[GID_STATUS], Win, NULL, GA_Text, App.status, TAG_END);
@@ -1787,15 +1805,7 @@ int MainWindow_Open(void)
     Inset = name_column_width();
     IdcmpHook.h_Entry = (HOOKFUNC)idcmp_hook;
     strcpy(PositionText, "0:00");
-    Hints[0].hi_Text = FB_Str(MSG_HINT_ZOOM);
-    Hints[1].hi_Text = FB_Str(MSG_HINT_RULER);
-    Hints[2].hi_Text = FB_Str(MSG_HINT_PLAYHEAD);
-    Hints[3].hi_Text = FB_Str(MSG_HINT_FROM_FILE);
-    Hints[4].hi_Text = FB_Str(MSG_HINT_TIMES);
-    Hints[5].hi_Text = FB_Str(MSG_HINT_STARTS);
-    Hints[6].hi_Text = FB_Str(MSG_HINT_LANES);
-    Hints[7].hi_Text = FB_Str(MSG_HINT_CROSSFADE);
-
+    Hints_Fill(Hints, HintMsgs, HINT_COUNT(HintMsgs));
 
     AppPort = IExec->AllocSysObjectTags(ASOT_PORT, TAG_END);
 
