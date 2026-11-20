@@ -168,6 +168,10 @@ typedef struct FBTimeline {
     int      num_clips;
     FBClip   clips[FB_MAX_CLIPS];
     FBFormat format;
+    /* The range between the two marks in the overview, in ms; range_to
+     * 0 = the end of the edit (so it follows the end as the edit grows).
+     * Use FB_TimelineRange(), which keeps it within the edit. */
+    fb_ms_t  range_from, range_to;
 } FBTimeline;
 
 void    FB_TimelineInit(FBTimeline *tl);
@@ -310,6 +314,15 @@ double  FB_EffectGetParam(const FBEffect *fx, const char *name, double def);
 
 /* Where the last clip on any track ends. */
 fb_ms_t FB_TimelineDuration(const FBTimeline *tl);
+
+/* The range between the marks, kept within the edit: from < to, or 0 0
+ * for an empty edit. Without marks set it is the whole edit. Returns its
+ * length. */
+fb_ms_t FB_TimelineRange(const FBTimeline *tl, fb_ms_t *from, fb_ms_t *to);
+
+/* Sets the marks (swapped if `to` is before `from`). A `to` at or past
+ * the end, or 0, means the end of the edit. */
+void    FB_TimelineSetRange(FBTimeline *tl, fb_ms_t from, fb_ms_t to);
 
 /* A stretch of the edit as a timeline of its own: what is shown from
  * `from` for `len` ms, moved to start at 0. Clips are cut to the window,

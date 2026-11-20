@@ -13,7 +13,6 @@
 #include "locale/catalog.h"
 #include "player/audio.h"
 #include "formbrod/render.h"
-#include "formbrod/picture.h"
 
 #include <time.h>
 
@@ -67,6 +66,10 @@ void App_Cleanup(void)
     Audio_Close();
     App_PreviewStop();
     still_cleanup();
+    if (App.range.anim) {
+        FB_AnimAbort(App.range.anim);     /* no half-made ANIM left */
+        App.range.anim = NULL;
+    }
     if (App.cache_backend) {
         cache_stop();   /* no half-made proxies left behind */
         App.cache_backend->Dispose(App.cache_backend);
@@ -944,6 +947,7 @@ int App_Export(const char *path, int preview)
         return -1;
     }
 
+    App.range.failed = 0;
     memset(&out, 0, sizeof(out));
     strncpy(out.path, path, sizeof(out.path) - 1);
     out.quality = preview ? FB_QUALITY_PREVIEW : FB_QUALITY_FINAL;
@@ -981,6 +985,162 @@ int App_Export(const char *path, int preview)
     return 0;
 }
 
+/* ---- The range between the marks ------------------------------------------ */
+
+#define RANGE_ANIM_FPS 10
+
+void App_SetRange(fb_ms_t from, fb_ms_t to)
+{
+    FB_TimelineSetRange(&App.timeline, from, to);
+    App.modified = 1;   /* saved with the project; no need to render again */
+}
+
+/* Each frame of an ANIM export goes into the file as it comes. */
+static int range_video(void *ud, const unsigned char *argb, int width,
+                       int height, int stride, fb_ms_t pts)
+{
+    (void)ud;
+    (void)pts;
+    if (App.range.failed)
+        return 0;
+    if (!App.range.anim) {
+        App.range.anim = FB_AnimOpen(App.range.path, width, height,
+                                     App.range.fps_num, App.range.fps_den);
+        if (!App.range.anim) {
+            FB_Log(FB_LOG_ERROR, "range", "Can't make %s", App.range.path);
+            App.range.failed = 1;    /* the rest is thrown away */
+            return 0;
+        }
+        FB_Log(FB_LOG_INFO, "range", "ANIM %s: %dx%d", App.range.path,
+               width, height);
+    }
+    if (FB_AnimAdd(App.range.anim, argb, stride) != 0) {
+        FB_Log(FB_LOG_ERROR, "range", "Can't write frame %d of %s",
+               FB_AnimFrames(App.range.anim), App.range.path);
+        App.range.failed = 1;
+    }
+    return 0;
+}
+
+static int range_audio(void *ud, const short *samples, int frames,
+                       fb_ms_t pts)
+{
+    (void)ud;
+    (void)samples;
+    (void)frames;
+    (void)pts;
+    return 0;
+}
+
+int App_ExportRange(const char *path, int width, int fps)
+{
+    static FBTimeline win;   /* large; keep them off the stack */
+    static FBJob job;
+    FBOutput out;
+    FBJobError err;
+    fb_ms_t from, to;
+    int anim = !FB_IsMovieName(path), i, silent;
+    size_t plen = strlen(path);
+
+    App_PlayStop();     /* the backend can do one thing at a time */
+    if (App.rendering) {
+        App_SetStatus("%s", FB_Str(MSG_STATUS_ALREADY_RENDERING));
+        return -1;
+    }
+    if (FB_TimelineRange(&App.timeline, &from, &to) <= 0) {
+        App_SetStatus("%s", App_JobErrorString(FB_JOB_EMPTY));
+        return -1;
+    }
+    FB_TimelineWindow(&win, with_proxies(), from, to - from);
+    if (fps <= 0 && anim)
+        fps = RANGE_ANIM_FPS;
+    if (fps > 0) {
+        win.format.fps_num = fps;
+        win.format.fps_den = 1;
+    }
+    memset(&out, 0, sizeof(out));
+    strncpy(out.path, path, sizeof(out.path) - 1);
+    strcpy(out.vcodec, "mpeg4");
+    strcpy(out.acodec, "aac");
+    out.quality = FB_QUALITY_PREVIEW;
+    out.width = width > 0 ? width : FB_PREVIEW_WIDTH;
+    /* An ANIM or a GIF has no sound. */
+    silent = anim || (plen >= 4 && (strcmp(path + plen - 4, ".gif") == 0
+                                    || strcmp(path + plen - 4, ".GIF") == 0));
+    if (silent)
+        for (i = 0; i < win.num_tracks; i++)
+            win.tracks[i].muted = 1;
+    err = FB_JobBuild(&job, &win, &out);
+    if (err == FB_JOB_EMPTY && silent) {   /* only sound there: black */
+        for (i = 0; i < win.num_tracks; i++)
+            win.tracks[i].muted = App.timeline.tracks[i].muted;
+        err = FB_JobBuild(&job, &win, &out);
+    }
+    if (err != FB_JOB_OK) {
+        FB_Log(FB_LOG_ERROR, "range", "Can't build the job: %s",
+               FB_JobErrorString(err));
+        App_SetStatus("%s", App_JobErrorString(err));
+        return -1;
+    }
+    FB_Log(FB_LOG_INFO, "range", "%s %lld to %lld ms as %s, %d wide",
+           anim ? "ANIM" : "Movie", (long long)from, (long long)to, path,
+           out.width);
+    log_job(&job);
+    if (anim) {
+        FBFrameSink sink;
+
+        memset(&App.range, 0, sizeof(App.range));
+        strncpy(App.range.path, path, sizeof(App.range.path) - 1);
+        if (!FB_TimelineFrameRate(&win, &App.range.fps_num,
+                                  &App.range.fps_den)) {
+            App.range.fps_num = fps > 0 ? fps : 25;
+            App.range.fps_den = 1;
+        }
+        sink.Video = range_video;
+        sink.Audio = range_audio;
+        sink.ud = NULL;
+        if (App.backend->Play(App.backend, &job, &sink) != 0) {
+            App_SetStatus("%s", App.backend->Result(App.backend).message);
+            return -1;
+        }
+        App.rendering = 2;
+    } else if (App.backend->Submit(App.backend, &job) != 0) {
+        App_SetStatus("%s", App.backend->Result(App.backend).message);
+        return -1;
+    } else {
+        App.rendering = 1;
+    }
+    App_SetStatus(FB_Str(MSG_STATUS_RENDERING), path);
+    return 0;
+}
+
+/* The ANIM export ended: finish the file, or remove it. */
+static void range_done(FBResult *r)
+{
+    int ok = r->state == FB_RENDER_DONE && !App.range.failed;
+
+    if (App.range.anim) {
+        int frames = FB_AnimFrames(App.range.anim);
+
+        if (ok) {
+            ok = FB_AnimClose(App.range.anim) == 0;
+            FB_Log(ok ? FB_LOG_INFO : FB_LOG_ERROR, "range",
+                   "%s: %d frames%s", App.range.path, frames,
+                   ok ? "" : ", but it couldn't be finished");
+        } else {
+            FB_AnimAbort(App.range.anim);
+        }
+        App.range.anim = NULL;
+    } else if (ok) {
+        ok = 0;                         /* not a single frame came */
+    }
+    if (r->state == FB_RENDER_DONE) {
+        r->state = ok ? FB_RENDER_DONE : FB_RENDER_FAILED;
+        snprintf(r->message, sizeof(r->message), "%.*s",
+                 (int)sizeof(r->message) - 1, App.range.path);
+    }
+}
+
 void App_CancelRender(void)
 {
     if (App.rendering)
@@ -994,6 +1154,10 @@ FBProgress App_PollRender(void)
     if (App.rendering && p.state != FB_RENDER_RUNNING) {
         FBResult r = App.backend->Result(App.backend);
 
+        if (App.rendering == 2) {
+            range_done(&r);
+            App.range.failed = r.state == FB_RENDER_FAILED;
+        }
         App.rendering = 0;
         if (App.preview.rendering)
             preview_window_done(&r);
@@ -1004,6 +1168,10 @@ FBProgress App_PollRender(void)
         else
             App_SetStatus(FB_Str(MSG_STATUS_FAILED), r.message);
     }
+    /* An ANIM whose file couldn't be finished failed, whatever the
+     * backend says (for ARexx RENDERSTATUS). */
+    if (!App.rendering && App.range.failed && p.state == FB_RENDER_DONE)
+        p.state = FB_RENDER_FAILED;
     return p;
 }
 

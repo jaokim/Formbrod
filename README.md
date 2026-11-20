@@ -49,6 +49,9 @@ Early skeleton. Working so far:
 - [x] The preview window shows the frame at the playhead while it isn't
       playing; frames can be saved as pictures for paint programs
       (Project > Save frame, ARexx `GRAB`). Not yet tried on AmigaOS
+- [x] A range marked with two flags in the overview, exported small as
+      an IFF ANIM or a movie (Project > Export range, ARexx
+      `EXPORTRANGE`). Not yet tried on AmigaOS
 - [x] Crossfades between clips on a track: the clips overlap, drawn with
       an X over them; picture with ffmpeg's `xfade` (fade, wipes, slides, circle...),
       sound with `acrossfade`. Not yet tried on AmigaOS
@@ -230,6 +233,8 @@ The port is called `FORMBROD`.
 | `PREVIEW` | `AT/N,STOP/S`: preview from `AT` ms in 10 s windows until stopped | the playlist's path |
 | `PLAYHEAD` | `AT/N`: move the playhead to `AT` ms first, if given | where the playhead is (ms) |
 | `GRAB` | `FILE/A,AT/N,FULL/S`: save the frame at the playhead (or at `AT` ms) as a picture: a PNG if `FILE` ends in `.png`, else a 24-bit IFF ILBM. Preview size (320 wide, quick), or with `FULL` the edit's frame size from the original files | the frame's time (ms) |
+| `RANGE` | `FROM/N,TO/N,CLEAR/S`: move the marks of the range in the overview (`TO 0` = the end of the edit), or `CLEAR` for the whole edit | `<from> <to>` (ms) |
+| `EXPORTRANGE` | `FILE/A,WIDTH/N,FPS/N`: render the range small, from the preview copies: an IFF ANIM (256 colours, no sound), or a movie if `FILE` ends in `.mp4`, `.mov`, `.avi`, `.mkv`, `.gif`... `WIDTH` default 320; `FPS` default 10 for an ANIM, else the edit's. Runs like `EXPORT`: poll `RENDERSTATUS` | |
 | `CACHE` | `ON/S,OFF/S,WIDTH/N,AUTO/S` (preview copies) | `ON\|OFF <width> <waiting>` |
 | `REMOVE` | `CLIP/N/A` | |
 | `EFFECT` | `CLIP/N/A,MODULE/A` | effect index |
@@ -258,6 +263,18 @@ film.
     ADDRESS FORMBROD
     'GRAB "RAM:stencil.iff" FULL'
     SAY 'Frame at' RESULT 'ms'
+
+For effects drawn frame by frame, mark the stretch in the overview and
+load it into the paint program as an ANIM:
+
+    /* 2 to 6 s of the edit, 160 wide, as an ANIM */
+    ADDRESS FORMBROD
+    'RANGE FROM 2000 TO 6000'
+    'EXPORTRANGE "RAM:stencil.anim" WIDTH 160'
+    DO UNTIL LEFT(RESULT, 7) ~= 'RUNNING'
+        'RENDERSTATUS'
+        ADDRESS COMMAND 'Wait 1'
+    END
 
 `OPEN` puts each file on a new track of its own, so two files opened
 that way play at the same time (the later one on top). `APPEND` joins a
@@ -445,6 +462,18 @@ playhead as a picture, full size from the original files: a PNG if the
 name ends in `.png`, else a 24-bit IFF ILBM, which every paint program
 reads. Use it as a stencil to draw an overlay in the right place. ARexx
 `GRAB` does the same, at the preview's size unless `FULL` is given.
+
+**The range.** The ruler at the top has two flags along its bottom, at
+the start and the end of the edit to begin with. Drag them to mark a
+range (a line through the film strip shows each one), or use *Edit →
+Range starts here* / *Range ends here* (keys `[` and `]`) at the
+playhead; *Range: whole edit* puts them back. The range is saved with
+the project. *Project → Export range...* renders it small (320 wide,
+from the preview copies) for a paint program: as an IFF ANIM, unless
+the name ends in a movie's (`.mp4`, `.gif`...). The ANIM has 256
+colours, the same in every frame (a fixed palette with an ordered
+dither, so still parts make no deltas), 10 frames a second, and ANIM-5
+deltas as DPaint writes them.
 
 Sound goes through AHI, on unit 0 unless `AHIUnit` in the settings says
 another. If AHI can't be opened the preview plays without sound, the

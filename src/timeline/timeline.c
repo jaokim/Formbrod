@@ -15,6 +15,42 @@ void FB_TimelineInit(FBTimeline *tl)
     FB_ExportDefaults(&tl->format.encode);
 }
 
+fb_ms_t FB_TimelineRange(const FBTimeline *tl, fb_ms_t *from, fb_ms_t *to)
+{
+    fb_ms_t end = FB_TimelineDuration(tl);
+    fb_ms_t f = tl->range_from, t = tl->range_to;
+
+    if (t <= 0 || t > end)
+        t = end;
+    if (f < 0)
+        f = 0;
+    if (f >= t) {                 /* the edit got shorter than the marks */
+        f = 0;
+        t = end;
+    }
+    *from = f;
+    *to = t;
+    return t - f;
+}
+
+void FB_TimelineSetRange(FBTimeline *tl, fb_ms_t from, fb_ms_t to)
+{
+    fb_ms_t end = FB_TimelineDuration(tl);
+
+    if (to > 0 && to < from) {
+        fb_ms_t x = from;
+
+        from = to;
+        to = x;
+    }
+    if (from < 0)
+        from = 0;
+    if (to >= end)
+        to = 0;
+    tl->range_from = from;
+    tl->range_to = to;
+}
+
 int FB_TimelineAddSource(FBTimeline *tl, const char *path, fb_ms_t duration,
                          int has_video, int has_audio)
 {

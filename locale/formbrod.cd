@@ -898,3 +898,29 @@ Show preview window
 ; Title of the file requester for Save frame.
 MSG_REQ_SAVE_FRAME (293//)
 Save the frame at the playhead
+;
+; Edit menu: put the start mark of the range (shown in the overview, the
+; ruler and film strip at the top) at the playhead. Key: [
+MSG_MENU_RANGE_FROM (294//)
+Range starts here
+;
+; Edit menu: put the end mark of the range at the playhead. Key: ]
+MSG_MENU_RANGE_TO (295//)
+Range ends here
+;
+; Edit menu: the range is the whole edit again.
+MSG_MENU_RANGE_CLEAR (296//)
+Range: whole edit
+;
+; Project menu: render the range small, as an IFF ANIM (or a movie if
+; the name ends in .mp4, .gif...), for paint programs.
+MSG_MENU_EXPORT_RANGE (297//)
+Export range...
+;
+; Title of the file requester for Export range.
+MSG_REQ_EXPORT_RANGE (298//)
+Export the range as an ANIM (or .mp4, .gif...)
+;
+; Hover hint over the ruler at the top.
+MSG_HINT_RULER (299//)
+Click or drag to move the playhead. Drag the flags at the bottom to mark a range

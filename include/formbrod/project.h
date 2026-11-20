@@ -10,6 +10,7 @@
  *   OUTPUT-RATE 0 0
  *   OUTPUT-FIT fit
  *   PAD-COLOR 000000
+ *   RANGE 2000 0
  *
  *   SOURCE 1 Work:Video/holiday.mp4
  *   SOURCE 2 clips/intro.mp4
@@ -44,6 +45,9 @@
  * that time, starting it that much earlier; the kind is an ffmpeg xfade
  * transition, "fade" if left out. (Readers that don't know CROSSFADE cut
  * there instead.) VOLUME scales its sound (1 = as recorded).
+ *
+ * RANGE <from> <to> is where the two marks in the overview are (to 0 =
+ * the end of the edit); without it, they're at the start and the end.
  *
  * Version 1 had no tracks: its clips are read as one picture track.
  *
