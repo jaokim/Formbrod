@@ -156,6 +156,10 @@ typedef struct FBClip {
     fb_ms_t  xfade;
     char     xfade_kind[FB_NAME_LEN];
     FBFit    fit;                  /* FB_FIT_DEFAULT = timeline's */
+    /* How much FB_TimelineWindow cut off the clip's start and end, so its
+     * effects still see the whole clip (a fade-in stays at the clip's
+     * real start, not the window's). Always 0 in an edit; never saved. */
+    fb_ms_t  cut_head, cut_tail;
     int      num_effects;
     FBEffect effects[FB_MAX_EFFECTS];
 } FBClip;
