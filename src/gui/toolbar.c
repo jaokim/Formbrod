@@ -58,6 +58,8 @@ typedef struct {
     Object *image, *alt_image;   /* NULL when not found / not loaded */
     const char *alt_icons;       /* what alt_image was loaded from */
     char text[TEXT_LEN], alt_text[TEXT_LEN];
+    const char *help, *alt_help; /* hover hints, from the catalog */
+    char hint[TEXT_LEN + 256];   /* "Label: hint", for icons only */
     /* Shown now, and wanted by the last Toolbar_Set(). */
     BOOL disabled, selected, alt;
     BOOL want_disabled, want_selected, want_alt;
@@ -165,11 +167,21 @@ static void set_node(Entry *e)
 {
     Object *img = e->alt && e->alt_image ? e->alt_image : e->image;
     const char *text = e->alt ? e->alt_text : e->text;
+    const char *help = e->alt ? e->alt_help : e->help;
+
+    /* With icons only, the hint is the one place the name shows. Only
+     * called while the bar has no list, so the old text isn't in use. */
+    if (!help)
+        help = text;
+    else if (Style == TOOLBAR_ICONS && Icons) {
+        snprintf(e->hint, sizeof(e->hint), "%s: %s", text, help);
+        help = e->hint;
+    }
 
     ISpeedBar->SetSpeedButtonNodeAttrs(e->node,
         SBNA_Text,     Style == TOOLBAR_ICONS && Icons ? NULL : text,
         SBNA_Image,    Style == TOOLBAR_TEXT || !Icons ? NULL : img,
-        SBNA_Help,     text,
+        SBNA_Help,     help,
         SBNA_Disabled, e->disabled,
         SBNA_Selected, e->selected,
         TAG_END);
@@ -195,6 +207,7 @@ Object *Toolbar_New(uint32 gadget_id, const ToolbarButton *buttons, int count,
         memset(e, 0, sizeof(*e));
         e->def = &buttons[i];
         plain_text(e->text, buttons[i].text);
+        e->help = buttons[i].help ? FB_Str(buttons[i].help) : NULL;
         if (Icons && !(e->image = load_icon(buttons[i].icons)))
             Icons = FALSE;       /* one missing: text for all */
     }
@@ -276,7 +289,7 @@ uint32 Toolbar_Clicked(void)
 }
 
 void Toolbar_Set(uint32 id, BOOL disabled, BOOL selected,
-                 uint32 alt_text, const char *alt_icons)
+                 uint32 alt_text, uint32 alt_help, const char *alt_icons)
 {
     int i;
 
@@ -288,8 +301,10 @@ void Toolbar_Set(uint32 id, BOOL disabled, BOOL selected,
         e->want_disabled = disabled;
         e->want_selected = selected;
         e->want_alt = alt_text != 0;
-        if (alt_text)
+        if (alt_text) {
             plain_text(e->alt_text, alt_text);
+            e->alt_help = alt_help ? FB_Str(alt_help) : NULL;
+        }
         if (alt_icons && alt_icons != e->alt_icons && Icons) {
             if (e->alt_image)
                 IIntuition->DisposeObject(e->alt_image);

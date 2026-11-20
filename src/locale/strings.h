@@ -504,8 +504,94 @@
 #define MSG_REQ_EXPORT_RANGE_STR         "Export the range as an ANIM (or .mp4, .gif...)"
 #define MSG_HINT_RULER                   299
 #define MSG_HINT_RULER_STR               "Click or drag to move the playhead. Drag the flags at the bottom to mark a range"
+#define MSG_HELP_ADD                     300
+#define MSG_HELP_ADD_STR                 "Add a video, a sound file or a picture. Each file gets a track of its own. Files can also be dropped on the window"
+#define MSG_HELP_SPLIT                   301
+#define MSG_HELP_SPLIT_STR               "Cut the selected clip in two at the playhead. With no clip selected, every track is cut there"
+#define MSG_HELP_SET_IN                  302
+#define MSG_HELP_SET_IN_STR              "Cut away the start of the selected clip, up to the playhead (key I). With none selected, the clip under the playhead"
+#define MSG_HELP_SET_OUT                 303
+#define MSG_HELP_SET_OUT_STR             "Cut away the end of the selected clip, from the playhead on (key O). With none selected, the clip under the playhead"
+#define MSG_HELP_REMOVE                  304
+#define MSG_HELP_REMOVE_STR              "Remove the selected clip. The clips after it on its track move up to close the gap"
+#define MSG_HELP_FADE                    305
+#define MSG_HELP_FADE_STR                "Fade the selected clip in over one second. Double-click the clip to set how long it fades in and out"
+#define MSG_HELP_CROSSFADE               306
+#define MSG_HELP_CROSSFADE_STR           "Fade over to the selected clip from the clip before it on its track. Click again for a plain cut"
+#define MSG_HELP_PREVIEW                 307
+#define MSG_HELP_PREVIEW_STR             "Play the edit from the playhead in the preview window (key Space)"
+#define MSG_HELP_STOP_PREVIEW            308
+#define MSG_HELP_STOP_PREVIEW_STR        "Stop playing (key Space)"
+#define MSG_HELP_EXPORT                  309
+#define MSG_HELP_EXPORT_STR              "Render the edit to a movie file at full quality. The project settings say which kind of file"
+#define MSG_HELP_CANCEL_EXPORT           310
+#define MSG_HELP_CANCEL_EXPORT_STR       "Stop the export. The file it was writing isn't finished"
+#define MSG_HINT_SCROLL                  311
+#define MSG_HINT_SCROLL_STR              "Drag to see another part of the edit"
+#define MSG_HINT_POSITION                312
+#define MSG_HINT_POSITION_STR            "Where the playhead is in the edit"
+#define MSG_HINT_CLIPNAME                313
+#define MSG_HINT_CLIPNAME_STR            "The file the selected clip comes from. Double-click the clip for all its settings"
+#define MSG_HINT_LENGTH                  314
+#define MSG_HINT_LENGTH_STR              "How long the clip lasts in the edit. Type a time and press Return"
+#define MSG_HINT_PROGRESS                315
+#define MSG_HINT_PROGRESS_STR            "How far an export has come"
+#define MSG_HINT_STATUS                  316
+#define MSG_HINT_STATUS_STR              "What happened last, or what is being done now"
+#define MSG_HINT_CLIP_FILE               317
+#define MSG_HINT_CLIP_FILE_STR           "The file this clip comes from"
+#define MSG_HINT_KIND                    318
+#define MSG_HINT_KIND_STR                "How the crossfade from the clip before looks. Picking one adds a crossfade if there is none"
+#define MSG_HINT_FADE_IN                 319
+#define MSG_HINT_FADE_IN_STR             "How long the clip takes to fade in, from black and silence or from the tracks below. 0 for no fade"
+#define MSG_HINT_FADE_OUT                320
+#define MSG_HINT_FADE_OUT_STR            "How long the clip takes to fade out, to black and silence or to the tracks below. 0 for no fade"
+#define MSG_HINT_CLIP_FIT                321
+#define MSG_HINT_CLIP_FIT_STR            "How this clip's picture fits the frame when its size or shape differs from the project's"
+#define MSG_HINT_SOURCE                  322
+#define MSG_HINT_SOURCE_STR              "The picture in the file: its size and frame rate"
+#define MSG_HINT_SHOWN                   323
+#define MSG_HINT_SHOWN_STR               "What fitting does to the picture in the film"
+#define MSG_HINT_VOLUME                  324
+#define MSG_HINT_VOLUME_STR              "How loud the clip is: 100 as it was recorded, 0 silent, at most 400. Type a number and press Return"
+#define MSG_HINT_EFFECT                  325
+#define MSG_HINT_EFFECT_STR              "The effect shown below. Effects are added from the Effects menu"
+#define MSG_HINT_PREV_EFFECT             326
+#define MSG_HINT_PREV_EFFECT_STR         "Show the clip's effect before this one"
+#define MSG_HINT_NEXT_EFFECT             327
+#define MSG_HINT_NEXT_EFFECT_STR         "Show the clip's effect after this one"
+#define MSG_HINT_REMOVE_EFFECT           328
+#define MSG_HINT_REMOVE_EFFECT_STR       "Take the effect shown off the clip"
+#define MSG_HINT_PARAM                   329
+#define MSG_HINT_PARAM_STR               "A setting of the effect. Type a number and press Return"
+#define MSG_HINT_WIDTH                   330
+#define MSG_HINT_WIDTH_STR               "The film's width in pixels. Leave empty for the first clip's size"
+#define MSG_HINT_HEIGHT                  331
+#define MSG_HINT_HEIGHT_STR              "The film's height in pixels. Leave empty for the first clip's size"
+#define MSG_HINT_RATE                    332
+#define MSG_HINT_RATE_STR                "Pictures a second in the film. Clips with another rate are converted"
+#define MSG_HINT_PROJECT_FIT             333
+#define MSG_HINT_PROJECT_FIT_STR         "How clips of another size or shape fit the frame, unless a clip is set otherwise"
+#define MSG_HINT_BAR_COLOUR              334
+#define MSG_HINT_BAR_COLOUR_STR          "The colour of the bars beside a fitted picture, as RRGGBB in hex: 000000 is black"
+#define MSG_HINT_FILE_TYPE               335
+#define MSG_HINT_FILE_TYPE_STR           "The kind of file Export makes"
+#define MSG_HINT_VCODEC                  336
+#define MSG_HINT_VCODEC_STR              "How the picture is compressed in the exported file"
+#define MSG_HINT_QUALITY                 337
+#define MSG_HINT_QUALITY_STR             "Better quality makes a bigger file"
+#define MSG_HINT_ACODEC                  338
+#define MSG_HINT_ACODEC_STR              "How the sound is compressed in the exported file"
+#define MSG_HINT_BITRATE                 339
+#define MSG_HINT_BITRATE_STR             "How much room a second of sound gets. More sounds better and makes a bigger file"
+#define MSG_HINT_SAMPLE_RATE             340
+#define MSG_HINT_SAMPLE_RATE_STR         "Sound samples a second. 48 kHz is usual for video, 44.1 kHz for CDs"
+#define MSG_HINT_PLAY_PICTURE            341
+#define MSG_HINT_PLAY_PICTURE_STR        "The edit, playing from the playhead. Space stops it, Esc closes the window"
+#define MSG_HINT_PLAY_TIME               342
+#define MSG_HINT_PLAY_TIME_STR           "Where in the edit the picture is"
 
-#define FB_NUM_STRINGS 246
+#define FB_NUM_STRINGS 289
 
 #ifdef FB_STRINGS_ARRAY
 static const struct FBBuiltinString {
@@ -758,6 +844,49 @@ static const struct FBBuiltinString {
     { MSG_MENU_EXPORT_RANGE, MSG_MENU_EXPORT_RANGE_STR },
     { MSG_REQ_EXPORT_RANGE, MSG_REQ_EXPORT_RANGE_STR },
     { MSG_HINT_RULER, MSG_HINT_RULER_STR },
+    { MSG_HELP_ADD, MSG_HELP_ADD_STR },
+    { MSG_HELP_SPLIT, MSG_HELP_SPLIT_STR },
+    { MSG_HELP_SET_IN, MSG_HELP_SET_IN_STR },
+    { MSG_HELP_SET_OUT, MSG_HELP_SET_OUT_STR },
+    { MSG_HELP_REMOVE, MSG_HELP_REMOVE_STR },
+    { MSG_HELP_FADE, MSG_HELP_FADE_STR },
+    { MSG_HELP_CROSSFADE, MSG_HELP_CROSSFADE_STR },
+    { MSG_HELP_PREVIEW, MSG_HELP_PREVIEW_STR },
+    { MSG_HELP_STOP_PREVIEW, MSG_HELP_STOP_PREVIEW_STR },
+    { MSG_HELP_EXPORT, MSG_HELP_EXPORT_STR },
+    { MSG_HELP_CANCEL_EXPORT, MSG_HELP_CANCEL_EXPORT_STR },
+    { MSG_HINT_SCROLL, MSG_HINT_SCROLL_STR },
+    { MSG_HINT_POSITION, MSG_HINT_POSITION_STR },
+    { MSG_HINT_CLIPNAME, MSG_HINT_CLIPNAME_STR },
+    { MSG_HINT_LENGTH, MSG_HINT_LENGTH_STR },
+    { MSG_HINT_PROGRESS, MSG_HINT_PROGRESS_STR },
+    { MSG_HINT_STATUS, MSG_HINT_STATUS_STR },
+    { MSG_HINT_CLIP_FILE, MSG_HINT_CLIP_FILE_STR },
+    { MSG_HINT_KIND, MSG_HINT_KIND_STR },
+    { MSG_HINT_FADE_IN, MSG_HINT_FADE_IN_STR },
+    { MSG_HINT_FADE_OUT, MSG_HINT_FADE_OUT_STR },
+    { MSG_HINT_CLIP_FIT, MSG_HINT_CLIP_FIT_STR },
+    { MSG_HINT_SOURCE, MSG_HINT_SOURCE_STR },
+    { MSG_HINT_SHOWN, MSG_HINT_SHOWN_STR },
+    { MSG_HINT_VOLUME, MSG_HINT_VOLUME_STR },
+    { MSG_HINT_EFFECT, MSG_HINT_EFFECT_STR },
+    { MSG_HINT_PREV_EFFECT, MSG_HINT_PREV_EFFECT_STR },
+    { MSG_HINT_NEXT_EFFECT, MSG_HINT_NEXT_EFFECT_STR },
+    { MSG_HINT_REMOVE_EFFECT, MSG_HINT_REMOVE_EFFECT_STR },
+    { MSG_HINT_PARAM, MSG_HINT_PARAM_STR },
+    { MSG_HINT_WIDTH, MSG_HINT_WIDTH_STR },
+    { MSG_HINT_HEIGHT, MSG_HINT_HEIGHT_STR },
+    { MSG_HINT_RATE, MSG_HINT_RATE_STR },
+    { MSG_HINT_PROJECT_FIT, MSG_HINT_PROJECT_FIT_STR },
+    { MSG_HINT_BAR_COLOUR, MSG_HINT_BAR_COLOUR_STR },
+    { MSG_HINT_FILE_TYPE, MSG_HINT_FILE_TYPE_STR },
+    { MSG_HINT_VCODEC, MSG_HINT_VCODEC_STR },
+    { MSG_HINT_QUALITY, MSG_HINT_QUALITY_STR },
+    { MSG_HINT_ACODEC, MSG_HINT_ACODEC_STR },
+    { MSG_HINT_BITRATE, MSG_HINT_BITRATE_STR },
+    { MSG_HINT_SAMPLE_RATE, MSG_HINT_SAMPLE_RATE_STR },
+    { MSG_HINT_PLAY_PICTURE, MSG_HINT_PLAY_PICTURE_STR },
+    { MSG_HINT_PLAY_TIME, MSG_HINT_PLAY_TIME_STR },
 };
 #endif
 

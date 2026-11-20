@@ -41,6 +41,7 @@
 #include "locale/catalog.h"
 #include "gui/clipwindow.h"
 #include "gui/mainwindow.h"
+#include "gui/hints.h"
 #include "gui/xfadekinds.h"
 #include "gui/winprefs.h"
 
@@ -95,6 +96,34 @@ static int EffectPos;
 
 /* Whether the working pointer is wanted (also for when it opens). */
 static BOOL Working;
+
+/* Hover hints; the effect's setting rows are added when the window opens. */
+static const HintMsg HintMsgs[] = {
+    { CG_NAME,      MSG_HINT_CLIP_FILE },
+    { CG_STARTS,    MSG_HINT_STARTS },
+    { CG_IN,        MSG_HINT_FROM_FILE },
+    { CG_LENGTH,    MSG_HINT_LENGTH },
+    { CG_XFADE,     MSG_HINT_CROSSFADE },
+    { CG_KIND,      MSG_HINT_KIND },
+    { CG_FADE_IN,   MSG_HINT_FADE_IN },
+    { CG_FADE_OUT,  MSG_HINT_FADE_OUT },
+    { CG_FIT,       MSG_HINT_CLIP_FIT },
+    { CG_SOURCE,    MSG_HINT_SOURCE },
+    { CG_SHOWN,     MSG_HINT_SHOWN },
+    { CG_VOLUME,    MSG_HINT_VOLUME },
+    { CG_EFFECT,    MSG_HINT_EFFECT },
+    { CG_PREV,      MSG_HINT_PREV_EFFECT },
+    { CG_NEXT,      MSG_HINT_NEXT_EFFECT },
+    { CG_REMOVE,    MSG_HINT_REMOVE_EFFECT },
+    { CG_PARAM_LABEL + 0, MSG_HINT_PARAM }, { CG_PARAM + 0, MSG_HINT_PARAM },
+    { CG_PARAM_LABEL + 1, MSG_HINT_PARAM }, { CG_PARAM + 1, MSG_HINT_PARAM },
+    { CG_PARAM_LABEL + 2, MSG_HINT_PARAM }, { CG_PARAM + 2, MSG_HINT_PARAM },
+    { CG_PARAM_LABEL + 3, MSG_HINT_PARAM }, { CG_PARAM + 3, MSG_HINT_PARAM },
+};
+#if PARAM_ROWS != 4
+#error "HintMsgs has a hint for each of 4 effect setting rows"
+#endif
+static struct HintInfo Hints[HINT_COUNT(HintMsgs) + 1];
 
 /* ---- Making the gadgets ---------------------------------------------- */
 
@@ -655,6 +684,7 @@ void ClipWindow_Open(void)
     FitLabels[FB_FIT_STRETCH] = (STRPTR)FB_Str(MSG_MENU_FIT_STRETCH);
     FitLabels[FB_FIT_COUNT]   = NULL;
     strcpy(NameText, FB_Str(MSG_CLIPWIN_NONE));
+    Hints_Fill(Hints, HintMsgs, HINT_COUNT(HintMsgs));
     SourceText[0] = ShownText[0] = EffectText[0] = '\0';
     EffectPos = 0;
 
@@ -675,9 +705,11 @@ void ClipWindow_Open(void)
         WA_CloseGadget,   TRUE,
         WA_SizeGadget,    TRUE,
         WA_IDCMP,         IDCMP_GADGETUP | IDCMP_CLOSEWINDOW |
-                          IDCMP_VANILLAKEY,
+                          IDCMP_VANILLAKEY | IDCMP_GADGETHELP,
         WA_PointerType,   Working ? FB_WORKING_POINTER : POINTERTYPE_NORMAL,
         placed ? TAG_IGNORE : WINDOW_Position, WPOS_CENTERMOUSE,
+        WINDOW_GadgetHelp, TRUE,
+        WINDOW_HintInfo,  Hints,
         WINDOW_Layout,    make_layout(),
         TAG_MORE,         place);
     if (WinObj)

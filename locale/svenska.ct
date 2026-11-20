@@ -743,3 +743,132 @@ Exportera intervallet som ANIM (eller .mp4, .gif...)
 ;
 MSG_HINT_RULER
 Klicka eller dra för att flytta positionen. Dra flaggorna längst ner för att markera ett intervall
+;
+MSG_HELP_ADD
+Lägg till en video, en ljudfil eller en bild. Varje fil får ett eget spår. Filer kan också släppas på fönstret
+;
+MSG_HELP_SPLIT
+Dela det valda klippet i två vid positionen. Är inget klipp valt delas alla spår där
+;
+MSG_HELP_SET_IN
+Skär bort början av det valda klippet, fram till positionen (tangent I). Är inget valt, klippet under positionen
+;
+MSG_HELP_SET_OUT
+Skär bort slutet av det valda klippet, från positionen (tangent O). Är inget valt, klippet under positionen
+;
+MSG_HELP_REMOVE
+Ta bort det valda klippet. Klippen efter på samma spår flyttas fram så att luckan försvinner
+;
+MSG_HELP_FADE
+Tona in det valda klippet under en sekund. Dubbelklicka på klippet för att ställa in hur länge det tonar in och ut
+;
+MSG_HELP_CROSSFADE
+Tona över till det valda klippet från klippet före på samma spår. Klicka igen för ett rakt klipp
+;
+MSG_HELP_PREVIEW
+Spela filmen från positionen i förhandsvisningsfönstret (tangent mellanslag)
+;
+MSG_HELP_STOP_PREVIEW
+Sluta spela (tangent mellanslag)
+;
+MSG_HELP_EXPORT
+Rendera filmen till en filmfil i full kvalitet. Projektinställningarna säger vilken sorts fil
+;
+MSG_HELP_CANCEL_EXPORT
+Avbryt exporten. Filen den skrev blir inte färdig
+;
+MSG_HINT_SCROLL
+Dra för att se en annan del av filmen
+;
+MSG_HINT_POSITION
+Var positionen är i filmen
+;
+MSG_HINT_CLIPNAME
+Filen som det valda klippet kommer från. Dubbelklicka på klippet för alla dess inställningar
+;
+MSG_HINT_LENGTH
+Hur länge klippet varar i filmen. Skriv en tid och tryck Retur
+;
+MSG_HINT_PROGRESS
+Hur långt en export har kommit
+;
+MSG_HINT_STATUS
+Vad som hände senast, eller vad som görs nu
+;
+MSG_HINT_CLIP_FILE
+Filen som klippet kommer från
+;
+MSG_HINT_KIND
+Hur övertoningen från klippet före ser ut. Väljer du en läggs en övertoning till om det inte finns någon
+;
+MSG_HINT_FADE_IN
+Hur länge klippet tonar in, från svart och tystnad eller från spåren under. 0 för ingen toning
+;
+MSG_HINT_FADE_OUT
+Hur länge klippet tonar ut, till svart och tystnad eller till spåren under. 0 för ingen toning
+;
+MSG_HINT_CLIP_FIT
+Hur klippets bild passas in i bilden när storleken eller formen skiljer sig från projektets
+;
+MSG_HINT_SOURCE
+Bilden i filen: dess storlek och bildfrekvens
+;
+MSG_HINT_SHOWN
+Vad anpassningen gör med bilden i filmen
+;
+MSG_HINT_VOLUME
+Hur högt klippet låter: 100 som det spelades in, 0 tyst, högst 400. Skriv ett tal och tryck Retur
+;
+MSG_HINT_EFFECT
+Effekten som visas nedanför. Effekter läggs till från menyn Effekter
+;
+MSG_HINT_PREV_EFFECT
+Visa klippets effekt före den här
+;
+MSG_HINT_NEXT_EFFECT
+Visa klippets effekt efter den här
+;
+MSG_HINT_REMOVE_EFFECT
+Ta bort effekten som visas från klippet
+;
+MSG_HINT_PARAM
+En inställning för effekten. Skriv ett tal och tryck Retur
+;
+MSG_HINT_WIDTH
+Filmens bredd i bildpunkter. Lämna tomt för första klippets storlek
+;
+MSG_HINT_HEIGHT
+Filmens höjd i bildpunkter. Lämna tomt för första klippets storlek
+;
+MSG_HINT_RATE
+Bilder per sekund i filmen. Klipp med en annan frekvens konverteras
+;
+MSG_HINT_PROJECT_FIT
+Hur klipp av en annan storlek eller form passas in i bilden, om inte klippet är inställt på annat sätt
+;
+MSG_HINT_BAR_COLOUR
+Färgen på kanterna bredvid en inpassad bild, som RRGGBB i hex: 000000 är svart
+;
+MSG_HINT_FILE_TYPE
+Vilken sorts fil Exportera gör
+;
+MSG_HINT_VCODEC
+Hur bilden komprimeras i den exporterade filen
+;
+MSG_HINT_QUALITY
+Bättre kvalitet ger en större fil
+;
+MSG_HINT_ACODEC
+Hur ljudet komprimeras i den exporterade filen
+;
+MSG_HINT_BITRATE
+Hur mycket utrymme en sekund ljud får. Mer låter bättre och ger en större fil
+;
+MSG_HINT_SAMPLE_RATE
+Ljudsampel per sekund. 48 kHz är vanligt för video, 44,1 kHz för cd-skivor
+;
+MSG_HINT_PLAY_PICTURE
+Filmen, som spelas från positionen. Mellanslag stoppar, Esc stänger fönstret
+;
+MSG_HINT_PLAY_TIME
+Var i filmen bilden är

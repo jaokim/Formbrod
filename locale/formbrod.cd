@@ -924,3 +924,180 @@ Export the range as an ANIM (or .mp4, .gif...)
 ; Hover hint over the ruler at the top.
 MSG_HINT_RULER (299//)
 Click or drag to move the playhead. Drag the flags at the bottom to mark a range
+;
+; ---- Toolbar hints --------------------------------------------------------
+; Hover hint over the Add file button.
+MSG_HELP_ADD (300//)
+Add a video, a sound file or a picture. Each file gets a track of its own. Files can also be dropped on the window
+;
+; Hover hint over the Split button.
+MSG_HELP_SPLIT (301//)
+Cut the selected clip in two at the playhead. With no clip selected, every track is cut there
+;
+; Hover hint over the Set in button. Key: I
+MSG_HELP_SET_IN (302//)
+Cut away the start of the selected clip, up to the playhead (key I). With none selected, the clip under the playhead
+;
+; Hover hint over the Set out button. Key: O
+MSG_HELP_SET_OUT (303//)
+Cut away the end of the selected clip, from the playhead on (key O). With none selected, the clip under the playhead
+;
+; Hover hint over the Remove button.
+MSG_HELP_REMOVE (304//)
+Remove the selected clip. The clips after it on its track move up to close the gap
+;
+; Hover hint over the Fade button. It adds a 1 s fade in.
+MSG_HELP_FADE (305//)
+Fade the selected clip in over one second. Double-click the clip to set how long it fades in and out
+;
+; Hover hint over the Crossfade button, which is on while the selected clip has a crossfade.
+MSG_HELP_CROSSFADE (306//)
+Fade over to the selected clip from the clip before it on its track. Click again for a plain cut
+;
+; Hover hint over the Preview button. Key: Space
+MSG_HELP_PREVIEW (307//)
+Play the edit from the playhead in the preview window (key Space)
+;
+; Hover hint over the Preview button while it plays and shows Stop.
+MSG_HELP_STOP_PREVIEW (308//)
+Stop playing (key Space)
+;
+; Hover hint over the Export button.
+MSG_HELP_EXPORT (309//)
+Render the edit to a movie file at full quality. The project settings say which kind of file
+;
+; Hover hint over the Export button while it exports and shows Cancel.
+MSG_HELP_CANCEL_EXPORT (310//)
+Stop the export. The file it was writing isn't finished
+;
+; ---- Main window hints ----------------------------------------------------
+; Hover hint over the scroller under the tracks.
+MSG_HINT_SCROLL (311//)
+Drag to see another part of the edit
+;
+; Hover hint over the playhead time.
+MSG_HINT_POSITION (312//)
+Where the playhead is in the edit
+;
+; Hover hint over the selected clip's name in the main window.
+MSG_HINT_CLIPNAME (313//)
+The file the selected clip comes from. Double-click the clip for all its settings
+;
+; Hover hint over the Length field, in the main window and the clip window.
+MSG_HINT_LENGTH (314//)
+How long the clip lasts in the edit. Type a time and press Return
+;
+; Hover hint over the Render gauge.
+MSG_HINT_PROGRESS (315//)
+How far an export has come
+;
+; Hover hint over the status line at the bottom.
+MSG_HINT_STATUS (316//)
+What happened last, or what is being done now
+;
+; ---- Clip window hints ----------------------------------------------------
+; Hover hint over the file name at the top of the clip window.
+MSG_HINT_CLIP_FILE (317//)
+The file this clip comes from
+;
+; Hover hint over the crossfade Kind chooser.
+MSG_HINT_KIND (318//)
+How the crossfade from the clip before looks. Picking one adds a crossfade if there is none
+;
+; Hover hint over the Fade in field.
+MSG_HINT_FADE_IN (319//)
+How long the clip takes to fade in, from black and silence or from the tracks below. 0 for no fade
+;
+; Hover hint over the Fade out field.
+MSG_HINT_FADE_OUT (320//)
+How long the clip takes to fade out, to black and silence or to the tracks below. 0 for no fade
+;
+; Hover hint over the clip's Fit chooser.
+MSG_HINT_CLIP_FIT (321//)
+How this clip's picture fits the frame when its size or shape differs from the project's
+;
+; Hover hint over "In the file": the file's picture size and rate.
+MSG_HINT_SOURCE (322//)
+The picture in the file: its size and frame rate
+;
+; Hover hint over "In the film": what fitting does to it.
+MSG_HINT_SHOWN (323//)
+What fitting does to the picture in the film
+;
+; Hover hint over the Volume field. The highest is FB_MAX_VOLUME, 400 %.
+MSG_HINT_VOLUME (324//)
+How loud the clip is: 100 as it was recorded, 0 silent, at most 400. Type a number and press Return
+;
+; Hover hint over the effect's name in the clip window.
+MSG_HINT_EFFECT (325//)
+The effect shown below. Effects are added from the Effects menu
+;
+; Hover hint over the Previous effect button.
+MSG_HINT_PREV_EFFECT (326//)
+Show the clip's effect before this one
+;
+; Hover hint over the Next effect button.
+MSG_HINT_NEXT_EFFECT (327//)
+Show the clip's effect after this one
+;
+; Hover hint over the Remove effect button.
+MSG_HINT_REMOVE_EFFECT (328//)
+Take the effect shown off the clip
+;
+; Hover hint over an effect's setting fields.
+MSG_HINT_PARAM (329//)
+A setting of the effect. Type a number and press Return
+;
+; ---- Project window hints -------------------------------------------------
+; Hover hint over the frame Width field.
+MSG_HINT_WIDTH (330//)
+The film's width in pixels. Leave empty for the first clip's size
+;
+; Hover hint over the frame Height field.
+MSG_HINT_HEIGHT (331//)
+The film's height in pixels. Leave empty for the first clip's size
+;
+; Hover hint over the Frame rate chooser.
+MSG_HINT_RATE (332//)
+Pictures a second in the film. Clips with another rate are converted
+;
+; Hover hint over the project's Fit chooser.
+MSG_HINT_PROJECT_FIT (333//)
+How clips of another size or shape fit the frame, unless a clip is set otherwise
+;
+; Hover hint over the Bar colour field: hex RRGGBB, '#' allowed.
+MSG_HINT_BAR_COLOUR (334//)
+The colour of the bars beside a fitted picture, as RRGGBB in hex: 000000 is black
+;
+; Hover hint over the export File type chooser.
+MSG_HINT_FILE_TYPE (335//)
+The kind of file Export makes
+;
+; Hover hint over the picture Encoder chooser.
+MSG_HINT_VCODEC (336//)
+How the picture is compressed in the exported file
+;
+; Hover hint over the picture Quality chooser.
+MSG_HINT_QUALITY (337//)
+Better quality makes a bigger file
+;
+; Hover hint over the sound Encoder chooser.
+MSG_HINT_ACODEC (338//)
+How the sound is compressed in the exported file
+;
+; Hover hint over the sound Bit rate chooser.
+MSG_HINT_BITRATE (339//)
+How much room a second of sound gets. More sounds better and makes a bigger file
+;
+; Hover hint over the Sample rate chooser.
+MSG_HINT_SAMPLE_RATE (340//)
+Sound samples a second. 48 kHz is usual for video, 44.1 kHz for CDs
+;
+; ---- Preview window hints -------------------------------------------------
+; Hover hint over the picture in the preview window.
+MSG_HINT_PLAY_PICTURE (341//)
+The edit, playing from the playhead. Space stops it, Esc closes the window
+;
+; Hover hint over the time under the preview picture.
+MSG_HINT_PLAY_TIME (342//)
+Where in the edit the picture is
