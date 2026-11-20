@@ -238,7 +238,8 @@ The port is called `FORMBROD`.
 | `CLIPS` | | number of clips |
 | `MODULES` | | module names |
 | `FIT` | `CLIP/N/A,MODE/A` | |
-| `FORMAT` | `WIDTH/N,HEIGHT/N,FPS/K,FIT/K` | `<w> <h> <fps> <fit>` |
+| `FORMAT` | `WIDTH/N,HEIGHT/N,FPS/K,FIT/K,PADCOLOR/K` | `<w> <h> <fps> <fit>` |
+| `EXPORTSETTINGS` | `VIDEO/K,QUALITY/K,SOUND/K,BITRATE/N,RATE/N,TYPE/K` | `<video> <quality> <sound> <kbit/s> <Hz> <suffix>` |
 | `NEWPROJECT` | | |
 | `OPENPROJECT` | `FILE/A` | |
 | `SAVEPROJECT` | `FILE` (default: the current file) | path saved to |
@@ -262,12 +263,43 @@ project; `0` (or `AUTO` for `FPS`) goes back to the first clip's value.
 the edges), `STRETCH` (ignore aspect) and, for `FIT` only, `DEFAULT` (use
 the project's).
 
-    'FORMAT WIDTH 1280 HEIGHT 720 FPS 25 FIT FIT'
+    'FORMAT WIDTH 1280 HEIGHT 720 FPS 25 FIT FIT PADCOLOR 202020'
     'FIT 2 FILL'        /* crop clip 2 instead of adding bars */
 
-All audio is resampled to 48 kHz stereo, and clips without audio get
+`EXPORTSETTINGS` sets how the project is exported, like *Project →
+Project settings* (below): encoders by ffmpeg's names, a quality of `LOW`,
+`MEDIUM`, `HIGH` or `BEST`, the sound's bit rate in kbit/s and its rate in
+Hz, and the file suffix. A bad value changes none of them.
+
+    'EXPORTSETTINGS VIDEO libx264 QUALITY BEST SOUND aac BITRATE 192 TYPE mkv'
+
+All audio is resampled to the export's rate (48 kHz unless set) in stereo, and clips without audio get
 silence, so files with and without sound can be joined. The clip list shows
 how each clip is fitted in its Effects column.
+
+## Project settings
+
+*Project → Project settings* opens a window with everything about the
+project as a whole. Every change is kept in the project file.
+
+- **Frame**: width and height (left empty: the first clip's), frame rate
+  (or the first clip's), how clips of another shape are fitted, and the
+  colour of the bars, as `RRGGBB`.
+- **Export file**: the file type. The export requester suggests the
+  project's name with that suffix; the name typed there decides in the
+  end, as ffmpeg picks the container from it.
+- **Picture**: the encoder (MPEG-4 Part 2, H.264 or Motion JPEG) and the
+  quality: Low, Medium, High (what export always used) or Best. That
+  means a quantiser of 6/4/3/2 for MPEG-4 and Motion JPEG, a crf of
+  28/24/20/17 for H.264, and a bit rate for other encoders.
+- **Sound**: the encoder (AAC, MP3, MP2, FLAC or uncompressed PCM), the
+  bit rate (96 to 320 kbit/s; not for FLAC and PCM) and the sample rate
+  (44.1 or 48 kHz).
+
+An encoder this build of ffmpeg lacks is marked *not in this ffmpeg*; and
+when the file type can't hold an encoder (PCM in MP4, say), export uses one
+it can. Previews keep their own quick settings. The defaults are MPEG-4
+Part 2 at High with AAC at 160 kbit/s and 48 kHz, in an `.mp4`, as before.
 
 ## Project files
 
@@ -282,6 +314,9 @@ the video files have moved:
     OUTPUT-RATE 0 0
     OUTPUT-FIT fit
     PAD-COLOR 000000
+    EXPORT-VIDEO mpeg4 high
+    EXPORT-SOUND aac 160 48000
+    EXPORT-TYPE mp4
 
     SOURCE 1 clips/intro.mp4
     SOURCE 2 Video:Holiday 2026/beach.mov
@@ -320,6 +355,9 @@ the video files have moved:
 - Version 1 files have no `TRACK` lines; they open as one picture track.
 - `OUTPUT-SIZE`, `OUTPUT-RATE` (`0` = the first clip's), `OUTPUT-FIT` and
   `PAD-COLOR` are the output format.
+- `EXPORT-VIDEO` (encoder, quality), `EXPORT-SOUND` (encoder, kbit/s, Hz)
+  and `EXPORT-TYPE` (file suffix) are how it's exported. Files without
+  them get the defaults.
 
 Only paths and edits are stored. When a project is opened its files are
 probed again; files that can't be found keep their clips, and the status
