@@ -1872,9 +1872,10 @@ int MainWindow_Open(void)
 
     Gad[GID_CLIPNAME] = (struct Gadget *)IIntuition->NewObject(CLS(C_BUTTON),
             NULL,
-        GA_ID,       GID_CLIPNAME,
-        GA_ReadOnly, TRUE,
-        GA_Text,     NameText,
+        GA_ID,          GID_CLIPNAME,
+        GA_ReadOnly,    TRUE,
+        GA_Text,        NameText,
+        GA_Underscore,  0,
         BUTTON_Justification, BCJ_LEFT,
         TAG_END);
     for (i = GID_STARTS; i <= GID_XFADE; i++)
@@ -1923,6 +1924,7 @@ int MainWindow_Open(void)
         GA_ID,       GID_STATUS,
         GA_ReadOnly, TRUE,
         GA_Text,     App.status,
+        GA_Underscore,  0,
         BUTTON_Justification, BCJ_LEFT,
         TAG_END);
 
