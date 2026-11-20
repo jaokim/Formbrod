@@ -745,52 +745,182 @@ Render previews in the background
 MSG_PLAYWIN_PREPARING (251//)
 Preparing the preview...
 ;
+; ---- Project settings window ----------------------------------------------
+; Project menu: opens the project settings window.
+MSG_MENU_PROJECT_SETTINGS (252//)
+Project settings...
+;
+; Title of the project settings window: the frame and how the project is
+; exported. Saved in the project file.
+MSG_PROJWIN_TITLE (253//)
+Project settings
+;
+; Groups in the project settings window.
+MSG_GROUP_FRAME (254//)
+Frame
+;
+MSG_GROUP_EXPORT_FILE (255//)
+Export file
+;
+; Labels in the project settings window.
+MSG_LABEL_WIDTH (256//)
+Width
+;
+MSG_LABEL_HEIGHT (257//)
+Height
+;
+MSG_LABEL_FRAME_RATE (258//)
+Frame rate
+;
+; The colour of the bars added when a clip doesn't fill the frame,
+; typed as RRGGBB (000000 is black).
+MSG_LABEL_BAR_COLOUR (259//)
+Bar colour
+;
+MSG_LABEL_FILE_TYPE (260//)
+File type
+;
+MSG_LABEL_ENCODER (261//)
+Encoder
+;
+MSG_LABEL_QUALITY (262//)
+Quality
+;
+MSG_LABEL_BITRATE (263//)
+Bit rate
+;
+MSG_LABEL_SAMPLE_RATE (264//)
+Sample rate
+;
+; Under the width and height fields.
+MSG_HINT_SIZE_AUTO (265//)
+Leave empty for the first clip's size
+;
+; Frame rate chooser: the first clip's rate, then rates like "25 fps".
+MSG_RATE_AUTO (266//)
+As the first clip
+;
+MSG_RATE_FPS (267//)
+%s fps
+;
+; Picture quality chooser.
+MSG_QUALITY_LOW (268//)
+Low (small file)
+;
+MSG_QUALITY_MEDIUM (269//)
+Medium
+;
+MSG_QUALITY_HIGH (270//)
+High
+;
+MSG_QUALITY_BEST (271//)
+Best (large file)
+;
+; Picture encoders.
+MSG_VCODEC_MPEG4 (272//)
+MPEG-4 Part 2
+;
+MSG_VCODEC_H264 (273//)
+H.264 (x264)
+;
+MSG_VCODEC_MJPEG (274//)
+Motion JPEG
+;
+; Sound encoders.
+MSG_ACODEC_AAC (275//)
+AAC
+;
+MSG_ACODEC_MP3 (276//)
+MP3 (LAME)
+;
+MSG_ACODEC_MP2 (277//)
+MP2
+;
+MSG_ACODEC_FLAC (278//)
+FLAC (lossless)
+;
+MSG_ACODEC_PCM (279//)
+Uncompressed (PCM)
+;
+; File types: the suffix the export file gets.
+MSG_TYPE_MP4 (280//)
+MP4 (.mp4)
+;
+MSG_TYPE_MOV (281//)
+QuickTime (.mov)
+;
+MSG_TYPE_MKV (282//)
+Matroska (.mkv)
+;
+MSG_TYPE_AVI (283//)
+AVI (.avi)
+;
+; An encoder the ffmpeg libraries were built without. Export then uses
+; one the file type can hold.
+MSG_NOT_AVAILABLE (284//)
+%s (not in this ffmpeg)
+;
+; Bit rate and sample rate choosers.
+MSG_KBITS (285//)
+%ld kbit/s
+;
+MSG_KHZ (286//)
+%s kHz
+;
+; Status line, after typing a bar colour that isn't one.
+MSG_STATUS_BAD_COLOUR (287//)
+%s isn't a colour: type RRGGBB, like 000000 for black
+;
+; Status line, after typing a frame size out of range.
+MSG_STATUS_BAD_SIZE (288//)
+The frame must be from 2 x 2 to 16384 x 16384
+;
 ; In the status line after a frame of the edit was saved as a picture
 ; (ARexx GRAB or Project > Save frame). %s: the file.
-MSG_STATUS_FRAME_SAVED (252//)
+MSG_STATUS_FRAME_SAVED (289//)
 Frame saved as %s
 ;
 ; In the status line when a frame couldn't be made or saved. %s: the
 ; file it was meant for. The log says why.
-MSG_STATUS_FRAME_FAILED (253//)
+MSG_STATUS_FRAME_FAILED (290//)
 Couldn't save the frame as %s
 ;
 ; Project menu: save the frame at the playhead as a picture, full size,
 ; for a paint program (PNG if the name ends in .png, else IFF ILBM).
-MSG_MENU_SAVE_FRAME (254//)
+MSG_MENU_SAVE_FRAME (291//)
 Save frame...
 ;
 ; Project menu: open the preview window without playing; it then shows
 ; the frame at the playhead, following it as it moves.
-MSG_MENU_SHOW_PREVIEW (255//)
+MSG_MENU_SHOW_PREVIEW (292//)
 Show preview window
 ;
 ; Title of the file requester for Save frame.
-MSG_REQ_SAVE_FRAME (256//)
+MSG_REQ_SAVE_FRAME (293//)
 Save the frame at the playhead
 ;
 ; Edit menu: put the start mark of the range (shown in the overview, the
 ; ruler and film strip at the top) at the playhead. Key: [
-MSG_MENU_RANGE_FROM (257//)
+MSG_MENU_RANGE_FROM (294//)
 Range starts here
 ;
 ; Edit menu: put the end mark of the range at the playhead. Key: ]
-MSG_MENU_RANGE_TO (258//)
+MSG_MENU_RANGE_TO (295//)
 Range ends here
 ;
 ; Edit menu: the range is the whole edit again.
-MSG_MENU_RANGE_CLEAR (259//)
+MSG_MENU_RANGE_CLEAR (296//)
 Range: whole edit
 ;
 ; Project menu: render the range small, as an IFF ANIM (or a movie if
 ; the name ends in .mp4, .gif...), for paint programs.
-MSG_MENU_EXPORT_RANGE (260//)
+MSG_MENU_EXPORT_RANGE (297//)
 Export range...
 ;
 ; Title of the file requester for Export range.
-MSG_REQ_EXPORT_RANGE (261//)
+MSG_REQ_EXPORT_RANGE (298//)
 Export the range as an ANIM (or .mp4, .gif...)
 ;
 ; Hover hint over the ruler at the top.
-MSG_HINT_RULER (262//)
+MSG_HINT_RULER (299//)
 Click or drag to move the playhead. Drag the flags at the bottom to mark a range

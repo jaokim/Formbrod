@@ -143,6 +143,17 @@ int FB_ProjectWrite(const FBTimeline *tl, const char *project_dir,
     buf_printf(&b, "OUTPUT-FIT %s\n", FB_FitName(tl->format.fit));
     buf_printf(&b, "PAD-COLOR %06lX\n",
                (unsigned long)(tl->format.pad_color & 0xFFFFFF));
+    {
+        const FBExport *e = &tl->format.encode;
+
+        buf_printf(&b, "; export: encoder and quality; encoder, kbit/s and "
+                       "Hz; file suffix\n");
+        buf_printf(&b, "EXPORT-VIDEO %s %s\n", e->vcodec,
+                   FB_VideoQualityName(e->vquality));
+        buf_printf(&b, "EXPORT-SOUND %s %d %d\n", e->acodec, e->abitrate,
+                   e->arate);
+        buf_printf(&b, "EXPORT-TYPE %s\n", e->filetype);
+    }
     if (tl->range_from > 0 || tl->range_to > 0)
         buf_printf(&b, "; the marks in the overview; 0 at the end = to "
                    "the end\nRANGE %lld %lld\n", (long long)tl->range_from,
@@ -319,6 +330,36 @@ FBProjectError FB_ProjectParse(FBTimeline *tl, const char *text,
             if (end == val || *end)
                 FAIL(FB_PROJECT_BAD_LINE);
             tl->format.pad_color = (uint32_t)(c & 0xFFFFFF);
+        } else if (strcmp(line, "EXPORT-VIDEO") == 0) {
+            FBExport e = tl->format.encode;
+            char codec[FB_NAME_LEN], quality[16];
+
+            if (sscanf(val, "%31s %15s", codec, quality) != 2)
+                FAIL(FB_PROJECT_BAD_LINE);
+            strcpy(e.vcodec, codec);
+            e.vquality = FB_VideoQualityFromName(quality);
+            if (!FB_ExportValid(&e))
+                FAIL(FB_PROJECT_BAD_LINE);
+            tl->format.encode = e;
+        } else if (strcmp(line, "EXPORT-SOUND") == 0) {
+            FBExport e = tl->format.encode;
+            char codec[FB_NAME_LEN];
+
+            if (sscanf(val, "%31s %d %d", codec, &e.abitrate, &e.arate) != 3)
+                FAIL(FB_PROJECT_BAD_LINE);
+            strcpy(e.acodec, codec);
+            if (!FB_ExportValid(&e))
+                FAIL(FB_PROJECT_BAD_LINE);
+            tl->format.encode = e;
+        } else if (strcmp(line, "EXPORT-TYPE") == 0) {
+            FBExport e = tl->format.encode;
+
+            if (strlen(val) >= sizeof(e.filetype))
+                FAIL(FB_PROJECT_BAD_LINE);
+            strcpy(e.filetype, val);
+            if (!FB_ExportValid(&e))
+                FAIL(FB_PROJECT_BAD_LINE);
+            tl->format.encode = e;
         } else if (strcmp(line, "RANGE") == 0) {
             long long f, t;
             char *end;

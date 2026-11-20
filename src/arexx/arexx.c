@@ -64,8 +64,17 @@
  *   CLIPS                               number of clips
  *   MODULES                             space-separated module names
  *   FIT CLIP/N/A,MODE/A                 DEFAULT|FIT|FILL|STRETCH
- *   FORMAT WIDTH/N,HEIGHT/N,FPS/K,FIT/K set output format; returns
- *                                       "<w> <h> <fps> <fit>" (0 = auto)
+ *   FORMAT WIDTH/N,HEIGHT/N,FPS/K,FIT/K,PADCOLOR/K
+ *                                       set output format; returns
+ *                                       "<w> <h> <fps> <fit>" (0 = auto);
+ *                                       PADCOLOR is RRGGBB (the bars)
+ *   EXPORTSETTINGS VIDEO/K,QUALITY/K,SOUND/K,BITRATE/N,RATE/N,TYPE/K
+ *                                       how the project is exported:
+ *                                       encoders (ffmpeg's names),
+ *                                       LOW|MEDIUM|HIGH|BEST, kbit/s, Hz
+ *                                       and the file suffix; returns
+ *                                       "<video> <quality> <sound>
+ *                                       <kbit/s> <Hz> <suffix>"
  *   NEWPROJECT                          empty the timeline (no questions)
  *   OPENPROJECT FILE/A                  replaces the timeline (no questions)
  *   SAVEPROJECT FILE                    without FILE: the current file;
@@ -503,9 +512,17 @@ static void cmd_format(struct ARexxCmd *cmd, struct RexxMsg *rm)
     int32 *h = (int32 *)cmd->ac_ArgList[1];
     const char *fps = (const char *)cmd->ac_ArgList[2];
     const char *fit = (const char *)cmd->ac_ArgList[3];
+    const char *pad = (const char *)cmd->ac_ArgList[4];
     int rc = 0, num, den;
 
     (void)rm;
+    if (pad) {
+        char *end;
+        unsigned long rgb = strtoul(pad[0] == '#' ? pad + 1 : pad, &end, 16);
+
+        if (*end || App_SetPadColor(rgb) != 0)
+            rc = RC_ERROR;
+    }
     if ((w || h) && App_SetFrameSize(w ? *w : 0, h ? *h : 0) != 0)
         rc = RC_ERROR;
     if (fps && (parse_rate(fps, &num, &den) != 0 ||
@@ -527,6 +544,57 @@ static void cmd_quit(struct ARexxCmd *cmd, struct RexxMsg *rm)
     set_result(cmd, 0);
 }
 
+static void lower(char *s)
+{
+    for (; *s; s++)
+        if (*s >= 'A' && *s <= 'Z')
+            *s = (char)(*s - 'A' + 'a');
+}
+
+static void cmd_exportsettings(struct ARexxCmd *cmd, struct RexxMsg *rm)
+{
+    FBExport e = App.timeline.format.encode;
+    const char *video = (const char *)cmd->ac_ArgList[0];
+    const char *quality = (const char *)cmd->ac_ArgList[1];
+    const char *sound = (const char *)cmd->ac_ArgList[2];
+    int32 *kbit = (int32 *)cmd->ac_ArgList[3];
+    int32 *rate = (int32 *)cmd->ac_ArgList[4];
+    const char *type = (const char *)cmd->ac_ArgList[5];
+    int rc = 0;
+
+    (void)rm;
+    if (video)
+        snprintf(e.vcodec, sizeof(e.vcodec), "%s", video);
+    if (quality) {
+        char q[16];
+
+        snprintf(q, sizeof(q), "%s", quality);
+        lower(q);
+        e.vquality = FB_VideoQualityFromName(q);
+    }
+    if (sound)
+        snprintf(e.acodec, sizeof(e.acodec), "%s", sound);
+    if (kbit)
+        e.abitrate = (int)*kbit;
+    if (rate)
+        e.arate = (int)*rate;
+    if (type) {
+        snprintf(e.filetype, sizeof(e.filetype), "%s",
+                 type[0] == '.' ? type + 1 : type);
+        lower(e.filetype);
+    }
+    /* All or nothing: a bad value changes none of them. */
+    if ((video || quality || sound || kbit || rate || type) &&
+        App_SetExport(&e) != 0)
+        rc = RC_ERROR;
+
+    e = App.timeline.format.encode;
+    snprintf(result, sizeof(result), "%s %s %s %d %d %s", e.vcodec,
+             FB_VideoQualityName(e.vquality), e.acodec, e.abitrate, e.arate,
+             e.filetype);
+    set_result(cmd, rc);
+}
+
 static struct ARexxCmd commands[] = {
     { "OPEN",         1,  cmd_open,         "FILE/A",            0, NULL, 0, 0, NULL },
     { "SPLIT",        2,  cmd_split,        "AT/N/A,TRACK/N",    0, NULL, 0, 0, NULL },
@@ -542,7 +610,7 @@ static struct ARexxCmd commands[] = {
     { "QUIT",         11, cmd_quit,         NULL,                0, NULL, 0, 0, NULL },
     { "FIT",          12, cmd_fit,          "CLIP/N/A,MODE/A",   0, NULL, 0, 0, NULL },
     { "FORMAT",       13, cmd_format,
-      "WIDTH/N,HEIGHT/N,FPS/K,FIT/K",                             0, NULL, 0, 0, NULL },
+      "WIDTH/N,HEIGHT/N,FPS/K,FIT/K,PADCOLOR/K",                  0, NULL, 0, 0, NULL },
     { "NEWPROJECT",   14, cmd_newproject,   NULL,                0, NULL, 0, 0, NULL },
     { "OPENPROJECT",  15, cmd_openproject,  "FILE/A",            0, NULL, 0, 0, NULL },
     { "SAVEPROJECT",  16, cmd_saveproject,  "FILE",              0, NULL, 0, 0, NULL },
@@ -558,10 +626,12 @@ static struct ARexxCmd commands[] = {
     { "REMOVEEFFECT", 23, cmd_removeeffect, "CLIP/N/A,EFFECT/N/A", 0, NULL, 0, 0, NULL },
     { "FADES",        24, cmd_fades,        "CLIP/N/A,IN/N,OUT/N", 0, NULL, 0, 0, NULL },
     { "VOLUME",       25, cmd_volume,       "CLIP/N/A,PERCENT/N/A", 0, NULL, 0, 0, NULL },
-    { "PLAYHEAD",     26, cmd_playhead,     "AT/N",              0, NULL, 0, 0, NULL },
-    { "GRAB",         27, cmd_grab,         "FILE/A,AT/N,FULL/S", 0, NULL, 0, 0, NULL },
-    { "RANGE",        28, cmd_range,        "FROM/N,TO/N,CLEAR/S", 0, NULL, 0, 0, NULL },
-    { "EXPORTRANGE",  29, cmd_exportrange,  "FILE/A,WIDTH/N,FPS/N", 0, NULL, 0, 0, NULL },
+    { "EXPORTSETTINGS", 26, cmd_exportsettings,
+      "VIDEO/K,QUALITY/K,SOUND/K,BITRATE/N,RATE/N,TYPE/K",        0, NULL, 0, 0, NULL },
+    { "PLAYHEAD",     27, cmd_playhead,     "AT/N",              0, NULL, 0, 0, NULL },
+    { "GRAB",         28, cmd_grab,         "FILE/A,AT/N,FULL/S", 0, NULL, 0, 0, NULL },
+    { "RANGE",        29, cmd_range,        "FROM/N,TO/N,CLEAR/S", 0, NULL, 0, 0, NULL },
+    { "EXPORTRANGE",  30, cmd_exportrange,  "FILE/A,WIDTH/N,FPS/N", 0, NULL, 0, 0, NULL },
     { NULL,           0,  NULL,             NULL,                0, NULL, 0, 0, NULL }
 };
 

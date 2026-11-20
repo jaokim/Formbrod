@@ -79,6 +79,7 @@
 #include "gui/track.h"
 #include "gui/xfadekinds.h"
 #include "gui/clipwindow.h"
+#include "gui/projectwindow.h"
 #include "gui/playwindow.h"
 #include "gui/winprefs.h"
 #include "gui/toolbar.h"
@@ -103,8 +104,9 @@ enum {
     MID_WRITE_LOG, MID_TRACK_APPEND, MID_TRACK_MUTE, MID_TRACK_HIDE,
     MID_TRACK_REMOVE, MID_PROXIES, MID_BG_RENDER, MID_PROXY_SIZE_MENU,
     MID_PROXY_AUTO, MID_PROXY_320, MID_PROXY_480, MID_PROXY_640,
-    MID_XFADE_MENU, MID_CLIP_WINDOW, MID_SAVE_FRAME, MID_SHOW_PREVIEW,
-    MID_RANGE_FROM, MID_RANGE_TO, MID_RANGE_CLEAR, MID_EXPORT_RANGE,
+    MID_XFADE_MENU, MID_CLIP_WINDOW, MID_PROJECT_WINDOW, MID_SAVE_FRAME,
+    MID_SHOW_PREVIEW, MID_RANGE_FROM, MID_RANGE_TO, MID_RANGE_CLEAR,
+    MID_EXPORT_RANGE,
     MID_XFADE_KIND = 150,    /* + index in XfadeKinds */
     MID_EFFECT = 200         /* + module index */
 };
@@ -745,7 +747,7 @@ static BOOL make_menus(struct Screen *scr)
     struct NewMenu *nm;
     int n = 0, i;
 
-    nm = calloc(64 + nmods, sizeof(*nm));
+    nm = calloc(80 + nmods, sizeof(*nm));
     if (!nm)
         return FALSE;
 
@@ -754,6 +756,8 @@ static BOOL make_menus(struct Screen *scr)
     add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_OPEN),     "O", MID_OPEN);
     add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_SAVE),     "S", MID_SAVE);
     add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_SAVE_AS),  "A", MID_SAVE_AS);
+    add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_PROJECT_SETTINGS), NULL,
+             MID_PROJECT_WINDOW);
     add_menu(nm, &n, NM_ITEM, NM_BARLABEL,               NULL, 0);
     add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_ADD),      "I", GID_ADD);
     add_menu(nm, &n, NM_ITEM, NM_BARLABEL,               NULL, 0);
@@ -1042,6 +1046,9 @@ static void handle_menu(uint32 id)
     case MID_CLIP_WINDOW:
         ClipWindow_Open();
         break;
+    case MID_PROJECT_WINDOW:
+        ProjectWindow_Open();
+        break;
     case MID_SAVE_FRAME:
         save_frame();
         MainWindow_Refresh();
@@ -1315,6 +1322,7 @@ void MainWindow_Refresh(void)
     update_title();
     sync_menus();
     ClipWindow_Refresh();
+    ProjectWindow_Refresh();
 
     /* Where a slow refresh spends its time (INFO when it's slow). */
     t_end = now_ms();
@@ -1338,6 +1346,7 @@ void MainWindow_SetWorking(BOOL working)
             WA_PointerType, working ? FB_WORKING_POINTER : POINTERTYPE_NORMAL,
             TAG_END);
     ClipWindow_SetWorking(working);
+    ProjectWindow_SetWorking(working);
 }
 
 void MainWindow_SetProgress(const FBProgress *p)
@@ -1632,9 +1641,16 @@ static void handle_gadget(uint32 id)
     case GID_EXPORT:
         if (App.rendering)
             App_CancelRender();
-        else if (ask_file(DRAWER_EXPORT, FB_Str(MSG_REQ_EXPORT), TRUE, NULL,
-                          path, sizeof(path)))
-            App_Export(path, FALSE);
+        else {
+            /* The project's name with the export suffix (Project
+             * settings > File type). */
+            char name[FB_PATH_LEN];
+
+            App_ExportFileName(name, sizeof(name));
+            if (ask_file(DRAWER_EXPORT, FB_Str(MSG_REQ_EXPORT), TRUE, name,
+                         path, sizeof(path)))
+                App_Export(path, FALSE);
+        }
         break;
     }
     MainWindow_Refresh();
@@ -1976,7 +1992,8 @@ uint32 MainWindow_SigMask(void)
         IIntuition->GetAttr(WINDOW_SigMask, WinObj, &mask);
     if (AppPort)
         mask |= 1UL << AppPort->mp_SigBit;
-    return mask | ClipWindow_SigMask() | PlayWindow_SigMask();
+    return mask | ClipWindow_SigMask() | ProjectWindow_SigMask() |
+           PlayWindow_SigMask();
 }
 
 void MainWindow_Handle(uint32 sigs)
@@ -1987,6 +2004,7 @@ void MainWindow_Handle(uint32 sigs)
     if (AppPort && (sigs & (1UL << AppPort->mp_SigBit)))
         handle_appmessages();
     ClipWindow_Handle(sigs);
+    ProjectWindow_Handle(sigs);
     PlayWindow_Handle(sigs);
 
     while ((result = IIntuition->IDoMethod(WinObj, WM_HANDLEINPUT, &code))
@@ -2068,6 +2086,7 @@ void MainWindow_Close(void)
 
     PlayWindow_Close();
     ClipWindow_Close();
+    ProjectWindow_Close();
 
     if (WinObj) {
         WinPrefs_Save("MainWindow", Win);

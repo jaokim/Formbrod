@@ -83,11 +83,41 @@ typedef enum {
     FB_FIT_COUNT
 } FBFit;
 
+/* How good the exported picture is: how hard the encoder may squeeze it
+ * (job.h turns it into a quantiser, a crf or a bit rate). */
+typedef enum {
+    FB_VQ_LOW = 1,
+    FB_VQ_MEDIUM,
+    FB_VQ_HIGH,           /* the default */
+    FB_VQ_BEST,
+    FB_VQ_COUNT
+} FBVideoQuality;
+
+/* What an export is made as. The defaults are what export always used:
+ * MPEG-4 Part 2 at high quality with AAC at 160 kbit/s, 48 kHz, in .mp4. */
+#define FB_EXPORT_VCODEC    "mpeg4"
+#define FB_EXPORT_ACODEC    "aac"
+#define FB_EXPORT_ABITRATE  160       /* kbit/s */
+#define FB_EXPORT_ARATE     48000     /* Hz */
+#define FB_EXPORT_TYPE      "mp4"
+#define FB_FILETYPE_LEN     8
+
+typedef struct FBExport {
+    char     vcodec[FB_NAME_LEN];   /* ffmpeg encoder name */
+    int      vquality;              /* FBVideoQuality */
+    char     acodec[FB_NAME_LEN];
+    int      abitrate;              /* kbit/s; ignored by PCM and FLAC */
+    int      arate;                 /* Hz */
+    char     filetype[FB_FILETYPE_LEN];  /* the export file's suffix,
+                                          * without the dot */
+} FBExport;
+
 typedef struct FBFormat {
     int      width, height;       /* 0 = size of the first clip's source */
     int      fps_num, fps_den;    /* 0 = rate of the first clip's source */
     FBFit    fit;                 /* default for clips; DEFAULT means FIT */
     uint32_t pad_color;           /* 0xRRGGBB for the bars */
+    FBExport encode;              /* how it's exported */
 } FBFormat;
 
 typedef struct FBParam {
@@ -347,5 +377,16 @@ FBFitResult FB_ClipFitResult(const FBTimeline *tl, const FBClip *clip,
  * FromName is case-insensitive and returns -1 if unknown. */
 const char *FB_FitName(FBFit fit);
 int     FB_FitFromName(const char *name);
+
+/* "low", "medium", "high", "best"; FromName gives -1 for anything else. */
+const char *FB_VideoQualityName(int q);
+int     FB_VideoQualityFromName(const char *name);
+/* The default export settings (FB_EXPORT_*). */
+void    FB_ExportDefaults(FBExport *e);
+/* Whether these are usable: an encoder name of letters, digits and '_'
+ * (whether the encoder exists is the backend's business), a quality
+ * level, a bit rate of 8-640 kbit/s, a rate of 8000-192000 Hz, and a
+ * suffix of 1-7 letters and digits. */
+int     FB_ExportValid(const FBExport *e);
 
 #endif

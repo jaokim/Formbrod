@@ -27,7 +27,33 @@ typedef struct FBOutput {
     char      acodec[FB_NAME_LEN];   /* e.g. "aac", "mp2" */
     int       width, height;         /* 0 = keep source size */
     FBQuality quality;
+    /* 0 = from `quality` (a preview's or a final's usual): */
+    int       vquality;              /* FBVideoQuality */
+    int       abitrate;              /* kbit/s */
+    int       arate;                 /* Hz */
 } FBOutput;
+
+/* What a picture quality means to the encoders: a constant quantiser
+ * (MPEG-4 Part 2, MPEG-1/2, MJPEG), a crf (x264, x265) or, for others, a
+ * bit rate of width x height x bits_per_pixel bit/s. */
+typedef struct FBVideoLevel {
+    int qscale, crf, bits_per_pixel;
+} FBVideoLevel;
+
+/* The level for an output: its vquality, else high for a final render
+ * and the preview's own (quick and small) for a preview. */
+FBVideoLevel FB_VideoLevel(const FBOutput *out);
+/* Its sound bit rate in bit/s: abitrate, else 160 kbit/s for a final
+ * render and 96 for a preview. */
+long FB_AudioBitRate(const FBOutput *out);
+/* Its sample rate: arate, else 48 kHz (44.1 for a preview). */
+int  FB_AudioRate(const FBOutput *out);
+/* Whether an encoder is one of those that take a quantiser, a crf, or
+ * neither (a bit rate). Used by the command line and by the backend. */
+int  FB_EncoderTakesQScale(const char *name);
+int  FB_EncoderTakesCRF(const char *name);
+/* Whether a sound encoder has no bit rate to set (PCM, FLAC). */
+int  FB_EncoderLossless(const char *name);
 
 typedef struct FBJob {
     int      version;

@@ -706,14 +706,17 @@ static int encoder_tail(LocalPriv *p, int kind, const AVCodec *codec,
     return (n < 0 || (size_t)n >= len) ? -1 : 0;
 }
 
-/* Sets bit rate or quantiser from the job's quality. */
+/* Sets bit rate or quantiser from the job's quality (FB_VideoLevel(),
+ * FB_AudioBitRate(): the same numbers the command line uses). */
 static void set_quality(AVCodecContext *enc, const AVCodec *codec, int kind,
-                        FBQuality q)
+                        const FBOutput *out)
 {
-    int final = q == FB_QUALITY_FINAL;
+    FBVideoLevel lv = FB_VideoLevel(out);
+    char crf[16];
 
     if (kind == KIND_AUDIO) {
-        enc->bit_rate = final ? 160000 : 96000;
+        if (!FB_EncoderLossless(codec->name))
+            enc->bit_rate = FB_AudioBitRate(out);
         return;
     }
     switch (codec->id) {
@@ -724,13 +727,14 @@ static void set_quality(AVCodecContext *enc, const AVCodec *codec, int kind,
     case AV_CODEC_ID_H263P:
         /* constant quantiser: 3 looks good, 8 is small and fast */
         enc->flags |= AV_CODEC_FLAG_QSCALE;
-        enc->global_quality = FF_QP2LAMBDA * (final ? 3 : 8);
+        enc->global_quality = FF_QP2LAMBDA * lv.qscale;
         break;
     default:
         /* x264/x265 and friends take crf; others get a bit rate */
-        if (av_opt_set(enc->priv_data, "crf", final ? "20" : "30", 0) < 0)
+        snprintf(crf, sizeof(crf), "%d", lv.crf);
+        if (av_opt_set(enc->priv_data, "crf", crf, 0) < 0)
             enc->bit_rate = (int64_t)enc->width * enc->height *
-                            (final ? 6 : 2);
+                            lv.bits_per_pixel;
         break;
     }
 }
@@ -769,7 +773,7 @@ static int open_encoder(LocalPriv *p, int kind, const AVCodec *codec,
         enc->channels = av_buffersink_get_channels(sink);
 #endif
     }
-    set_quality(enc, codec, kind, p->job.output.quality);
+    set_quality(enc, codec, kind, &p->job.output);
     if (p->out->oformat->flags & AVFMT_GLOBALHEADER)
         enc->flags |= AV_CODEC_FLAG_GLOBAL_HEADER;
 

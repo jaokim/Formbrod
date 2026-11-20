@@ -12,6 +12,7 @@ void FB_TimelineInit(FBTimeline *tl)
     memset(tl, 0, sizeof(*tl));
     tl->format.fit = FB_FIT_FIT;
     tl->format.pad_color = 0x000000;
+    FB_ExportDefaults(&tl->format.encode);
 }
 
 fb_ms_t FB_TimelineRange(const FBTimeline *tl, fb_ms_t *from, fb_ms_t *to)
@@ -949,4 +950,60 @@ int FB_TimelineWindow(FBTimeline *dst, const FBTimeline *src, fb_ms_t from,
             c->xfade = overlap > 0 ? overlap : 0;
     }
     return n;
+}
+
+/* ---- Export settings ------------------------------------------------------ */
+
+static const char *const QualityNames[FB_VQ_COUNT] = {
+    NULL, "low", "medium", "high", "best"
+};
+
+const char *FB_VideoQualityName(int q)
+{
+    return q >= FB_VQ_LOW && q < FB_VQ_COUNT ? QualityNames[q] : "high";
+}
+
+int FB_VideoQualityFromName(const char *name)
+{
+    int q;
+
+    for (q = FB_VQ_LOW; q < FB_VQ_COUNT; q++)
+        if (strcmp(name, QualityNames[q]) == 0)
+            return q;
+    return -1;
+}
+
+void FB_ExportDefaults(FBExport *e)
+{
+    memset(e, 0, sizeof(*e));
+    copy_str(e->vcodec, FB_EXPORT_VCODEC, sizeof(e->vcodec));
+    e->vquality = FB_VQ_HIGH;
+    copy_str(e->acodec, FB_EXPORT_ACODEC, sizeof(e->acodec));
+    e->abitrate = FB_EXPORT_ABITRATE;
+    e->arate = FB_EXPORT_ARATE;
+    copy_str(e->filetype, FB_EXPORT_TYPE, sizeof(e->filetype));
+}
+
+static int plain_name(const char *s, size_t max, int underscore)
+{
+    size_t n = 0;
+
+    for (; *s; s++, n++) {
+        int c = (unsigned char)*s;
+
+        if (!((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+              (c >= '0' && c <= '9') || (underscore && c == '_')))
+            return 0;
+    }
+    return n > 0 && n < max;
+}
+
+int FB_ExportValid(const FBExport *e)
+{
+    return plain_name(e->vcodec, sizeof(e->vcodec), 1) &&
+           e->vquality >= FB_VQ_LOW && e->vquality < FB_VQ_COUNT &&
+           plain_name(e->acodec, sizeof(e->acodec), 1) &&
+           e->abitrate >= 8 && e->abitrate <= 640 &&
+           e->arate >= 8000 && e->arate <= 192000 &&
+           plain_name(e->filetype, sizeof(e->filetype), 0);
 }

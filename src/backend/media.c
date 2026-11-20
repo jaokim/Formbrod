@@ -144,6 +144,16 @@ static FBProbeResult probe(const char *path, FBSource *info,
 
 #endif
 
+int FB_HaveEncoder(const char *name)
+{
+#ifdef HAVE_LIBAV
+    return avcodec_find_encoder_by_name(name) != NULL;
+#else
+    (void)name;
+    return -1;
+#endif
+}
+
 FBProbeResult FB_ProbeMedia(const char *path, FBSource *info,
                             char *why, size_t why_len)
 {

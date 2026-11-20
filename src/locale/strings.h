@@ -408,30 +408,104 @@
 #define MSG_MENU_BACKGROUND_RENDER_STR   "Render previews in the background"
 #define MSG_PLAYWIN_PREPARING            251
 #define MSG_PLAYWIN_PREPARING_STR        "Preparing the preview..."
-#define MSG_STATUS_FRAME_SAVED           252
+#define MSG_MENU_PROJECT_SETTINGS        252
+#define MSG_MENU_PROJECT_SETTINGS_STR    "Project settings..."
+#define MSG_PROJWIN_TITLE                253
+#define MSG_PROJWIN_TITLE_STR            "Project settings"
+#define MSG_GROUP_FRAME                  254
+#define MSG_GROUP_FRAME_STR              "Frame"
+#define MSG_GROUP_EXPORT_FILE            255
+#define MSG_GROUP_EXPORT_FILE_STR        "Export file"
+#define MSG_LABEL_WIDTH                  256
+#define MSG_LABEL_WIDTH_STR              "Width"
+#define MSG_LABEL_HEIGHT                 257
+#define MSG_LABEL_HEIGHT_STR             "Height"
+#define MSG_LABEL_FRAME_RATE             258
+#define MSG_LABEL_FRAME_RATE_STR         "Frame rate"
+#define MSG_LABEL_BAR_COLOUR             259
+#define MSG_LABEL_BAR_COLOUR_STR         "Bar colour"
+#define MSG_LABEL_FILE_TYPE              260
+#define MSG_LABEL_FILE_TYPE_STR          "File type"
+#define MSG_LABEL_ENCODER                261
+#define MSG_LABEL_ENCODER_STR            "Encoder"
+#define MSG_LABEL_QUALITY                262
+#define MSG_LABEL_QUALITY_STR            "Quality"
+#define MSG_LABEL_BITRATE                263
+#define MSG_LABEL_BITRATE_STR            "Bit rate"
+#define MSG_LABEL_SAMPLE_RATE            264
+#define MSG_LABEL_SAMPLE_RATE_STR        "Sample rate"
+#define MSG_HINT_SIZE_AUTO               265
+#define MSG_HINT_SIZE_AUTO_STR           "Leave empty for the first clip's size"
+#define MSG_RATE_AUTO                    266
+#define MSG_RATE_AUTO_STR                "As the first clip"
+#define MSG_RATE_FPS                     267
+#define MSG_RATE_FPS_STR                 "%s fps"
+#define MSG_QUALITY_LOW                  268
+#define MSG_QUALITY_LOW_STR              "Low (small file)"
+#define MSG_QUALITY_MEDIUM               269
+#define MSG_QUALITY_MEDIUM_STR           "Medium"
+#define MSG_QUALITY_HIGH                 270
+#define MSG_QUALITY_HIGH_STR             "High"
+#define MSG_QUALITY_BEST                 271
+#define MSG_QUALITY_BEST_STR             "Best (large file)"
+#define MSG_VCODEC_MPEG4                 272
+#define MSG_VCODEC_MPEG4_STR             "MPEG-4 Part 2"
+#define MSG_VCODEC_H264                  273
+#define MSG_VCODEC_H264_STR              "H.264 (x264)"
+#define MSG_VCODEC_MJPEG                 274
+#define MSG_VCODEC_MJPEG_STR             "Motion JPEG"
+#define MSG_ACODEC_AAC                   275
+#define MSG_ACODEC_AAC_STR               "AAC"
+#define MSG_ACODEC_MP3                   276
+#define MSG_ACODEC_MP3_STR               "MP3 (LAME)"
+#define MSG_ACODEC_MP2                   277
+#define MSG_ACODEC_MP2_STR               "MP2"
+#define MSG_ACODEC_FLAC                  278
+#define MSG_ACODEC_FLAC_STR              "FLAC (lossless)"
+#define MSG_ACODEC_PCM                   279
+#define MSG_ACODEC_PCM_STR               "Uncompressed (PCM)"
+#define MSG_TYPE_MP4                     280
+#define MSG_TYPE_MP4_STR                 "MP4 (.mp4)"
+#define MSG_TYPE_MOV                     281
+#define MSG_TYPE_MOV_STR                 "QuickTime (.mov)"
+#define MSG_TYPE_MKV                     282
+#define MSG_TYPE_MKV_STR                 "Matroska (.mkv)"
+#define MSG_TYPE_AVI                     283
+#define MSG_TYPE_AVI_STR                 "AVI (.avi)"
+#define MSG_NOT_AVAILABLE                284
+#define MSG_NOT_AVAILABLE_STR            "%s (not in this ffmpeg)"
+#define MSG_KBITS                        285
+#define MSG_KBITS_STR                    "%ld kbit/s"
+#define MSG_KHZ                          286
+#define MSG_KHZ_STR                      "%s kHz"
+#define MSG_STATUS_BAD_COLOUR            287
+#define MSG_STATUS_BAD_COLOUR_STR        "%s isn't a colour: type RRGGBB, like 000000 for black"
+#define MSG_STATUS_BAD_SIZE              288
+#define MSG_STATUS_BAD_SIZE_STR          "The frame must be from 2 x 2 to 16384 x 16384"
+#define MSG_STATUS_FRAME_SAVED           289
 #define MSG_STATUS_FRAME_SAVED_STR       "Frame saved as %s"
-#define MSG_STATUS_FRAME_FAILED          253
+#define MSG_STATUS_FRAME_FAILED          290
 #define MSG_STATUS_FRAME_FAILED_STR      "Couldn't save the frame as %s"
-#define MSG_MENU_SAVE_FRAME              254
+#define MSG_MENU_SAVE_FRAME              291
 #define MSG_MENU_SAVE_FRAME_STR          "Save frame..."
-#define MSG_MENU_SHOW_PREVIEW            255
+#define MSG_MENU_SHOW_PREVIEW            292
 #define MSG_MENU_SHOW_PREVIEW_STR        "Show preview window"
-#define MSG_REQ_SAVE_FRAME               256
+#define MSG_REQ_SAVE_FRAME               293
 #define MSG_REQ_SAVE_FRAME_STR           "Save the frame at the playhead"
-#define MSG_MENU_RANGE_FROM              257
+#define MSG_MENU_RANGE_FROM              294
 #define MSG_MENU_RANGE_FROM_STR          "Range starts here"
-#define MSG_MENU_RANGE_TO                258
+#define MSG_MENU_RANGE_TO                295
 #define MSG_MENU_RANGE_TO_STR            "Range ends here"
-#define MSG_MENU_RANGE_CLEAR             259
+#define MSG_MENU_RANGE_CLEAR             296
 #define MSG_MENU_RANGE_CLEAR_STR         "Range: whole edit"
-#define MSG_MENU_EXPORT_RANGE            260
+#define MSG_MENU_EXPORT_RANGE            297
 #define MSG_MENU_EXPORT_RANGE_STR        "Export range..."
-#define MSG_REQ_EXPORT_RANGE             261
+#define MSG_REQ_EXPORT_RANGE             298
 #define MSG_REQ_EXPORT_RANGE_STR         "Export the range as an ANIM (or .mp4, .gif...)"
-#define MSG_HINT_RULER                   262
+#define MSG_HINT_RULER                   299
 #define MSG_HINT_RULER_STR               "Click or drag to move the playhead. Drag the flags at the bottom to mark a range"
 
-#define FB_NUM_STRINGS 209
+#define FB_NUM_STRINGS 246
 
 #ifdef FB_STRINGS_ARRAY
 static const struct FBBuiltinString {
@@ -636,6 +710,43 @@ static const struct FBBuiltinString {
     { MSG_STATUS_RENDERED_AHEAD, MSG_STATUS_RENDERED_AHEAD_STR },
     { MSG_MENU_BACKGROUND_RENDER, MSG_MENU_BACKGROUND_RENDER_STR },
     { MSG_PLAYWIN_PREPARING, MSG_PLAYWIN_PREPARING_STR },
+    { MSG_MENU_PROJECT_SETTINGS, MSG_MENU_PROJECT_SETTINGS_STR },
+    { MSG_PROJWIN_TITLE, MSG_PROJWIN_TITLE_STR },
+    { MSG_GROUP_FRAME, MSG_GROUP_FRAME_STR },
+    { MSG_GROUP_EXPORT_FILE, MSG_GROUP_EXPORT_FILE_STR },
+    { MSG_LABEL_WIDTH, MSG_LABEL_WIDTH_STR },
+    { MSG_LABEL_HEIGHT, MSG_LABEL_HEIGHT_STR },
+    { MSG_LABEL_FRAME_RATE, MSG_LABEL_FRAME_RATE_STR },
+    { MSG_LABEL_BAR_COLOUR, MSG_LABEL_BAR_COLOUR_STR },
+    { MSG_LABEL_FILE_TYPE, MSG_LABEL_FILE_TYPE_STR },
+    { MSG_LABEL_ENCODER, MSG_LABEL_ENCODER_STR },
+    { MSG_LABEL_QUALITY, MSG_LABEL_QUALITY_STR },
+    { MSG_LABEL_BITRATE, MSG_LABEL_BITRATE_STR },
+    { MSG_LABEL_SAMPLE_RATE, MSG_LABEL_SAMPLE_RATE_STR },
+    { MSG_HINT_SIZE_AUTO, MSG_HINT_SIZE_AUTO_STR },
+    { MSG_RATE_AUTO, MSG_RATE_AUTO_STR },
+    { MSG_RATE_FPS, MSG_RATE_FPS_STR },
+    { MSG_QUALITY_LOW, MSG_QUALITY_LOW_STR },
+    { MSG_QUALITY_MEDIUM, MSG_QUALITY_MEDIUM_STR },
+    { MSG_QUALITY_HIGH, MSG_QUALITY_HIGH_STR },
+    { MSG_QUALITY_BEST, MSG_QUALITY_BEST_STR },
+    { MSG_VCODEC_MPEG4, MSG_VCODEC_MPEG4_STR },
+    { MSG_VCODEC_H264, MSG_VCODEC_H264_STR },
+    { MSG_VCODEC_MJPEG, MSG_VCODEC_MJPEG_STR },
+    { MSG_ACODEC_AAC, MSG_ACODEC_AAC_STR },
+    { MSG_ACODEC_MP3, MSG_ACODEC_MP3_STR },
+    { MSG_ACODEC_MP2, MSG_ACODEC_MP2_STR },
+    { MSG_ACODEC_FLAC, MSG_ACODEC_FLAC_STR },
+    { MSG_ACODEC_PCM, MSG_ACODEC_PCM_STR },
+    { MSG_TYPE_MP4, MSG_TYPE_MP4_STR },
+    { MSG_TYPE_MOV, MSG_TYPE_MOV_STR },
+    { MSG_TYPE_MKV, MSG_TYPE_MKV_STR },
+    { MSG_TYPE_AVI, MSG_TYPE_AVI_STR },
+    { MSG_NOT_AVAILABLE, MSG_NOT_AVAILABLE_STR },
+    { MSG_KBITS, MSG_KBITS_STR },
+    { MSG_KHZ, MSG_KHZ_STR },
+    { MSG_STATUS_BAD_COLOUR, MSG_STATUS_BAD_COLOUR_STR },
+    { MSG_STATUS_BAD_SIZE, MSG_STATUS_BAD_SIZE_STR },
     { MSG_STATUS_FRAME_SAVED, MSG_STATUS_FRAME_SAVED_STR },
     { MSG_STATUS_FRAME_FAILED, MSG_STATUS_FRAME_FAILED_STR },
     { MSG_MENU_SAVE_FRAME, MSG_MENU_SAVE_FRAME_STR },
