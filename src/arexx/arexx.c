@@ -41,6 +41,15 @@
  *                                       preview size, or FULL: the edit's
  *                                       size from the original files;
  *                                       returns the frame's time (ms)
+ *   RANGE FROM/N,TO/N,CLEAR/S           the range between the marks in
+ *                                       the overview: move either mark
+ *                                       (TO 0 = the end), or CLEAR for the
+ *                                       whole edit; returns "<from> <to>"
+ *   EXPORTRANGE FILE/A,WIDTH/N,FPS/N    render the range small: an IFF
+ *                                       ANIM, or a movie if FILE ends in
+ *                                       .mp4, .gif...; WIDTH default 320,
+ *                                       FPS default 10 (ANIM) or the
+ *                                       edit's; then poll RENDERSTATUS
  *   TRACKS                              number of tracks
  *   REMOVE CLIP/N/A
  *   EFFECT CLIP/N/A,MODULE/A            add an effect, returns its index
@@ -216,6 +225,34 @@ static void cmd_grab(struct ARexxCmd *cmd, struct RexxMsg *rm)
     if (at >= 0)
         snprintf(result, sizeof(result), "%lld", (long long)at);
     set_result(cmd, at < 0 ? RC_ERROR : 0);
+}
+
+static void cmd_range(struct ARexxCmd *cmd, struct RexxMsg *rm)
+{
+    fb_ms_t from, to;
+
+    (void)rm;
+    FB_TimelineRange(&App.timeline, &from, &to);
+    if (cmd->ac_ArgList[2]) {
+        App_SetRange(0, 0);
+    } else if (cmd->ac_ArgList[0] || cmd->ac_ArgList[1]) {
+        App_SetRange(cmd->ac_ArgList[0] ? *(int32 *)cmd->ac_ArgList[0] : from,
+                     cmd->ac_ArgList[1] ? *(int32 *)cmd->ac_ArgList[1] : to);
+    }
+    FB_TimelineRange(&App.timeline, &from, &to);
+    snprintf(result, sizeof(result), "%lld %lld", (long long)from,
+             (long long)to);
+    set_result(cmd, 0);
+}
+
+static void cmd_exportrange(struct ARexxCmd *cmd, struct RexxMsg *rm)
+{
+    (void)rm;
+    result[0] = '\0';
+    set_result(cmd, App_ExportRange((const char *)cmd->ac_ArgList[0],
+                    cmd->ac_ArgList[1] ? *(int32 *)cmd->ac_ArgList[1] : 0,
+                    cmd->ac_ArgList[2] ? *(int32 *)cmd->ac_ArgList[2] : 0)
+                    ? RC_ERROR : 0);
 }
 
 static void cmd_crossfade(struct ARexxCmd *cmd, struct RexxMsg *rm)
@@ -593,6 +630,8 @@ static struct ARexxCmd commands[] = {
       "VIDEO/K,QUALITY/K,SOUND/K,BITRATE/N,RATE/N,TYPE/K",        0, NULL, 0, 0, NULL },
     { "PLAYHEAD",     27, cmd_playhead,     "AT/N",              0, NULL, 0, 0, NULL },
     { "GRAB",         28, cmd_grab,         "FILE/A,AT/N,FULL/S", 0, NULL, 0, 0, NULL },
+    { "RANGE",        29, cmd_range,        "FROM/N,TO/N,CLEAR/S", 0, NULL, 0, 0, NULL },
+    { "EXPORTRANGE",  30, cmd_exportrange,  "FILE/A,WIDTH/N,FPS/N", 0, NULL, 0, 0, NULL },
     { NULL,           0,  NULL,             NULL,                0, NULL, 0, 0, NULL }
 };
 

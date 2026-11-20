@@ -105,7 +105,8 @@ enum {
     MID_TRACK_REMOVE, MID_PROXIES, MID_BG_RENDER, MID_PROXY_SIZE_MENU,
     MID_PROXY_AUTO, MID_PROXY_320, MID_PROXY_480, MID_PROXY_640,
     MID_XFADE_MENU, MID_CLIP_WINDOW, MID_PROJECT_WINDOW, MID_SAVE_FRAME,
-    MID_SHOW_PREVIEW,
+    MID_SHOW_PREVIEW, MID_RANGE_FROM, MID_RANGE_TO, MID_RANGE_CLEAR,
+    MID_EXPORT_RANGE,
     MID_XFADE_KIND = 150,    /* + index in XfadeKinds */
     MID_EFFECT = 200         /* + module index */
 };
@@ -282,6 +283,8 @@ static void sync_menus(void);
 static int selected_clip(void);
 static uint32 now_ms(void);
 static void save_frame(void);
+static void range_menu(uint32 id);
+static void export_range(void);
 
 /* The track editor reports a selection, a dragged edge, a dragged clip,
  * or (like the ruler) a moved playhead. */
@@ -341,6 +344,9 @@ static void lanes_changed(struct TagItem *tags)
         timebase_changed(Gad[GID_LANES]);
 }
 
+/* A mark of the range was let go: refreshed after the window's events. */
+static BOOL RangeMoved;
+
 /* Live updates while something is dragged: the tracks, the scroller and
  * the zoom slider notify the window (ICA_TARGET ICTARGET_IDCMP), and
  * window.class calls this from WM_HANDLEINPUT. */
@@ -356,6 +362,18 @@ static uint32 idcmp_hook(struct Hook *hook, Object *winobj,
     switch (id) {
     case GID_RULER:
     case GID_FILMSTRIP:
+        if (IUtility->FindTagItem(TRACK_RangeFrom, tags)) {
+            /* A mark was dragged on the ruler: the range moves, and the
+             * film strip shows it. */
+            App_SetRange((int32)IUtility->GetTagData(TRACK_RangeFrom, 0, tags),
+                         (int32)IUtility->GetTagData(TRACK_RangeTo, 0, tags));
+            if (Gad[GID_FILMSTRIP])
+                IIntuition->SetGadgetAttrs(Gad[GID_FILMSTRIP], Win, NULL,
+                                           TRACK_Redraw, TRUE, TAG_END);
+            if (IUtility->GetTagData(TRACK_RangeDone, FALSE, tags))
+                RangeMoved = TRUE;      /* the title, after the events */
+            break;
+        }
         /* The track has moved TB's playhead and redrawn itself. */
         timebase_changed(Gad[id]);
         break;
@@ -584,7 +602,12 @@ static BOOL menu_enabled(uint32 id)
         return have_clips && !App.rendering;
     case MID_SAVE_FRAME:
     case MID_SHOW_PREVIEW:
+    case MID_RANGE_FROM:
+    case MID_RANGE_TO:
+    case MID_RANGE_CLEAR:
         return have_clips;
+    case MID_EXPORT_RANGE:
+        return have_clips && !App.rendering;
     case MID_CANCEL:
         return App.rendering != 0;
     case MID_TRACK_APPEND:
@@ -740,6 +763,8 @@ static BOOL make_menus(struct Screen *scr)
     add_menu(nm, &n, NM_ITEM, NM_BARLABEL,               NULL, 0);
     add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_PREVIEW),  "P", GID_PREVIEW);
     add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_EXPORT),   "E", GID_EXPORT);
+    add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_EXPORT_RANGE), NULL,
+             MID_EXPORT_RANGE);
     add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_SAVE_FRAME), NULL,
              MID_SAVE_FRAME);
     add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_SHOW_PREVIEW), NULL,
@@ -755,6 +780,12 @@ static BOOL make_menus(struct Screen *scr)
     add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_SET_IN),   NULL, GID_SET_IN);
     add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_SET_OUT),  NULL, GID_SET_OUT);
     add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_REMOVE),   NULL, GID_REMOVE);
+    add_menu(nm, &n, NM_ITEM, NM_BARLABEL,               NULL, 0);
+    add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_RANGE_FROM), NULL,
+             MID_RANGE_FROM);
+    add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_RANGE_TO), NULL, MID_RANGE_TO);
+    add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_RANGE_CLEAR), NULL,
+             MID_RANGE_CLEAR);
     add_menu(nm, &n, NM_ITEM, NM_BARLABEL,               NULL, 0);
     add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_CLIP_SETTINGS), NULL,
              MID_CLIP_WINDOW);
@@ -1020,6 +1051,15 @@ static void handle_menu(uint32 id)
         break;
     case MID_SAVE_FRAME:
         save_frame();
+        MainWindow_Refresh();
+        break;
+    case MID_RANGE_FROM:
+    case MID_RANGE_TO:
+    case MID_RANGE_CLEAR:
+        range_menu(id);
+        break;
+    case MID_EXPORT_RANGE:
+        export_range();
         MainWindow_Refresh();
         break;
     case MID_SHOW_PREVIEW:
@@ -1391,6 +1431,33 @@ static void save_frame(void)
         App_GrabFrame(FB_MS(TB.playhead), TRUE, path);
 }
 
+/* Edit > Range start / end at the playhead, or the whole edit again.
+ * A start past the end (or an end before the start) takes the other
+ * mark along: to the end of the edit, or to its start. */
+static void range_menu(uint32 id)
+{
+    fb_ms_t from, to, at = FB_MS(TB.playhead);
+
+    FB_TimelineRange(&App.timeline, &from, &to);
+    if (id == MID_RANGE_CLEAR)
+        App_SetRange(0, 0);
+    else if (id == MID_RANGE_FROM)
+        App_SetRange(at, at < to ? to : 0);
+    else
+        App_SetRange(at > from ? from : 0, at);
+    MainWindow_Refresh();
+}
+
+/* Project > Export range: the range small, as an ANIM or a movie. */
+static void export_range(void)
+{
+    char path[FB_PATH_LEN];
+
+    if (ask_file(DRAWER_EXPORT, FB_Str(MSG_REQ_EXPORT_RANGE), TRUE,
+                 "range.anim", path, sizeof(path)))
+        App_ExportRange(path, 0, 0);
+}
+
 /* ---- Projects --------------------------------------------------------- */
 
 static const char *project_name(void)
@@ -1669,6 +1736,7 @@ static Object *track(Class *cls, uint32 id, CONST_STRPTR empty_text)
         TRACK_EmptyText, empty_text,
         TRACK_Inset,     Inset,
         TRACK_Label,     id == GID_FILMSTRIP ? FB_Str(MSG_TRACK_RESULT) : NULL,
+        TRACK_Marks,     id == GID_RULER ? 2 : id == GID_FILMSTRIP ? 1 : 0,
         FILMSTRIP_Pictures, show_pictures(),
         FILMSTRIP_ThumbFunc, draw_thumb,
         LANES_WaveFunc,  draw_wave,
@@ -1718,7 +1786,7 @@ int MainWindow_Open(void)
     IdcmpHook.h_Entry = (HOOKFUNC)idcmp_hook;
     strcpy(PositionText, "0:00");
     Hints[0].hi_Text = FB_Str(MSG_HINT_ZOOM);
-    Hints[1].hi_Text = FB_Str(MSG_HINT_PLAYHEAD);
+    Hints[1].hi_Text = FB_Str(MSG_HINT_RULER);
     Hints[2].hi_Text = FB_Str(MSG_HINT_PLAYHEAD);
     Hints[3].hi_Text = FB_Str(MSG_HINT_FROM_FILE);
     Hints[4].hi_Text = FB_Str(MSG_HINT_TIMES);
@@ -1953,8 +2021,8 @@ void MainWindow_Handle(uint32 sigs)
                 handle_gadget(result & WMHI_GADGETMASK);
             break;
         case WMHI_VANILLAKEY:
-            /* I and O: Set in and Set out at the playhead; Space plays
-             * from it, or stops. */
+            /* I and O: Set in and Set out at the playhead; [ and ]: the
+             * range's marks there; Space plays from it, or stops. */
             switch (result & WMHI_KEYMASK) {
             case ' ':
                 handle_gadget(GID_PREVIEW);
@@ -1964,6 +2032,12 @@ void MainWindow_Handle(uint32 sigs)
                 break;
             case 'o': case 'O':
                 handle_gadget(GID_SET_OUT);
+                break;
+            case '[':                   /* the range's marks */
+                range_menu(MID_RANGE_FROM);
+                break;
+            case ']':
+                range_menu(MID_RANGE_TO);
                 break;
             }
             break;
@@ -1975,6 +2049,11 @@ void MainWindow_Handle(uint32 sigs)
             sync_controls();
             break;
         }
+    }
+
+    if (RangeMoved) {
+        RangeMoved = FALSE;
+        MainWindow_Refresh();           /* "modified" in the title */
     }
 
     /* A toolbar click, however it was told (Toolbar_Noted/Code), once. */

@@ -13,6 +13,7 @@
 #include "formbrod/thumbs.h"
 #include "formbrod/waves.h"
 #include "formbrod/player.h"
+#include "formbrod/picture.h"
 
 typedef struct FBApp {
     FBTimeline  timeline;
@@ -74,6 +75,14 @@ typedef struct FBApp {
         long     dry_ms;       /* sound that wasn't there in time */
         fb_ms_t  first_dry;    /* where it first ran dry, or -1 */
     } play;
+    /* A range being exported as an IFF ANIM (App_ExportRange): the
+     * backend plays into a sink that adds each frame. */
+    struct {
+        FBAnimWriter *anim;
+        char          path[FB_PATH_LEN];
+        int           fps_num, fps_den;
+        int           failed;  /* a frame couldn't be written */
+    } range;
     /* Single frames of the edit (App_StillShow, App_GrabFrame), made on
      * a backend of their own. */
     struct {
@@ -289,6 +298,19 @@ const FBPlayFrame *App_PollStill(void);
 fb_ms_t App_GrabFrame(fb_ms_t at, int full, const char *path);
 /* "0:12,3 of 1:05,0" for the last frame made, for under the picture. */
 void App_StillTimeText(char *buf, size_t len);
+
+/* The range between the two marks in the overview (FB_TimelineRange):
+ * SetRange moves the marks (to 0 or past the end = the end), saved with
+ * the project. Doesn't count as an edit for rendering.
+ *
+ * ExportRange renders that range small, for paint programs: `width`
+ * wide (0 = FB_PREVIEW_WIDTH), at `fps` frames a second (0 = the edit's
+ * rate for a movie, 10 for an ANIM), from the preview copies. A name
+ * ending in a movie container (.mp4, .gif..., FB_IsMovieName) gives a
+ * movie with sound; anything else an IFF ANIM (picture.h), without sound.
+ * It runs like an export (App_PollRender, Cancel). 0, or -1. */
+void App_SetRange(fb_ms_t from, fb_ms_t to);
+int  App_ExportRange(const char *path, int width, int fps);
 
 /* Media probing (src/backend/media.c). Fills duration, stream flags and
  * video size/aspect/rate of `info` (not its path). */

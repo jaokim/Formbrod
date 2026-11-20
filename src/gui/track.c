@@ -36,6 +36,13 @@ Class *TrackClass, *RulerClass, *FilmstripClass, *LanesClass;
 #define COL_HOLE     0xD3D1C7
 #define COL_LOADING  0x5F5E5A
 #define COL_SUN      0xFAC775
+#define COL_MARK     0x2E8BC0    /* the range's marks */
+#define COL_RANGE    0x9CCBE6    /* the band between them */
+
+#define MARK_ZONE    15          /* flags: this high at the ruler's bottom */
+#define MARK_FLAG    10          /* ...and this wide where widest */
+#define MARK_GRAB    4           /* grabbed this far behind a flag's pole,
+                                    as well as anywhere on the flag */
 
 #define HOLE_PITCH   12          /* sprocket holes, pixels apart */
 #define HOLE_W       5
@@ -85,7 +92,21 @@ struct TrackData {
     CONST_STRPTR      empty_text;
     CONST_STRPTR      label;
     int               inset;
+    int               marks;       /* TRACK_Marks */
+    int               drag_mark;   /* -1, or the mark being dragged (0, 1) */
+    fb_ms_t           drag[2];     /* the range while it's dragged */
 };
+
+/* The range's marks, in ms: the one being dragged, else the timeline's. */
+static void range_of(const struct TrackData *td, fb_ms_t *from, fb_ms_t *to)
+{
+    if (td->drag_mark >= 0) {
+        *from = td->drag[0];
+        *to = td->drag[1];
+    } else {
+        FB_TimelineRange(td->tl, from, to);
+    }
+}
 
 static uint32 playhead_ms(const struct TrackData *td)
 {
@@ -126,6 +147,10 @@ static BOOL track_set(struct TrackData *td, struct TagItem *tags)
             td->label = (CONST_STRPTR)ti->ti_Data;
             redraw = TRUE;
             break;
+        case TRACK_Marks:
+            td->marks = (int)ti->ti_Data;
+            redraw = TRUE;
+            break;
         case TRACK_Redraw:
             redraw = TRUE;
             break;
@@ -164,6 +189,92 @@ static void notify(Class *cl, Object *o, struct GadgetInfo *gi, uint32 flags)
     msg.opu_GInfo    = gi;
     msg.opu_Flags    = flags;
     IIntuition->IDoSuperMethodA(cl, o, (Msg)&msg);
+}
+
+/* Tells the window where the marks are while one is dragged; `done` on
+ * release. */
+static void notify_range(Class *cl, Object *o, struct GadgetInfo *gi,
+                         BOOL done)
+{
+    struct TrackData *td = INST_DATA(cl, o);
+    struct TagItem tags[5];
+    struct opUpdate msg;
+
+    tags[0].ti_Tag  = TRACK_RangeFrom;
+    tags[0].ti_Data = (uint32)td->drag[0];
+    tags[1].ti_Tag  = TRACK_RangeTo;
+    tags[1].ti_Data = (uint32)td->drag[1];
+    tags[2].ti_Tag  = TRACK_RangeDone;
+    tags[2].ti_Data = done;
+    tags[3].ti_Tag  = GA_ID;
+    tags[3].ti_Data = ((struct Gadget *)o)->GadgetID;
+    tags[4].ti_Tag  = TAG_END;
+    tags[4].ti_Data = 0;
+
+    msg.MethodID     = OM_NOTIFY;
+    msg.opu_AttrList = tags;
+    msg.opu_GInfo    = gi;
+    msg.opu_Flags    = done ? 0 : OPUF_INTERIM;
+    IIntuition->IDoSuperMethodA(cl, o, (Msg)&msg);
+}
+
+/* The mark whose flag is at (x, y) in the gadget (x from the time
+ * axis), or -1. Only where flags are drawn (TRACK_Marks 2). */
+static int mark_at(const struct TrackData *td, const struct Gadget *g,
+                   long x, long y)
+{
+    fb_ms_t from, to;
+    long d0, d1;
+
+    if (td->marks != 2 || !td->tl || y < g->Height - MARK_ZONE)
+        return -1;
+    range_of(td, &from, &to);
+    /* How far into each flag: the start mark's flag points right, the
+     * end mark's left. A click on a flag, or a little behind its pole,
+     * grabs it. */
+    d0 = x - FB_ViewTimeToX(&td->tb->view, FB_US(from));
+    d1 = FB_ViewTimeToX(&td->tb->view, FB_US(to)) - x;
+    if (d0 < -MARK_GRAB || d0 > MARK_FLAG + 1)
+        d0 = -1000;
+    if (d1 < -MARK_GRAB || d1 > MARK_FLAG + 1)
+        d1 = -1000;
+    if (d0 == -1000 && d1 == -1000)
+        return -1;
+    if (d0 == -1000)
+        return 1;
+    if (d1 == -1000)
+        return 0;
+    /* On both (zoomed out, or a short range): the one whose flag was hit
+     * (right of the start = into its flag), else the nearer pole. */
+    if (d0 >= 0 && d1 < 0)
+        return 0;
+    if (d1 >= 0 && d0 < 0)
+        return 1;
+    return (d0 < 0 ? -d0 : d0) <= (d1 < 0 ? -d1 : d1) ? 0 : 1;
+}
+
+/* Moves the dragged mark to pixel x, snapped to a frame and kept at
+ * least a frame from the other one, within the edit. TRUE if it moved. */
+static BOOL drag_mark_x(struct TrackData *td, long x)
+{
+    fb_us_t t = FB_ViewXToTime(&td->tb->view, x);
+    fb_us_t frame = td->tb->frame_us > 0 ? td->tb->frame_us : 40000;
+    fb_ms_t end = FB_TimelineDuration(td->tl), ms, old;
+    int k = td->drag_mark;
+
+    t -= t % frame;
+    ms = FB_MS(t);
+    if (k == 0 && ms > td->drag[1] - FB_MS(frame))
+        ms = td->drag[1] - FB_MS(frame);
+    if (k == 1 && ms < td->drag[0] + FB_MS(frame))
+        ms = td->drag[0] + FB_MS(frame);
+    if (ms > end)
+        ms = end;
+    if (ms < 0)
+        ms = 0;
+    old = td->drag[k];
+    td->drag[k] = ms;
+    return ms != old;
 }
 
 /* Moves the playhead to pixel x of the gadget, snapped to the start of a
@@ -236,6 +347,58 @@ static void track_render(Class *cl, Object *o, struct gpRender *msg)
     draw.trd_Timeline   = td->tl;
     IIntuition->IDoMethodA(o, (Msg)&draw);
 
+    /* The range: a line at each mark; on the ruler also a band between
+     * them along the bottom, and a flag on each to drag it by. */
+    if (td->marks && td->tl) {
+        fb_ms_t from, to;
+        long xm[2], k;
+
+        range_of(td, &from, &to);
+        xm[0] = FB_ViewTimeToX(&td->tb->view, FB_US(from));
+        xm[1] = FB_ViewTimeToX(&td->tb->view, FB_US(to));
+        if (td->marks == 2) {
+            long a = xm[0] < 0 ? 0 : xm[0], b = xm[1];
+
+            if (b > x1 - x0)
+                b = x1 - x0;
+            Track_SetRGB(rp, COL_RANGE);
+            if (a <= b)
+                IGraphics->RectFill(rp, x0 + a, y1 - 2, x0 + b, y1);
+        }
+        Track_SetRGB(rp, COL_MARK);
+        for (k = 0; k < 2; k++) {
+            long mx = x0 + xm[k];
+            int i;
+
+            if (xm[k] < 0 || mx > x1)
+                continue;
+            IGraphics->RectFill(rp, mx, y0, mx, y1);
+            if (td->marks != 2)
+                continue;
+            /* A flag pointing into the range: from the start mark to the
+             * right, from the end mark to the left. Its pole is two pixels
+             * wide (the line and one inside the range). */
+            {
+                long pa = k == 0 ? mx : mx - 1, pb = k == 0 ? mx + 1 : mx;
+
+                IGraphics->RectFill(rp, pa < x0 ? x0 : pa, y1 - MARK_ZONE + 1,
+                                    pb > x1 ? x1 : pb, y1);
+            }
+            for (i = 0; i < MARK_ZONE - 3; i++) {
+                long w = MARK_FLAG - i * MARK_FLAG / (MARK_ZONE - 3);
+                long fy = y1 - MARK_ZONE + 1 + i;
+                long fa = k == 0 ? mx : mx - w, fb = k == 0 ? mx + w : mx;
+
+                if (fa < x0)
+                    fa = x0;
+                if (fb > x1)
+                    fb = x1;
+                if (fa <= fb && fy >= y0)
+                    IGraphics->RectFill(rp, fa, fy, fb, fy);
+            }
+        }
+    }
+
     /* The playhead, two pixels wide, on top of everything. */
     x = FB_ViewTimeToX(&td->tb->view, td->tb->playhead);
     if (x >= 0 && x0 + x <= x1) {
@@ -272,6 +435,13 @@ static uint32 track_go_active(Class *cl, Object *o, struct gpInput *msg)
     if (!msg->gpi_IEvent || timeline_empty(td) ||
         msg->gpi_Mouse.X < td->inset)
         return GMR_NOREUSE;
+    td->drag_mark = mark_at(td, (struct Gadget *)o,
+                            msg->gpi_Mouse.X - td->inset, msg->gpi_Mouse.Y);
+    if (td->drag_mark >= 0) {
+        /* A flag: drag that mark instead of the playhead. */
+        FB_TimelineRange(td->tl, &td->drag[0], &td->drag[1]);
+        return GMR_MEACTIVE;
+    }
     set_playhead_x(td, msg->gpi_Mouse.X - td->inset);
     redraw(o, msg->gpi_GInfo);
     notify(cl, o, msg->gpi_GInfo, OPUF_INTERIM);
@@ -285,6 +455,23 @@ static uint32 track_handle_input(Class *cl, Object *o, struct gpInput *msg)
 
     if (ie->ie_Class != IECLASS_RAWMOUSE)
         return GMR_MEACTIVE;
+    if (td->drag_mark >= 0) {
+        switch (ie->ie_Code) {
+        case SELECTUP:
+        case MENUDOWN:
+            notify_range(cl, o, msg->gpi_GInfo, TRUE);
+            td->drag_mark = -1;
+            redraw(o, msg->gpi_GInfo);
+            return ie->ie_Code == SELECTUP ? GMR_NOREUSE : GMR_REUSE;
+        case IECODE_NOBUTTON:
+            if (drag_mark_x(td, msg->gpi_Mouse.X - td->inset)) {
+                redraw(o, msg->gpi_GInfo);
+                notify_range(cl, o, msg->gpi_GInfo, FALSE);
+            }
+            break;
+        }
+        return GMR_MEACTIVE;
+    }
     switch (ie->ie_Code) {
     case SELECTUP:
         *msg->gpi_Termination = playhead_ms(td);
@@ -315,6 +502,7 @@ static uint32 track_dispatch(Class *cl, Object *o, Msg msg)
         if (o) {
             td = INST_DATA(cl, o);
             memset(td, 0, sizeof(*td));
+            td->drag_mark = -1;
             track_set(td, ((struct opSet *)msg)->ops_AttrList);
         }
         return (uint32)o;
@@ -363,6 +551,8 @@ static uint32 track_dispatch(Class *cl, Object *o, Msg msg)
         return track_handle_input(cl, o, (struct gpInput *)msg);
 
     case GM_GOINACTIVE:
+        td = INST_DATA(cl, o);
+        td->drag_mark = -1;
         return 0;
 
     case TRACKM_DRAWCONTENT:
@@ -375,7 +565,7 @@ static uint32 track_dispatch(Class *cl, Object *o, Msg msg)
 
 static int ruler_height(struct TextFont *font)
 {
-    return (font ? font->tf_YSize : 8) + 8;
+    return (font ? font->tf_YSize : 8) + 17;   /* room for the marks' flags */
 }
 
 static void ruler_draw(struct trackDraw *d)
