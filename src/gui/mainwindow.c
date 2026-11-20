@@ -104,7 +104,8 @@ enum {
     MID_WRITE_LOG, MID_TRACK_APPEND, MID_TRACK_MUTE, MID_TRACK_HIDE,
     MID_TRACK_REMOVE, MID_PROXIES, MID_BG_RENDER, MID_PROXY_SIZE_MENU,
     MID_PROXY_AUTO, MID_PROXY_320, MID_PROXY_480, MID_PROXY_640,
-    MID_XFADE_MENU, MID_CLIP_WINDOW, MID_PROJECT_WINDOW,
+    MID_XFADE_MENU, MID_CLIP_WINDOW, MID_PROJECT_WINDOW, MID_SAVE_FRAME,
+    MID_SHOW_PREVIEW,
     MID_XFADE_KIND = 150,    /* + index in XfadeKinds */
     MID_EFFECT = 200         /* + module index */
 };
@@ -280,6 +281,7 @@ static void update_clip_fields(int clip);
 static void sync_menus(void);
 static int selected_clip(void);
 static uint32 now_ms(void);
+static void save_frame(void);
 
 /* The track editor reports a selection, a dragged edge, a dragged clip,
  * or (like the ruler) a moved playhead. */
@@ -580,6 +582,9 @@ static BOOL menu_enabled(uint32 id)
     case GID_PREVIEW:
     case GID_EXPORT:
         return have_clips && !App.rendering;
+    case MID_SAVE_FRAME:
+    case MID_SHOW_PREVIEW:
+        return have_clips;
     case MID_CANCEL:
         return App.rendering != 0;
     case MID_TRACK_APPEND:
@@ -735,6 +740,10 @@ static BOOL make_menus(struct Screen *scr)
     add_menu(nm, &n, NM_ITEM, NM_BARLABEL,               NULL, 0);
     add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_PREVIEW),  "P", GID_PREVIEW);
     add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_EXPORT),   "E", GID_EXPORT);
+    add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_SAVE_FRAME), NULL,
+             MID_SAVE_FRAME);
+    add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_SHOW_PREVIEW), NULL,
+             MID_SHOW_PREVIEW);
     add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_CANCEL),   NULL, MID_CANCEL);
     add_menu(nm, &n, NM_ITEM, NM_BARLABEL,               NULL, 0);
     add_menu(nm, &n, NM_ITEM, FB_Str(MSG_MENU_ABOUT),    "?", MID_ABOUT);
@@ -1008,6 +1017,20 @@ static void handle_menu(uint32 id)
         break;
     case MID_PROJECT_WINDOW:
         ProjectWindow_Open();
+        break;
+    case MID_SAVE_FRAME:
+        save_frame();
+        MainWindow_Refresh();
+        break;
+    case MID_SHOW_PREVIEW:
+        /* Opens it on the frame at the playhead; the main loop keeps it
+         * there as the playhead moves (main.c). */
+        if (!App_Playing()) {
+            int w, h;
+
+            App_PlaySize(&w, &h);
+            PlayWindow_Open(w, h);
+        }
         break;
     case MID_PROXIES:
         /* A toggle, like Show frame pictures below. */
@@ -1355,6 +1378,17 @@ static int ask_file(int kind, const char *title, int save, const char *file,
     }
     IAsl->FreeAslRequest(fr);
     return ok;
+}
+
+/* Project > Save frame: the frame at the playhead, full size from the
+ * original files, as a picture for a paint program. */
+static void save_frame(void)
+{
+    char path[FB_PATH_LEN];
+
+    if (ask_file(DRAWER_EXPORT, FB_Str(MSG_REQ_SAVE_FRAME), TRUE,
+                 "frame.png", path, sizeof(path)))
+        App_GrabFrame(FB_MS(TB.playhead), TRUE, path);
 }
 
 /* ---- Projects --------------------------------------------------------- */
@@ -1950,6 +1984,11 @@ void MainWindow_Handle(uint32 sigs)
         if (id > 0 && id < GID_TOOLBAR)
             handle_gadget(id);
     }
+}
+
+fb_ms_t MainWindow_Playhead(void)
+{
+    return FB_MS(TB.playhead);
 }
 
 void MainWindow_SetPlayhead(fb_ms_t ms)

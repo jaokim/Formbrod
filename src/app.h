@@ -74,6 +74,19 @@ typedef struct FBApp {
         long     dry_ms;       /* sound that wasn't there in time */
         fb_ms_t  first_dry;    /* where it first ran dry, or -1 */
     } play;
+    /* Single frames of the edit (App_StillShow, App_GrabFrame), made on
+     * a backend of their own. */
+    struct {
+        FBBackend  *backend;
+        int         busy;      /* a frame is being made */
+        fb_ms_t     at;        /* ...from here in the edit */
+        int         full;      /* full size from the originals */
+        unsigned    gen;       /* the edit it's of */
+        int         have;      /* `frame` holds it */
+        FBPlayFrame frame;
+        int         want;      /* show another one after it */
+        fb_ms_t     want_at;
+    } still;
 } FBApp;
 
 extern FBApp App;
@@ -254,6 +267,28 @@ int  App_BackgroundRender(void);
 void App_SetBackgroundRender(int on);
 /* How many pieces the edit has, and how many are rendered. */
 void App_RenderedPieces(int *ready, int *total);
+
+/* Single frames of the edit, as at the playhead.
+ *
+ * StillShow starts making the preview frame at `at` (preview size, from a
+ * piece rendered in the background or from proxies), for the preview
+ * window to follow the playhead when it isn't playing. Asked again while
+ * one is being made, it finishes that one and then makes the latest one
+ * asked for. PollStill does a turn of work; the main loop calls it while
+ * StillBusy is true, and shows the frame it returns (valid until the
+ * next call).
+ *
+ * GrabFrame makes the frame at `at` at once and writes it to `path`, as
+ * a PNG if the name ends in ".png", else as a 24-bit IFF ILBM (picture.h):
+ * preview size, or with `full` the edit's frame size from the original
+ * files. `at` is kept within the edit. Returns the time of the frame
+ * written, or -1 (status line set). */
+int  App_StillShow(fb_ms_t at);
+int  App_StillBusy(void);
+const FBPlayFrame *App_PollStill(void);
+fb_ms_t App_GrabFrame(fb_ms_t at, int full, const char *path);
+/* "0:12,3 of 1:05,0" for the last frame made, for under the picture. */
+void App_StillTimeText(char *buf, size_t len);
 
 /* Media probing (src/backend/media.c). Fills duration, stream flags and
  * video size/aspect/rate of `info` (not its path). */

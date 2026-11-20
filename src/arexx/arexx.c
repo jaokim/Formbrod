@@ -33,6 +33,14 @@
  *   PREVIEW AT/N,STOP/S                 preview from AT ms (default: 0)
  *                                       in 10 s windows until stopped;
  *                                       returns the playlist's path
+ *   PLAYHEAD AT/N                       where the playhead is (ms), after
+ *                                       moving it to AT if given
+ *   GRAB FILE/A,AT/N,FULL/S             save the frame at the playhead (or
+ *                                       AT ms) as a picture: PNG if FILE
+ *                                       ends in .png, else IFF ILBM;
+ *                                       preview size, or FULL: the edit's
+ *                                       size from the original files;
+ *                                       returns the frame's time (ms)
  *   TRACKS                              number of tracks
  *   REMOVE CLIP/N/A
  *   EFFECT CLIP/N/A,MODULE/A            add an effect, returns its index
@@ -74,6 +82,7 @@
 
 #include "app.h"
 #include "gui/playwindow.h"
+#include "gui/mainwindow.h"
 #include "arexx.h"
 #include "formbrod/module.h"
 
@@ -182,6 +191,31 @@ static void cmd_volume(struct ARexxCmd *cmd, struct RexxMsg *rm)
     set_result(cmd, App_SetVolume(*(int32 *)cmd->ac_ArgList[0],
                                   *(int32 *)cmd->ac_ArgList[1] / 100.0)
                     ? RC_ERROR : 0);
+}
+
+static void cmd_playhead(struct ARexxCmd *cmd, struct RexxMsg *rm)
+{
+    (void)rm;
+    if (cmd->ac_ArgList[0])
+        MainWindow_SetPlayhead(*(int32 *)cmd->ac_ArgList[0]);
+    snprintf(result, sizeof(result), "%lld",
+             (long long)MainWindow_Playhead());
+    set_result(cmd, 0);
+}
+
+static void cmd_grab(struct ARexxCmd *cmd, struct RexxMsg *rm)
+{
+    fb_ms_t at;
+
+    (void)rm;
+    result[0] = '\0';
+    at = App_GrabFrame(cmd->ac_ArgList[1] ? *(int32 *)cmd->ac_ArgList[1]
+                                          : MainWindow_Playhead(),
+                       cmd->ac_ArgList[2] != 0,
+                       (const char *)cmd->ac_ArgList[0]);
+    if (at >= 0)
+        snprintf(result, sizeof(result), "%lld", (long long)at);
+    set_result(cmd, at < 0 ? RC_ERROR : 0);
 }
 
 static void cmd_crossfade(struct ARexxCmd *cmd, struct RexxMsg *rm)
@@ -557,6 +591,8 @@ static struct ARexxCmd commands[] = {
     { "VOLUME",       25, cmd_volume,       "CLIP/N/A,PERCENT/N/A", 0, NULL, 0, 0, NULL },
     { "EXPORTSETTINGS", 26, cmd_exportsettings,
       "VIDEO/K,QUALITY/K,SOUND/K,BITRATE/N,RATE/N,TYPE/K",        0, NULL, 0, 0, NULL },
+    { "PLAYHEAD",     27, cmd_playhead,     "AT/N",              0, NULL, 0, 0, NULL },
+    { "GRAB",         28, cmd_grab,         "FILE/A,AT/N,FULL/S", 0, NULL, 0, 0, NULL },
     { NULL,           0,  NULL,             NULL,                0, NULL, 0, 0, NULL }
 };
 

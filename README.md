@@ -46,6 +46,9 @@ Early skeleton. Working so far:
 - [x] Preview copies (proxies): each video gets a small MJPEG copy in
       the background, once per file, and previews are rendered from them
 - [x] Playing from the playhead in a preview window, with sound (AHI)
+- [x] The preview window shows the frame at the playhead while it isn't
+      playing; frames can be saved as pictures for paint programs
+      (Project > Save frame, ARexx `GRAB`). Not yet tried on AmigaOS
 - [x] Crossfades between clips on a track: the clips overlap, drawn with
       an X over them; picture with ffmpeg's `xfade` (fade, wipes, slides, circle...),
       sound with `acrossfade`. Not yet tried on AmigaOS
@@ -225,6 +228,8 @@ The port is called `FORMBROD`.
 | `RENDERAHEAD` | `ON/S,OFF/S`: background rendering for previews | `ON\|OFF <ready> <pieces>` |
 | `PLAY` | `AT/N,STOP/S`: play in the preview window from `AT` ms to the end, or stop | |
 | `PREVIEW` | `AT/N,STOP/S`: preview from `AT` ms in 10 s windows until stopped | the playlist's path |
+| `PLAYHEAD` | `AT/N`: move the playhead to `AT` ms first, if given | where the playhead is (ms) |
+| `GRAB` | `FILE/A,AT/N,FULL/S`: save the frame at the playhead (or at `AT` ms) as a picture: a PNG if `FILE` ends in `.png`, else a 24-bit IFF ILBM. Preview size (320 wide, quick), or with `FULL` the edit's frame size from the original files | the frame's time (ms) |
 | `CACHE` | `ON/S,OFF/S,WIDTH/N,AUTO/S` (preview copies) | `ON\|OFF <width> <waiting>` |
 | `REMOVE` | `CLIP/N/A` | |
 | `EFFECT` | `CLIP/N/A,MODULE/A` | effect index |
@@ -244,6 +249,15 @@ The port is called `FORMBROD`.
 | `OPENPROJECT` | `FILE/A` | |
 | `SAVEPROJECT` | `FILE` (default: the current file) | path saved to |
 | `QUIT` | | |
+
+`GRAB` is meant for paint programs: save the frame where an overlay
+should go, draw on it as a stencil, and the picture lines up with the
+film.
+
+    /* The frame at the playhead, full size, for a paint program */
+    ADDRESS FORMBROD
+    'GRAB "RAM:stencil.iff" FULL'
+    SAY 'Frame at' RESULT 'ms'
 
 `OPEN` puts each file on a new track of its own, so two files opened
 that way play at the same time (the later one on top). `APPEND` joins a
@@ -416,6 +430,21 @@ then, it shows why (the status line). It can be made any size: the
 picture is scaled to fit,
 keeping its shape, by the graphics card where it can (compositing),
 else in software, else it is shown at its own size.
+
+**The frame at the playhead.** While the preview window is open and
+nothing plays, it shows the frame at the playhead, and follows it when
+the playhead is clicked or dragged, or the edit changes. *Project → Show
+preview window* opens it without playing. While the playhead is dragged
+it shows frames as fast as they can be made, ending on the one where the
+playhead stops. Frames come from a piece rendered ahead where there is
+one (instant), else from the preview copies, and are made on a backend
+of their own, so they don't stop an export.
+
+**Saving a frame.** *Project → Save frame...* saves the frame at the
+playhead as a picture, full size from the original files: a PNG if the
+name ends in `.png`, else a 24-bit IFF ILBM, which every paint program
+reads. Use it as a stencil to draw an overlay in the right place. ARexx
+`GRAB` does the same, at the preview's size unless `FULL` is given.
 
 Sound goes through AHI, on unit 0 unless `AHIUnit` in the settings says
 another. If AHI can't be opened the preview plays without sound, the

@@ -874,3 +874,27 @@ MSG_STATUS_BAD_COLOUR (287//)
 ; Status line, after typing a frame size out of range.
 MSG_STATUS_BAD_SIZE (288//)
 The frame must be from 2 x 2 to 16384 x 16384
+;
+; In the status line after a frame of the edit was saved as a picture
+; (ARexx GRAB or Project > Save frame). %s: the file.
+MSG_STATUS_FRAME_SAVED (289//)
+Frame saved as %s
+;
+; In the status line when a frame couldn't be made or saved. %s: the
+; file it was meant for. The log says why.
+MSG_STATUS_FRAME_FAILED (290//)
+Couldn't save the frame as %s
+;
+; Project menu: save the frame at the playhead as a picture, full size,
+; for a paint program (PNG if the name ends in .png, else IFF ILBM).
+MSG_MENU_SAVE_FRAME (291//)
+Save frame...
+;
+; Project menu: open the preview window without playing; it then shows
+; the frame at the playhead, following it as it moves.
+MSG_MENU_SHOW_PREVIEW (292//)
+Show preview window
+;
+; Title of the file requester for Save frame.
+MSG_REQ_SAVE_FRAME (293//)
+Save the frame at the playhead

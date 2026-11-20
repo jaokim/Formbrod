@@ -454,12 +454,26 @@ void PlayWindow_Prepare(int w, int h)
     FB_LEAVE("gui", "waiting for the first picture");
 }
 
+void PlayWindow_Open(int w, int h)
+{
+    if (Win) {
+        IIntuition->WindowToFront(Win);
+        return;
+    }
+    PlayWindow_Prepare(w, h);
+}
+
 void PlayWindow_SetMessage(const char *text)
 {
     FB_TRACE("gui", "preview window message: %s", text ? text : "");
     snprintf(Message, sizeof(Message), "%s", text ? text : "");
     if (Win && !Have)
         draw(Win->RPort);
+}
+
+int PlayWindow_IsOpen(void)
+{
+    return Win != NULL;
 }
 
 int PlayWindow_HasPicture(void)

@@ -17,9 +17,15 @@
  * brings it to front, and says the preview is being prepared until the
  * first picture is shown. */
 void   PlayWindow_Prepare(int w, int h);
+/* Opens the window (as Prepare) or brings it to front, keeping the
+ * picture it shows. */
+void   PlayWindow_Open(int w, int h);
 /* Text in the picture area while there is no picture yet, e.g. why the
  * preview stopped before its first one. */
 void   PlayWindow_SetMessage(const char *text);
+/* Whether the window is open. While it is and nothing plays, it shows
+ * the frame at the playhead (main.c, App_StillShow). */
+int    PlayWindow_IsOpen(void);
 /* Whether a picture of this preview has been shown since Prepare. */
 int    PlayWindow_HasPicture(void);
 /* Shows a picture, opening the window (or making it fit) if needed. */

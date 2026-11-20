@@ -77,6 +77,7 @@ SRC = src/main.c \
       src/cache/waves.c \
       src/player/player.c \
       src/player/audio.c \
+      src/picture/picture.c \
       src/job/module.c \
       src/backend/local_backend.c \
       src/backend/media.c \

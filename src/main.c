@@ -114,6 +114,30 @@ int main(int argc, char **argv)
                 if (!sigs && sleep_ms >= 20)
                     IDOS->Delay(1);             /* nothing due for a while */
             }
+        } else if (App_StillBusy()) {
+            /* The preview window follows the playhead: a turn of work on
+             * the frame at it, on a backend of its own. An export goes on
+             * alongside; proxies wait (a frame takes a fraction of a
+             * second). */
+            const FBPlayFrame *f;
+
+            trace_branch("frame at the playhead");
+            sigs = IExec->SetSignal(0, mask) & mask;
+            f = App_PollStill();
+            if (f && PlayWindow_IsOpen() && !App_Playing()) {
+                char text[64];
+
+                PlayWindow_Show(f);
+                App_StillTimeText(text, sizeof(text));
+                PlayWindow_SetText(text);
+            }
+            if (App.rendering) {
+                FBProgress p = App_PollRender();
+
+                MainWindow_SetProgress(&p);
+                if (!App.rendering)
+                    MainWindow_Refresh();
+            }
         } else if (App.rendering) {
             FBProgress p;
 
@@ -179,6 +203,29 @@ int main(int argc, char **argv)
         if (sigs & MainWindow_SigMask()) {
             last_input = now_ms();
             MainWindow_Handle(sigs);
+        }
+
+        /* The preview window, while open and not playing, shows the
+         * frame at the playhead, and a new one when the playhead moves
+         * or the edit changes (or when it has just been opened). While
+         * playing it shows playback, so the frame there is taken as
+         * shown. */
+        {
+            static fb_ms_t shown_at = -1;
+            static unsigned shown_gen;
+
+            if (App_Playing()) {
+                shown_at = MainWindow_Playhead();
+                shown_gen = App.gen;
+            } else if (!PlayWindow_IsOpen()) {
+                shown_at = -1;
+            } else if (MainWindow_Playhead() != shown_at
+                       || App.gen != shown_gen) {
+                shown_at = MainWindow_Playhead();
+                shown_gen = App.gen;
+                if (FB_TimelineDuration(&App.timeline) > 0)
+                    App_StillShow(shown_at);
+            }
         }
 
         /* Playing stopped (ended, failed or stopped) before its first

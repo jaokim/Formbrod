@@ -482,8 +482,18 @@
 #define MSG_STATUS_BAD_COLOUR_STR        "%s isn't a colour: type RRGGBB, like 000000 for black"
 #define MSG_STATUS_BAD_SIZE              288
 #define MSG_STATUS_BAD_SIZE_STR          "The frame must be from 2 x 2 to 16384 x 16384"
+#define MSG_STATUS_FRAME_SAVED           289
+#define MSG_STATUS_FRAME_SAVED_STR       "Frame saved as %s"
+#define MSG_STATUS_FRAME_FAILED          290
+#define MSG_STATUS_FRAME_FAILED_STR      "Couldn't save the frame as %s"
+#define MSG_MENU_SAVE_FRAME              291
+#define MSG_MENU_SAVE_FRAME_STR          "Save frame..."
+#define MSG_MENU_SHOW_PREVIEW            292
+#define MSG_MENU_SHOW_PREVIEW_STR        "Show preview window"
+#define MSG_REQ_SAVE_FRAME               293
+#define MSG_REQ_SAVE_FRAME_STR           "Save the frame at the playhead"
 
-#define FB_NUM_STRINGS 235
+#define FB_NUM_STRINGS 240
 
 #ifdef FB_STRINGS_ARRAY
 static const struct FBBuiltinString {
@@ -725,6 +735,11 @@ static const struct FBBuiltinString {
     { MSG_KHZ, MSG_KHZ_STR },
     { MSG_STATUS_BAD_COLOUR, MSG_STATUS_BAD_COLOUR_STR },
     { MSG_STATUS_BAD_SIZE, MSG_STATUS_BAD_SIZE_STR },
+    { MSG_STATUS_FRAME_SAVED, MSG_STATUS_FRAME_SAVED_STR },
+    { MSG_STATUS_FRAME_FAILED, MSG_STATUS_FRAME_FAILED_STR },
+    { MSG_MENU_SAVE_FRAME, MSG_MENU_SAVE_FRAME_STR },
+    { MSG_MENU_SHOW_PREVIEW, MSG_MENU_SHOW_PREVIEW_STR },
+    { MSG_REQ_SAVE_FRAME, MSG_REQ_SAVE_FRAME_STR },
 };
 #endif
 
