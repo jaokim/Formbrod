@@ -39,8 +39,10 @@ Class *TrackClass, *RulerClass, *FilmstripClass, *LanesClass;
 #define COL_MARK     0x2E8BC0    /* the range's marks */
 #define COL_RANGE    0x9CCBE6    /* the band between them */
 
-#define MARK_ZONE    9           /* flags: this high at the ruler's bottom */
-#define MARK_GRAB    5           /* ...and grabbed this many pixels away */
+#define MARK_ZONE    15          /* flags: this high at the ruler's bottom */
+#define MARK_FLAG    10          /* ...and this wide where widest */
+#define MARK_GRAB    4           /* grabbed this far behind a flag's pole,
+                                    as well as anywhere on the flag */
 
 #define HOLE_PITCH   12          /* sprocket holes, pixels apart */
 #define HOLE_W       5
@@ -227,19 +229,28 @@ static int mark_at(const struct TrackData *td, const struct Gadget *g,
     if (td->marks != 2 || !td->tl || y < g->Height - MARK_ZONE)
         return -1;
     range_of(td, &from, &to);
+    /* How far into each flag: the start mark's flag points right, the
+     * end mark's left. A click on a flag, or a little behind its pole,
+     * grabs it. */
     d0 = x - FB_ViewTimeToX(&td->tb->view, FB_US(from));
-    d1 = x - FB_ViewTimeToX(&td->tb->view, FB_US(to));
-    if (d0 < 0)
-        d0 = -d0;
-    if (d1 < 0)
-        d1 = -d1;
-    if (d0 > MARK_GRAB && d1 > MARK_GRAB)
+    d1 = FB_ViewTimeToX(&td->tb->view, FB_US(to)) - x;
+    if (d0 < -MARK_GRAB || d0 > MARK_FLAG + 1)
+        d0 = -1000;
+    if (d1 < -MARK_GRAB || d1 > MARK_FLAG + 1)
+        d1 = -1000;
+    if (d0 == -1000 && d1 == -1000)
         return -1;
-    /* The nearer one. Zoomed far out both can be at one place: then the
-     * end mark when clicked right of it, so dragging right widens. */
-    if (d0 == d1)
-        return x > FB_ViewTimeToX(&td->tb->view, FB_US(from)) ? 1 : 0;
-    return d0 < d1 ? 0 : 1;
+    if (d0 == -1000)
+        return 1;
+    if (d1 == -1000)
+        return 0;
+    /* On both (zoomed out, or a short range): the one whose flag was hit
+     * (right of the start = into its flag), else the nearer pole. */
+    if (d0 >= 0 && d1 < 0)
+        return 0;
+    if (d1 >= 0 && d0 < 0)
+        return 1;
+    return (d0 < 0 ? -d0 : d0) <= (d1 < 0 ? -d1 : d1) ? 0 : 1;
 }
 
 /* Moves the dragged mark to pixel x, snapped to a frame and kept at
@@ -365,9 +376,16 @@ static void track_render(Class *cl, Object *o, struct gpRender *msg)
             if (td->marks != 2)
                 continue;
             /* A flag pointing into the range: from the start mark to the
-             * right, from the end mark to the left. */
-            for (i = 0; i < MARK_ZONE - 2; i++) {
-                long w = (MARK_ZONE - 2 - i) / 2 + 1;
+             * right, from the end mark to the left. Its pole is two pixels
+             * wide (the line and one inside the range). */
+            {
+                long pa = k == 0 ? mx : mx - 1, pb = k == 0 ? mx + 1 : mx;
+
+                IGraphics->RectFill(rp, pa < x0 ? x0 : pa, y1 - MARK_ZONE + 1,
+                                    pb > x1 ? x1 : pb, y1);
+            }
+            for (i = 0; i < MARK_ZONE - 3; i++) {
+                long w = MARK_FLAG - i * MARK_FLAG / (MARK_ZONE - 3);
                 long fy = y1 - MARK_ZONE + 1 + i;
                 long fa = k == 0 ? mx : mx - w, fb = k == 0 ? mx + w : mx;
 
@@ -547,7 +565,7 @@ static uint32 track_dispatch(Class *cl, Object *o, Msg msg)
 
 static int ruler_height(struct TextFont *font)
 {
-    return (font ? font->tf_YSize : 8) + 12;   /* room for the marks' flags */
+    return (font ? font->tf_YSize : 8) + 17;   /* room for the marks' flags */
 }
 
 static void ruler_draw(struct trackDraw *d)
