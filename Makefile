@@ -22,6 +22,10 @@
 #                    builds them with both tools and checks they agree
 #   make strings     regenerates src/locale/strings.h after editing
 #                    locale/formbrod.cd (needs Python 3)
+#
+# Release:
+#   make release     builds Formbrod.lha from release/, the program and
+#                    the catalogs (needs lha)
 
 CC        ?= ppc-amigaos-gcc
 DEPS_DIR  ?= deps
@@ -139,10 +143,36 @@ compare-catalogs: $(CATALOGS)
 			$(LOCBUILD)/catgen/$$l/formbrod.catalog || exit 1; \
 	done
 
+# ---- Release archive ----------------------------------------------------
+# make release packs everything under release/ (the Formbrod drawer and its
+# icons, plus anything added there later), the program and the catalogs
+# into $(RELEASE_LHA):
+#   Formbrod.info
+#   Formbrod/Formbrod
+#   Formbrod/Formbrod.info
+#   Formbrod/Catalogs/<language>/formbrod.catalog
+# Needs an lha that can create archives (lha for Unix, or LhA on AmigaOS;
+# lhasa only unpacks). LHA_ADD is the command that adds files recursively.
+LHA         ?= lha
+LHA_ADD     ?= a
+RELEASE_SRC  = release
+RELEASE_DIR  = build/release
+RELEASE_LHA ?= $(TARGET).lha
+
+release: $(TARGET) $(CATALOGS)
+	rm -rf $(RELEASE_DIR) $(RELEASE_LHA)
+	@mkdir -p $(RELEASE_DIR)
+	cp -R $(RELEASE_SRC)/. $(RELEASE_DIR)/
+	@mkdir -p $(RELEASE_DIR)/Formbrod
+	cp $(TARGET) $(RELEASE_DIR)/Formbrod/Formbrod
+	cp -R Catalogs $(RELEASE_DIR)/Formbrod/
+	cd $(RELEASE_DIR) && $(LHA) $(LHA_ADD) $(abspath $(RELEASE_LHA)) *
+	$(LHA) l $(RELEASE_LHA)
+
 clean:
-	rm -rf $(BUILD) $(TARGET) Catalogs
+	rm -rf $(BUILD) $(TARGET) Catalogs $(RELEASE_DIR) $(RELEASE_LHA)
 
 test:
 	$(MAKE) -f Makefile.host test
 
-.PHONY: clean test strings catalogs compare-catalogs deps config
+.PHONY: clean release test strings catalogs compare-catalogs deps config
