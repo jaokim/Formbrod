@@ -1,6 +1,6 @@
-; $VER: Install-Formbrod 1.0 (21.11.2026)
+; $VER: Install-Formbrod 1.1 (21.11.2026)
 ;
-; Installer script for Formbröd. This file is ISO-8859-1, like Installer
+; Installer script for Formbrod. This file is ISO-8859-1, like Installer
 ; expects; keep it that way when editing.
 ; Run it from the unpacked Formbrod drawer.
 ; Copies everything in this drawer (except the installer itself) into a
@@ -26,18 +26,18 @@
     )
     (
         (set #welcome
-            (cat "This installs Formbröd, a video editor for AmigaOS 4.\n\n"
+            (cat "This installs Formbrod, a video editor for AmigaOS 4.\n\n"
                  "A drawer called " #name " is created where you choose."))
-        (set #ask-dest "Where should Formbröd be installed? A drawer called Formbrod is created here.")
+        (set #ask-dest "Where should Formbrod be installed? A drawer called Formbrod is created here.")
         (set #ask-help
             (cat "Choose the drawer to install Formbröd in. The installation creates "
                  "the drawer " #name " there, holding the program, its icon and the "
                  "catalogs for the translations.\n\nIf the drawer already exists, "
                  "its files are replaced, so you can install a new version over an "
                  "old one."))
-        (set #copying "Copying Formbröd...")
+        (set #copying "Copying Formbrod...")
         (set #same-dir "You can't install into the drawer the installation runs from.")
-        (set #done "Formbröd is installed in\n")
+        (set #done "Formbrod is installed in\n")
     )
 )
 
