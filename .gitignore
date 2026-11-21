@@ -4,3 +4,6 @@ Formbrod
 *.info
 __pycache__/
 /deps/
+/Formbrod.lha
+# Icons and other files under release/ belong in the archive.
+!/release/**

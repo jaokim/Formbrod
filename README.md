@@ -180,6 +180,20 @@ uploads them together with the executable.
 Copy the `Catalogs` drawer next to the program, or into `LOCALE:Catalogs/`.
 Formbröd then follows the language set in the Locale preferences.
 
+To pack a release:
+
+    make release                   # Formbrod.lha
+
+The archive holds everything under `release/` (the `Formbrod` drawer and
+its icons), the program as `Formbrod/Formbrod` and the catalogs in
+`Formbrod/Catalogs/`. Files added to `release/` later go in too. It needs
+an lha that can create archives (lha for Unix, or LhA on AmigaOS); lhasa
+only unpacks.
+
+To install from the archive, unpack it anywhere and run
+`Formbrod/Install-Formbrod` with Installer. It asks where to put Formbröd
+and copies the drawer there, everything except the installer included.
+
 ## Translating
 
 The GUI text lives in `locale/formbrod.cd` (English, built in) and one
