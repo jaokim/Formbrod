@@ -85,7 +85,7 @@
 #include "gui/toolbar.h"
 #include "gui/hints.h"
 #include "prefs/prefs.h"
-#include "version.h"
+#include "Formbrod_rev.h"
 
 enum {
     GID_ADD = 1, GID_SPLIT, GID_REMOVE, GID_FADE, GID_PREVIEW, GID_EXPORT,
@@ -904,7 +904,7 @@ static void show_about(void)
     struct EasyStruct es;
     char version[32];
 
-    snprintf(version, sizeof(version), "%s (%s)", FB_VERSION, FB_VERSION_DATE);
+    snprintf(version, sizeof(version), "%s (%s)", VERS, DATE);
     memset(&es, 0, sizeof(es));
     es.es_StructSize   = sizeof(es);
     es.es_Title        = (STRPTR)FB_Str(MSG_ABOUT_TITLE);
