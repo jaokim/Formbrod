@@ -87,7 +87,13 @@ static double secs(fb_ms_t ms)
 static FBJobError add_effects(Buf *b, const FBClip *clip, int audio)
 {
     char tmp[1024];
-    int i;
+    int i, cut = clip->cut_head > 0 || clip->cut_tail > 0, shifted = 0;
+    /* A clip cut by a window (FB_TimelineWindow): effects are made for
+     * the whole clip, and its frames are moved to where they are in it
+     * while the effects run, then back. A fade-in then stays at the
+     * clip's start and a fade-out at its end, as in the full render. */
+    fb_ms_t len = clip->out - clip->in + (cut ? clip->cut_head
+                                                + clip->cut_tail : 0);
 
     for (i = 0; i < clip->num_effects; i++) {
         const FBEffect *fx = &clip->effects[i];
@@ -102,11 +108,19 @@ static FBJobError add_effects(Buf *b, const FBClip *clip, int audio)
         fn = audio ? mod->audio_filter : mod->video_filter;
         if (!fn)
             continue;
-        if (fn(fx, clip->out - clip->in, tmp, sizeof(tmp)) != 0)
+        if (fn(fx, len, tmp, sizeof(tmp)) != 0)
             return FB_JOB_OVERFLOW;
-        if (tmp[0])
-            buf_printf(b, ",%s", tmp);
+        if (!tmp[0])
+            continue;
+        if (cut && !shifted && clip->cut_head > 0) {
+            buf_printf(b, ",%s=PTS+%.3f/TB", audio ? "asetpts" : "setpts",
+                       secs(clip->cut_head));
+            shifted = 1;
+        }
+        buf_printf(b, ",%s", tmp);
     }
+    if (shifted)
+        buf_printf(b, ",%s=PTS-STARTPTS", audio ? "asetpts" : "setpts");
     return FB_JOB_OK;
 }
 
