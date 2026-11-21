@@ -44,7 +44,7 @@
 
   This is an early version, and has been developed using AI (Claude).
   The program has been tested on AmigaOS 4 on AmigaOne X1000 and
-  micro-AmigaOne. Most features have been tested and verified on Linux.
+  micro-AmigaOne. Most features have also been tested and verified on Linux.
 
 @endnode
 
@@ -87,8 +87,7 @@
      its own, and its film strip is drawn above the tracks.
   2. Choose @{b}Track > Append file...@{ub} to add a second video after
      the first on the same track. Or drop it on the track from Workbench.
-  3. Move the playhead to where the first video should end and press
-     @{b}O@{ub} (Set out).
+  3. Trim the clips by resizing to lef tor right using the white borders.
   4. Press @{b}Space@{ub} to play the result in the preview window.
   5. Click @{b}Export@{ub} and give a file name. Progress is shown at the
      bottom of the window.
