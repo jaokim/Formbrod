@@ -190,6 +190,10 @@ its icons), the program as `Formbrod/Formbrod` and the catalogs in
 an lha that can create archives (lha for Unix, or LhA on AmigaOS); lhasa
 only unpacks.
 
+To install from the archive, unpack it anywhere and run
+`Formbrod/Install-Formbrod` with Installer. It asks where to put Formbröd
+and copies the drawer there, everything except the installer included.
+
 ## Translating
 
 The GUI text lives in `locale/formbrod.cd` (English, built in) and one

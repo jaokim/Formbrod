@@ -1,0 +1,98 @@
+; $VER: Install-Formbrod 1.0 (21.11.2026)
+;
+; Installer script for Formbröd. This file is ISO-8859-1, like Installer
+; expects; keep it that way when editing.
+; Run it from the unpacked Formbrod drawer.
+; Copies everything in this drawer (except the installer itself) into a
+; Formbrod drawer wherever the user chooses.
+
+(set #name "Formbrod")
+
+; ---- Strings ------------------------------------------------------------
+(if (= @language "svenska")
+    (
+        (set #welcome
+            (cat "Det här installerar Formbröd, en videoredigerare för AmigaOS 4.\n\n"
+                 "En låda som heter " #name " skapas där du väljer."))
+        (set #ask-dest "Var ska Formbröd installeras? En låda som heter Formbrod skapas här.")
+        (set #ask-help
+            (cat "Välj lådan som Formbröd ska installeras i. Installationen skapar "
+                 "lådan " #name " där, med programmet, dess ikon och katalogerna "
+                 "för översättningarna.\n\nFinns lådan redan skrivs filerna i den "
+                 "över, så du kan installera en ny version ovanpå en gammal."))
+        (set #copying "Kopierar Formbröd...")
+        (set #same-dir "Du kan inte installera i samma låda som installationen körs från.")
+        (set #done "Formbröd är installerat i\n")
+    )
+    (
+        (set #welcome
+            (cat "This installs Formbröd, a video editor for AmigaOS 4.\n\n"
+                 "A drawer called " #name " is created where you choose."))
+        (set #ask-dest "Where should Formbröd be installed? A drawer called Formbrod is created here.")
+        (set #ask-help
+            (cat "Choose the drawer to install Formbröd in. The installation creates "
+                 "the drawer " #name " there, holding the program, its icon and the "
+                 "catalogs for the translations.\n\nIf the drawer already exists, "
+                 "its files are replaced, so you can install a new version over an "
+                 "old one."))
+        (set #copying "Copying Formbröd...")
+        (set #same-dir "You can't install into the drawer the installation runs from.")
+        (set #done "Formbröd is installed in\n")
+    )
+)
+
+; ---- Where we are -------------------------------------------------------
+; The drawer this script is in, and that drawer's own icon next to it.
+(set #srcdir  (expandpath (pathonly @icon)))
+(set #srcicon (tackon (pathonly #srcdir) (cat (fileonly #srcdir) ".info")))
+
+(message #welcome)
+
+; ---- Where to ---------------------------------------------------------
+(set #parent
+    (askdir
+        (prompt #ask-dest)
+        (help #ask-help)
+        (default @default-dest)
+    )
+)
+(set #dest (tackon #parent #name))
+
+(if (= (exists #dest) 2)
+    (if (= (expandpath #dest) #srcdir)
+        (abort #same-dir)
+    )
+)
+
+; ---- Copy -------------------------------------------------------------
+(complete 10)
+(working #copying)
+
+(if (<> (exists #dest) 2)
+    (makedir #dest)
+)
+
+; The drawer icon.
+(if (exists #srcicon)
+    (copyfiles
+        (source #srcicon)
+        (dest #parent)
+        (newname (cat #name ".info"))
+        (nogauge)
+    )
+)
+
+; Everything in the drawer except this script and its icon, subdrawers
+; (such as Catalogs) included.
+(copyfiles
+    (prompt #copying)
+    (help @copyfiles-help)
+    (source #srcdir)
+    (dest #dest)
+    (pattern "~(Install-Formbrod#?)")
+)
+
+(complete 100)
+
+(set @default-dest #dest)
+(exit (cat #done #dest))
