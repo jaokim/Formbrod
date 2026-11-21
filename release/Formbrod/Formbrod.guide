@@ -6,7 +6,7 @@
 
 @node Main "Formbröd"
 
-  @{b}Formbröd 1.1@{ub} - a video editor for AmigaOS 4
+  @{b}Formbröd@{ub} - a video editor for AmigaOS 4
 
   @{" Introduction    " link Intro}  What it is
   @{" Requirements    " link Requirements}  What you need
@@ -42,8 +42,9 @@
 
   Every action in the window can also be done from @{" ARexx " link ARexx}.
 
-  This is an early version. Many features have so far only been tried
-  on Linux; please report anything that doesn't work.
+  This is an early version, and has been developed using AI (Claude).
+  The program has been tested on AmigaOS 4 on AmigaOne X1000 and
+  micro-AmigaOne. Most features have been tested and verified on Linux.
 
 @endnode
 
@@ -358,6 +359,8 @@
 
   Joakim Nordström
   joakim.nordstrom@gmail.com
+
+  Website: https://github.io/amiga/formbrod
 
   Source code: https://github.com/jaokim/Formbrod
 

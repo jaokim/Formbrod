@@ -20,10 +20,10 @@ Features:
 - English and Swedish
 
 USAGE
-Unpack the archive, open the Formbrod drawer and run Install-Formbrod. Or
-just drag the drawer wherever you like.
+Unpack the archive, open the Formbrod drawer and run Install. Or just
+drag the drawer wherever you like.
 
-Click Add file, trim with I and O at the playhead, play with Space, and
+Click Add file, trim by dragging the white borders, play with Space, and
 click Export. Formbrod.guide explains the rest, including ARexx:
 
   /* Join two files and export */
@@ -44,9 +44,9 @@ for any damages resulting from the use of this software, whether direct,
 indirect, incidental, or consequential.
 
 NOTES
-This is an early version, and several features have so far mostly been tested
-on Linux. Please report problems, with the log file (Settings > Write log
-file) if possible.
+This is an early version. It has been tested on AmigaOS 4, AmigaOne X1000 and
+micro-AmigaOne. The majority of features have been tested on Linux. Please
+report problems, with the log file (Settings > Write log file) if possible.
 
 Source code: https://github.com/jaokim/Formbrod
 ffmpeg libraries ported to AmigaOS 4 by Michael Trebilcock.
