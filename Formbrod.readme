@@ -1,0 +1,52 @@
+Formbröd is a video editor for AmigaOS 4.
+
+DESCRIPTION
+Formbröd cuts, trims and joins video files, sound files and pictures on a
+timeline, with fades, crossfades and effect modules, and exports the result
+as a movie file. Video is read and written with the ffmpeg libraries, which
+are built into the program.
+
+Features:
+- Tracks for video, sound and pictures, with film strip thumbnails and
+  waveforms
+- Trim, split and move clips by dragging, or by typing times
+- Fades, crossfades (fade, wipes, slides, circle...) and per-clip volume
+- Clips of any size and frame rate, fitted to the project's frame
+- Preview with sound, rendered from small copies made in the background
+- Save frames as IFF or PNG and export ranges as IFF ANIM, for drawing on
+  in paint programs
+- Projects saved as plain text
+- ARexx port with every editing command
+- English and Swedish
+
+USAGE
+Unpack the archive, open the Formbrod drawer and run Install-Formbrod. Or
+just drag the drawer wherever you like.
+
+Click Add file, trim with I and O at the playhead, play with Space, and
+click Export. Formbrod.guide explains the rest, including ARexx:
+
+  /* Join two files and export */
+  ADDRESS FORMBROD
+  'OPEN "Work:Video/intro.mp4"'
+  'APPEND' RESULT '"Work:Video/main.mp4"'
+  'EXPORT "Work:Video/final.mp4"'
+
+CHANGES
+1.1 - First release
+
+REQUIREMENTS
+AmigaOS 4.1 and AHI.
+
+DISCLAIMER
+This software is to be regarded as in beta state. The authors are not liable
+for any damages resulting from the use of this software, whether direct,
+indirect, incidental, or consequential.
+
+NOTES
+This is an early version, and several features have so far mostly been tested
+on Linux. Please report problems, with the log file (Settings > Write log
+file) if possible.
+
+Source code: https://github.com/jaokim/Formbrod
+ffmpeg libraries ported to AmigaOS 4 by Michael Trebilcock.

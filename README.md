@@ -194,6 +194,10 @@ To install from the archive, unpack it anywhere and run
 `Formbrod/Install-Formbrod` with Installer. It asks where to put Formbröd
 and copies the drawer there, everything except the installer included.
 
+`release/Formbrod/Formbrod.guide` is the user manual (AmigaGuide) and
+`Formbrod.readme` the text for OS4Depot. Both, like the Installer
+script, are ISO-8859-1; keep them that way when editing.
+
 ## Translating
 
 The GUI text lives in `locale/formbrod.cd` (English, built in) and one

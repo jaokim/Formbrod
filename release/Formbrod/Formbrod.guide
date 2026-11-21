@@ -1,0 +1,367 @@
+@database Formbrod.guide
+@$VER: Formbrod.guide 1.1 (21.11.2026)
+@author "Joakim Nordström"
+@(c) "2026 Joakim Nordström"
+@index Main
+
+@node Main "Formbröd"
+
+  @{b}Formbröd 1.1@{ub} - a video editor for AmigaOS 4
+
+  @{" Introduction    " link Intro}  What it is
+  @{" Requirements    " link Requirements}  What you need
+  @{" Installation    " link Install}  Getting it onto your disk
+
+  @{" Quick start     " link QuickStart}  Join two files and export them
+  @{" The window      " link Window}  Toolbar, film strip and tracks
+  @{" Editing         " link Editing}  Trimming, splitting and moving clips
+  @{" Effects         " link Effects}  Fades, crossfades and modules
+  @{" Previewing      " link Preview}  Playing the edit
+  @{" Exporting       " link Export}  Making the finished movie
+  @{" Paint programs  " link Paint}  Frames and ANIMs for drawing on
+  @{" Projects        " link Projects}  Saving your work
+
+  @{" Settings        " link Settings}  Menus, files and the cache
+  @{" ARexx           " link ARexx}  Scripting Formbröd
+  @{" Translations    " link Translations}  Languages
+  @{" History         " link History}  Versions
+  @{" Author          " link Author}  Contact
+
+@endnode
+
+@node Intro "Introduction"
+
+  @{b}Introduction@{ub}
+
+  Formbröd is a video editor for AmigaOS 4. Add video files, sound files
+  and pictures, cut them, put them in order, add fades and crossfades,
+  and export the result as a movie file.
+
+  Reading and writing video is done by the ffmpeg libraries, which are
+  built into the program. Nothing else needs installing.
+
+  Every action in the window can also be done from @{" ARexx " link ARexx}.
+
+  This is an early version. Many features have so far only been tried
+  on Linux; please report anything that doesn't work.
+
+@endnode
+
+@node Requirements "Requirements"
+
+  @{b}Requirements@{ub}
+
+  - AmigaOS 4.1
+  - AHI, for sound when previewing
+  - Enough memory for the videos you edit. Previews use small copies
+    of the files, so editing needs far less than exporting.
+
+  The toolbar uses the AISS icons in TBImages:.
+
+@endnode
+
+@node Install "Installation"
+
+  @{b}Installation@{ub}
+
+  Unpack the archive anywhere, open the Formbrod drawer and double-click
+  @{b}Install-Formbrod@{ub}. Choose where to put it; a drawer called
+  Formbrod is made there.
+
+  To update, install over the old drawer. Your settings and the cache
+  are kept.
+
+  You can also just drag the Formbrod drawer wherever you like.
+
+  The Catalogs drawer holds the translations. Keep it next to the
+  program, or copy its contents to LOCALE:Catalogs/.
+
+@endnode
+
+@node QuickStart "Quick start"
+
+  @{b}Quick start@{ub}
+
+  1. Click @{b}Add file@{ub} and choose a video. It appears on a track of
+     its own, and its film strip is drawn above the tracks.
+  2. Choose @{b}Track > Append file...@{ub} to add a second video after
+     the first on the same track. Or drop it on the track from Workbench.
+  3. Move the playhead to where the first video should end and press
+     @{b}O@{ub} (Set out).
+  4. Press @{b}Space@{ub} to play the result in the preview window.
+  5. Click @{b}Export@{ub} and give a file name. Progress is shown at the
+     bottom of the window.
+
+@endnode
+
+@node Window "The window"
+
+  @{b}The window@{ub}
+
+  @{b}Toolbar@{ub}
+  Add file, Split, Remove, Fade, Crossfade, Play and Export. Hold the
+  mouse over a button to see what it does. Set in and Set out are in the
+  Edit menu, and on the I and O keys.
+
+  @{b}Ruler and film strip@{ub}
+  The film strip shows the finished edit with a picture a second. Click
+  or drag in it, or in the ruler, to move the playhead. The zoom control
+  sets how much of the edit fits in the window.
+
+  @{b}Overview@{ub}
+  The whole edit at once. Its two flags mark a range, used by
+  @{" Export range " link Paint}.
+
+  @{b}Tracks@{ub}
+  Under the film strip is one row per track: Video 1, Audio 1 and so
+  on. A video track's sound is on a lane under it, with its waveform.
+  Higher video tracks are drawn on top of lower ones; all sound is
+  mixed.
+
+  @{b}Clip fields@{ub}
+  Starts, From file and Length of the selected clip. Type 1:05.5 or
+  plain seconds like 12.5 and press Return.
+
+@endnode
+
+@node Editing "Editing"
+
+  @{b}Editing@{ub}
+
+  @{b}Adding@{ub}
+  Add file puts a video, a sound file or a picture on a new track. A
+  picture starts out 5 seconds long and can be made any length. Files
+  dropped on a track are added after its last clip; files dropped below
+  the tracks get a track each.
+
+  @{b}Selecting@{ub}
+  Click a clip to select it. Click a track's name to select the track
+  for the Track menu (Append file, Mute audio, Hide video, Remove track).
+
+  @{b}Trimming@{ub}
+  Drag either end of a clip. Or put the playhead in it and use
+  @{b}Set in@{ub} (I) to cut away its start, or @{b}Set out@{ub} (O) to
+  cut away its end. With the playhead after a clip's end, Set out makes
+  it longer, as far as its file goes. The clips after it move along, so
+  no gap is left.
+
+  @{b}Splitting@{ub}
+  Split cuts the selected clip at the playhead. With nothing selected,
+  every track is cut there.
+
+  @{b}Moving@{ub}
+  Drag the middle of a clip. An outline shows where it lands: where you
+  drop it if there's room, otherwise between the clips at the orange
+  line. Ends snap to other clips, the start and the playhead. Drop it
+  below the tracks to give it a track of its own. The right mouse button
+  cancels.
+
+  @{b}Fitting@{ub}
+  Clips of different size and frame rate can be mixed. Each is fitted to
+  the project's frame: inside with bars, filling it and cropping, or
+  stretched. Set the default under Settings > Fit clips to frame, or per
+  clip in the clip window.
+
+  @{b}Clip window@{ub}
+  Double-click a clip (or Edit > Clip settings...) for all its settings:
+  timing, fades, crossfade, fit, volume and effects. It follows the
+  selection.
+
+@endnode
+
+@node Effects "Effects"
+
+  @{b}Effects@{ub}
+
+  @{b}Fades@{ub}
+  The Fade button fades the selected clip in over one second. Set fade
+  in and fade out lengths in the clip window.
+
+  @{b}Crossfades@{ub}
+  The Crossfade button fades over to the selected clip from the one
+  before it on its track. The clips overlap, drawn with an X. Choose the
+  kind (fade, wipes, slides, circle...) under Edit > Crossfade kind.
+  Click Crossfade again for a plain cut.
+
+  @{b}Modules@{ub}
+  The Effects menu lists the effect modules. Each effect's settings get
+  fields in the clip window.
+
+  @{b}Volume@{ub}
+  Per clip in the clip window, 100% being as recorded.
+
+@endnode
+
+@node Preview "Previewing"
+
+  @{b}Previewing@{ub}
+
+  Space plays from the playhead in the preview window, with sound, and
+  stops again. When not playing, the window shows the frame at the
+  playhead. Project > Show preview window opens it.
+
+  To keep editing smooth, each video gets a small copy (a proxy) made in
+  the background the first time it's added. Previews are rendered from
+  these. Settings > Make preview copies and Preview copy size control
+  this. With Render previews in the background on, the edit is rendered
+  ahead so playing starts at once.
+
+@endnode
+
+@node Export "Exporting"
+
+  @{b}Exporting@{ub}
+
+  Project > Project settings... sets the frame (size, frame rate, how
+  clips fit) and what export writes: video codec and quality, sound and
+  bit rate, and the kind of file.
+
+  Export renders the whole edit at full quality from the original files.
+  Cancel render stops it; the file it was writing is not finished.
+
+@endnode
+
+@node Paint "Paint programs"
+
+  @{b}Paint programs@{ub}
+
+  @{b}Save frame...@{ub} (Project menu) saves the frame at the playhead as
+  an IFF ILBM or PNG. Draw on it as a stencil, and the picture lines up
+  with the film.
+
+  For effects drawn frame by frame, mark a range with the overview's
+  flags (or Edit > Range starts here / Range ends here) and choose
+  Project > @{b}Export range...@{ub}. It is written small, as an IFF ANIM, or as
+  a movie if the name ends in .mp4, .gif and so on.
+
+@endnode
+
+@node Projects "Projects"
+
+  @{b}Projects@{ub}
+
+  New, Open project... and Save project in the Project menu. A project
+  is a plain text file listing the files used and how they're edited. It
+  can be read and edited in a text editor. The video files themselves
+  are not copied, so keep them where they are.
+
+@endnode
+
+@node Settings "Settings"
+
+  @{b}Settings@{ub}
+
+  The Settings menu holds the program's own settings.
+
+  - Fit clips to frame: the default for new clips
+  - Show frame pictures: thumbnails in the film strip
+  - Make preview copies / Preview copy size
+  - Render previews in the background
+  - Write log file: to T:Formbrod.log. Include it when reporting a
+    problem.
+
+  @{b}Cache@{ub}
+  Preview copies, thumbnails and waveforms are kept in the Cache drawer
+  next to the program (PROGDIR:Cache). It can be deleted at any time;
+  it's made again when needed.
+
+@endnode
+
+@node ARexx "ARexx"
+
+  @{b}ARexx@{ub}
+
+  The port is called @{b}FORMBROD@{ub}. Times are in milliseconds, clips
+  and tracks are numbered from 0.
+
+  /* Join two files, fade in the first, and export */
+  ADDRESS FORMBROD
+  'OPEN "Work:Video/intro.mp4"'
+  track = RESULT
+  'APPEND' track '"Work:Video/main.mp4"'
+  'EFFECT 0 fade'
+  'SETPARAM 0' RESULT 'in 2.0'
+  'EXPORT "Work:Video/final.mp4"'
+  DO UNTIL LEFT(RESULT, 7) ~= 'RUNNING'
+      'RENDERSTATUS'
+      ADDRESS COMMAND 'Wait 1'
+  END
+
+  @{b}Files and projects@{ub}
+  OPEN FILE/A                    add a file on a new track; gives the track
+  APPEND TRACK/N/A,FILE/A        add a file after a track's last clip
+  NEWPROJECT, OPENPROJECT FILE/A, SAVEPROJECT FILE
+  QUIT
+
+  @{b}Editing@{ub}
+  TRACKS, CLIPS                  how many there are
+  SPLIT AT/N/A,TRACK/N           all tracks if TRACK is left out
+  TRIM CLIP/N/A,IN/N,OUT/N       times in the clip's file
+  MOVE CLIP/N/A,AT/N/A,TRACK/N   like dragging it
+  REMOVE CLIP/N/A
+  FIT CLIP/N/A,MODE/A
+  VOLUME CLIP/N/A,PERCENT/N/A    100 = as recorded, up to 400
+  PLAYHEAD AT/N                  moves it if AT is given; gives its time
+
+  @{b}Effects@{ub}
+  MODULES                        the effect modules' names
+  EFFECT CLIP/N/A,MODULE/A       gives the effect's number
+  SETPARAM CLIP/N/A,EFFECT/N/A,NAME/A,VALUE/A
+  REMOVEEFFECT CLIP/N/A,EFFECT/N/A
+  FADES CLIP/N/A,IN/N,OUT/N
+  CROSSFADE CLIP/N/A,LENGTH/N/A,KIND/K   KIND: fade, wipeleft, ...
+
+  @{b}Preview@{ub}
+  PLAY AT/N,STOP/S
+  PREVIEW AT/N,STOP/S
+  RENDERAHEAD ON/S,OFF/S
+  CACHE ON/S,OFF/S,WIDTH/N,AUTO/S
+
+  @{b}Export@{ub}
+  FORMAT WIDTH/N,HEIGHT/N,FPS/K,FIT/K,PADCOLOR/K
+  EXPORTSETTINGS VIDEO/K,QUALITY/K,SOUND/K,BITRATE/N,RATE/N,TYPE/K
+  EXPORT FILE/A,PREVIEW/S
+  RENDERSTATUS                   IDLE, RUNNING <pos> <total>, DONE,
+                                 FAILED or CANCELLED
+  CANCEL
+
+  @{b}Paint programs@{ub}
+  GRAB FILE/A,AT/N,FULL/S        save a frame (.png, else IFF ILBM)
+  RANGE FROM/N,TO/N,CLEAR/S
+  EXPORTRANGE FILE/A,WIDTH/N,FPS/N   poll RENDERSTATUS like EXPORT
+
+@endnode
+
+@node Translations "Translations"
+
+  @{b}Translations@{ub}
+
+  Formbröd follows the language set in the Locale preferences. English
+  is built in; Swedish is included.
+
+  To translate it into another language, see locale/ in the source
+  code. Translations are very welcome.
+
+@endnode
+
+@node History "History"
+
+  @{b}History@{ub}
+
+  1.1 (21.11.2026)  First release.
+
+@endnode
+
+@node Author "Author"
+
+  @{b}Author@{ub}
+
+  Joakim Nordström
+  joakim.nordstrom@gmail.com
+
+  Source code: https://github.com/jaokim/Formbrod
+
+  Formbröd uses the ffmpeg libraries (ffmpeg.org), ported to AmigaOS 4
+  by Michael Trebilcock.
+
+@endnode
