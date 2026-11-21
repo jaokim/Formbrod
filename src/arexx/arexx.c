@@ -595,6 +595,8 @@ static void cmd_exportsettings(struct ARexxCmd *cmd, struct RexxMsg *rm)
     set_result(cmd, rc);
 }
 
+/* Every command needs its own ID (the second field): new commands take
+   the next free number. */
 static struct ARexxCmd commands[] = {
     { "OPEN",         1,  cmd_open,         "FILE/A",            0, NULL, 0, 0, NULL },
     { "SPLIT",        2,  cmd_split,        "AT/N/A,TRACK/N",    0, NULL, 0, 0, NULL },
@@ -618,20 +620,20 @@ static struct ARexxCmd commands[] = {
     { "TRACKS",       18, cmd_tracks,       NULL,                0, NULL, 0, 0, NULL },
     { "TRIM",         19, cmd_trim,         "CLIP/N/A,IN/N,OUT/N", 0, NULL, 0, 0, NULL },
     { "MOVE",         20, cmd_move,         "CLIP/N/A,AT/N/A,TRACK/N", 0, NULL, 0, 0, NULL },
-    { "RENDERAHEAD",  24, cmd_renderahead,  "ON/S,OFF/S",        0, NULL, 0, 0, NULL },
-    { "PLAY",         23, cmd_play,         "AT/N,STOP/S",       0, NULL, 0, 0, NULL },
-    { "PREVIEW",      22, cmd_preview,      "AT/N,STOP/S",       0, NULL, 0, 0, NULL },
     { "CACHE",        21, cmd_cache,        "ON/S,OFF/S,WIDTH/N,AUTO/S", 0, NULL, 0, 0, NULL },
-    { "CROSSFADE",    22, cmd_crossfade,    "CLIP/N/A,LENGTH/N/A,KIND/K", 0, NULL, 0, 0, NULL },
-    { "REMOVEEFFECT", 23, cmd_removeeffect, "CLIP/N/A,EFFECT/N/A", 0, NULL, 0, 0, NULL },
-    { "FADES",        24, cmd_fades,        "CLIP/N/A,IN/N,OUT/N", 0, NULL, 0, 0, NULL },
-    { "VOLUME",       25, cmd_volume,       "CLIP/N/A,PERCENT/N/A", 0, NULL, 0, 0, NULL },
-    { "EXPORTSETTINGS", 26, cmd_exportsettings,
+    { "PREVIEW",      22, cmd_preview,      "AT/N,STOP/S",       0, NULL, 0, 0, NULL },
+    { "PLAY",         23, cmd_play,         "AT/N,STOP/S",       0, NULL, 0, 0, NULL },
+    { "RENDERAHEAD",  24, cmd_renderahead,  "ON/S,OFF/S",        0, NULL, 0, 0, NULL },
+    { "CROSSFADE",    25, cmd_crossfade,    "CLIP/N/A,LENGTH/N/A,KIND/K", 0, NULL, 0, 0, NULL },
+    { "REMOVEEFFECT", 26, cmd_removeeffect, "CLIP/N/A,EFFECT/N/A", 0, NULL, 0, 0, NULL },
+    { "FADES",        27, cmd_fades,        "CLIP/N/A,IN/N,OUT/N", 0, NULL, 0, 0, NULL },
+    { "VOLUME",       28, cmd_volume,       "CLIP/N/A,PERCENT/N/A", 0, NULL, 0, 0, NULL },
+    { "EXPORTSETTINGS", 29, cmd_exportsettings,
       "VIDEO/K,QUALITY/K,SOUND/K,BITRATE/N,RATE/N,TYPE/K",        0, NULL, 0, 0, NULL },
-    { "PLAYHEAD",     27, cmd_playhead,     "AT/N",              0, NULL, 0, 0, NULL },
-    { "GRAB",         28, cmd_grab,         "FILE/A,AT/N,FULL/S", 0, NULL, 0, 0, NULL },
-    { "RANGE",        29, cmd_range,        "FROM/N,TO/N,CLEAR/S", 0, NULL, 0, 0, NULL },
-    { "EXPORTRANGE",  30, cmd_exportrange,  "FILE/A,WIDTH/N,FPS/N", 0, NULL, 0, 0, NULL },
+    { "PLAYHEAD",     30, cmd_playhead,     "AT/N",              0, NULL, 0, 0, NULL },
+    { "GRAB",         31, cmd_grab,         "FILE/A,AT/N,FULL/S", 0, NULL, 0, 0, NULL },
+    { "RANGE",        32, cmd_range,        "FROM/N,TO/N,CLEAR/S", 0, NULL, 0, 0, NULL },
+    { "EXPORTRANGE",  33, cmd_exportrange,  "FILE/A,WIDTH/N,FPS/N", 0, NULL, 0, 0, NULL },
     { NULL,           0,  NULL,             NULL,                0, NULL, 0, 0, NULL }
 };
 
