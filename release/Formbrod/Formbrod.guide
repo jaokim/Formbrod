@@ -66,7 +66,7 @@
   @{b}Installation@{ub}
 
   Unpack the archive anywhere, open the Formbrod drawer and double-click
-  @{b}Install-Formbrod@{ub}. Choose where to put it; a drawer called
+  @{b}Install@{ub}. Choose where to put it; a drawer called
   Formbrod is made there.
 
   To update, install over the old drawer. Your settings and the cache

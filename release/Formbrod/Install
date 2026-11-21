@@ -1,4 +1,4 @@
-; $VER: Install-Formbrod 1.1 (21.11.2026)
+; $VER: Install 1.1 (21.11.2026)
 ;
 ; Installer script for Formbrod. This file is ISO-8859-1, like Installer
 ; expects; keep it that way when editing.
@@ -89,7 +89,7 @@
     (help @copyfiles-help)
     (source #srcdir)
     (dest #dest)
-    (pattern "~(Install-Formbrod#?)")
+    (pattern "~(Install|Install.info)")
 )
 
 (complete 100)

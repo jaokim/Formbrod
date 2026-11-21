@@ -191,7 +191,7 @@ an lha that can create archives (lha for Unix, or LhA on AmigaOS); lhasa
 only unpacks.
 
 To install from the archive, unpack it anywhere and run
-`Formbrod/Install-Formbrod` with Installer. It asks where to put Formbröd
+`Formbrod/Install` with Installer. It asks where to put Formbröd
 and copies the drawer there, everything except the installer included.
 
 `release/Formbrod/Formbrod.guide` is the user manual (AmigaGuide) and
