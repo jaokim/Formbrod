@@ -33,7 +33,7 @@ TARGET    = Formbrod
 BUILD     = build/amiga
 
 CFLAGS    = -std=gnu99 -O2 -Wall -Wextra -Wno-unused-parameter \
-            -Iinclude -Isrc
+			-Iinclude -Isrc
 LDFLAGS   =
 LIBS      = -lauto
 
@@ -41,7 +41,7 @@ ifeq ($(LIBAV),1)
 CFLAGS   += -DHAVE_LIBAV -I$(LIBAV_PREFIX)/include
 LDFLAGS  += -L$(LIBAV_PREFIX)/lib
 LIBS     := -lavfilter -lavformat -lavcodec -lswscale -lswresample \
-            -lavutil -lbz2 -lz -lpthread -latomic -lm $(LIBS)
+			-lavutil -lbz2 -lz -lpthread -latomic -lm $(LIBS)
 endif
 
 # Downloads third-party libraries listed in tools/deps.list into $(DEPS_DIR).
@@ -53,35 +53,35 @@ config:
 	@echo "LIBAV=$(LIBAV) LIBAV_PREFIX=$(LIBAV_PREFIX)"
 
 SRC = src/main.c \
-      src/app.c \
-      src/gui/mainwindow.c \
-      src/gui/timebase.c \
-      src/gui/track.c \
-      src/gui/lanes.c \
-      src/gui/clipwindow.c \
-      src/gui/projectwindow.c \
-      src/gui/playwindow.c \
-      src/gui/winprefs.c \
-      src/gui/toolbar.c \
-      src/locale/catalog.c \
-      src/arexx/arexx.c \
-      src/prefs/prefs.c \
-      src/timeline/timeline.c \
-      src/timeline/project.c \
-      src/timeline/timeview.c \
-      src/log/log.c \
-      src/job/job.c \
-      src/cache/cache.c \
-      src/cache/render.c \
-      src/cache/thumbs.c \
-      src/cache/waves.c \
-      src/player/player.c \
-      src/player/audio.c \
-      src/picture/picture.c \
-      src/job/module.c \
-      src/backend/local_backend.c \
-      src/backend/media.c \
-      modules/fade/fade.c
+	  src/app.c \
+	  src/gui/mainwindow.c \
+	  src/gui/timebase.c \
+	  src/gui/track.c \
+	  src/gui/lanes.c \
+	  src/gui/clipwindow.c \
+	  src/gui/projectwindow.c \
+	  src/gui/playwindow.c \
+	  src/gui/winprefs.c \
+	  src/gui/toolbar.c \
+	  src/locale/catalog.c \
+	  src/arexx/arexx.c \
+	  src/prefs/prefs.c \
+	  src/timeline/timeline.c \
+	  src/timeline/project.c \
+	  src/timeline/timeview.c \
+	  src/log/log.c \
+	  src/job/job.c \
+	  src/cache/cache.c \
+	  src/cache/render.c \
+	  src/cache/thumbs.c \
+	  src/cache/waves.c \
+	  src/player/player.c \
+	  src/player/audio.c \
+	  src/picture/picture.c \
+	  src/job/module.c \
+	  src/backend/local_backend.c \
+	  src/backend/media.c \
+	  modules/fade/fade.c
 
 OBJ = $(SRC:%.c=$(BUILD)/%.o)
 
@@ -106,9 +106,13 @@ CT         = $(wildcard locale/*.ct)
 LANGUAGES  = $(CT:locale/%.ct=%)
 CATALOGS   = $(LANGUAGES:%=Catalogs/%/formbrod.catalog)
 LOCBUILD   = build/locale
+VERSION    = 1
 
 strings: $(CD) tools/catgen.py
 	$(CATGEN) header $(CD) -o src/locale/strings.h
+
+revision:
+	bumprev -e si -v $(VERSION) -n $(TARGET) -b src/$(TARGET) -e si
 
 catalogs: $(CATALOGS)
 
@@ -122,17 +126,17 @@ Catalogs/%/formbrod.catalog: locale/%.ct $(CD)
 	$(ICONV) -f UTF-8 -t ISO-8859-1 $(CD) > $(LOCBUILD)/latin1/formbrod.cd
 	$(ICONV) -f UTF-8 -t ISO-8859-1 $< > $(LOCBUILD)/latin1/$*.ct
 	$(FLEXCAT) $(LOCBUILD)/latin1/formbrod.cd $(LOCBUILD)/latin1/$*.ct \
-	    CATALOG=$@
+		CATALOG=$@
 endif
 
 # Builds every catalog with catgen too and checks both tools agree.
 compare-catalogs: $(CATALOGS)
 	@for l in $(LANGUAGES); do \
-	    mkdir -p $(LOCBUILD)/catgen/$$l && \
-	    $(CATGEN) catalog $(CD) locale/$$l.ct \
-	        -o $(LOCBUILD)/catgen/$$l/formbrod.catalog && \
-	    $(CATGEN) compare Catalogs/$$l/formbrod.catalog \
-	        $(LOCBUILD)/catgen/$$l/formbrod.catalog || exit 1; \
+		mkdir -p $(LOCBUILD)/catgen/$$l && \
+		$(CATGEN) catalog $(CD) locale/$$l.ct \
+			-o $(LOCBUILD)/catgen/$$l/formbrod.catalog && \
+		$(CATGEN) compare Catalogs/$$l/formbrod.catalog \
+			$(LOCBUILD)/catgen/$$l/formbrod.catalog || exit 1; \
 	done
 
 clean:

@@ -15,7 +15,7 @@
 #include "arexx/arexx.h"
 #include "prefs/prefs.h"
 #include "locale/catalog.h"
-#include "version.h"
+#include "Formbrod_rev.h"
 
 /* Proxies are made only when the user has left the window alone this
  * long, so editing never waits for them. */
@@ -43,8 +43,7 @@ static void trace_branch(const char *what)
     }
 }
 
-static const char USED ver[] =
-    "$VER: Formbrod " FB_VERSION " (" FB_VERSION_DATE ")";
+static const char USED ver[] = VERSTAG;
 
 int main(int argc, char **argv)
 {
