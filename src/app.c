@@ -9,7 +9,7 @@
 #include "formbrod/timeview.h"
 #include "formbrod/backend.h"
 #include "prefs/prefs.h"
-#include "version.h"
+#include "Formbrod_rev.h"
 #include "locale/catalog.h"
 #include "player/audio.h"
 #include "formbrod/render.h"
@@ -135,7 +135,7 @@ void App_StartLog(void)
 
     if (!App_LogEnabled() || FB_LogOpen(App_LogFile(), level) != 0)
         return;
-    FB_Log(FB_LOG_INFO, "app", "Formbrod " FB_VERSION " (" FB_VERSION_DATE
+    FB_Log(FB_LOG_INFO, "app", "Formbrod " VERS " (" DATE
            "), log level %s", FB_LogLevelName(level));
     FB_BackendLogStart();
 }
