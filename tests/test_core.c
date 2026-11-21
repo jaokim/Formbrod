@@ -1816,6 +1816,56 @@ static void test_window_and_seek(void)
     CHECK(strstr(job.filtergraph, "aformat=sample_rates=48000") != NULL);
 }
 
+/* Windows cutting into a clip with a fade: the fade stays where it is
+ * in the whole clip, not at the window's start or end. */
+static void test_window_fade(void)
+{
+    static FBTimeline tl, w;
+    static FBJob job;
+    FBOutput out;
+    FBEffect *fx;
+    int s;
+
+    FB_TimelineInit(&tl);
+    s = FB_TimelineAddSource(&tl, "s.mp4", 20000, 1, 1);
+    FB_SourceSetVideo(&tl.sources[s], 640, 360, 1, 1, 25, 1);
+    FB_TimelineAppendToTrack(&tl, 0, s, 0, 20000);
+    fx = FB_ClipAddEffect(&tl.clips[0], "fade");
+    CHECK(fx != NULL);
+    FB_EffectSetParam(fx, "in", 2.0);
+    FB_EffectSetParam(fx, "out", 2.0);
+    memset(&out, 0, sizeof(out));
+    strcpy(out.path, "out.mp4");
+    out.quality = FB_QUALITY_FINAL;
+
+    /* The whole edit: no shifting. */
+    CHECK(tl.clips[0].cut_head == 0 && tl.clips[0].cut_tail == 0);
+    CHECK(FB_JobBuild(&job, &tl, &out) == FB_JOB_OK);
+    CHECK(strstr(job.filtergraph, "PTS+") == NULL);
+    CHECK(strstr(job.filtergraph, "fade=t=out:st=18.000") != NULL);
+
+    /* 7 s to 7.2 s: the frames are moved to 7 s while the fades run. */
+    CHECK(FB_TimelineWindow(&w, &tl, 7000, 200) == 1);
+    CHECK(w.clips[0].cut_head == 7000 && w.clips[0].cut_tail == 12800);
+    CHECK(FB_JobBuild(&job, &w, &out) == FB_JOB_OK);
+    CHECK(strstr(job.filtergraph, "fps=25/1,setpts=PTS+7.000/TB,"
+                 "fade=t=in:st=0:d=2.000,fade=t=out:st=18.000:d=2.000,"
+                 "setpts=PTS-STARTPTS") != NULL);
+    CHECK(strstr(job.filtergraph, "asetpts=PTS+7.000/TB,afade=t=in:st=0")
+          != NULL);
+
+    /* Only the end cut: nothing to move, the fade-out still at 18 s. */
+    CHECK(FB_TimelineWindow(&w, &tl, 0, 10000) == 1);
+    CHECK(w.clips[0].cut_head == 0 && w.clips[0].cut_tail == 10000);
+    CHECK(FB_JobBuild(&job, &w, &out) == FB_JOB_OK);
+    CHECK(strstr(job.filtergraph, "PTS+") == NULL);
+    CHECK(strstr(job.filtergraph, "fade=t=out:st=18.000") != NULL);
+
+    /* A window of a window adds up. */
+    CHECK(FB_TimelineWindow(&w, &w, 5000, 1000) == 1);
+    CHECK(w.clips[0].cut_head == 5000 && w.clips[0].cut_tail == 14000);
+}
+
 /* Windows cutting into crossfades. */
 static void test_window_crossfade(void)
 {
@@ -2702,6 +2752,7 @@ int main(void)
     test_job_tracks();
     test_job_three_tracks();
     test_window_and_seek();
+    test_window_fade();
     test_window_crossfade();
     test_player();
     test_render_pieces();

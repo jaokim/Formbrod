@@ -418,6 +418,70 @@ static const AVCodec *pick_encoder(const char *name, const AVOutputFormat *of,
 
 /* ---- Submit ------------------------------------------------------------- */
 
+/* The time of the first keyframe a read from here gives (of the video
+ * stream, or any stream if there is none), in AV_TIME_BASE units;
+ * AV_NOPTS_VALUE if none turns up soon. Reads packets, so seek again
+ * afterwards. */
+static int64_t first_key_time(AVFormatContext *fmt, AVPacket *pkt)
+{
+    int v = av_find_best_stream(fmt, AVMEDIA_TYPE_VIDEO, -1, -1, NULL, 0);
+    int64_t t = AV_NOPTS_VALUE;
+    int n;
+
+    for (n = 0; n < 2000 && av_read_frame(fmt, pkt) >= 0; n++) {
+        int64_t ts = pkt->pts != AV_NOPTS_VALUE ? pkt->pts : pkt->dts;
+
+        if ((v < 0 || pkt->stream_index == v)
+            && (pkt->flags & AV_PKT_FLAG_KEY) && ts != AV_NOPTS_VALUE) {
+            t = av_rescale_q(ts, fmt->streams[pkt->stream_index]->time_base,
+                             AV_TIME_BASE_Q);
+            av_packet_unref(pkt);
+            break;
+        }
+        av_packet_unref(pkt);
+    }
+    return t;
+}
+
+/* Jumps to a keyframe at or before `ts` (AV_TIME_BASE units, the file's
+ * own times). Some demuxers (MPEG program and transport streams) land
+ * on a packet near `ts` rather than on a keyframe, so decoding would
+ * only start at the next keyframe, after the frames wanted: then this
+ * jumps further back, a second, two, four..., or to the start. */
+static int seek_before(LocalPriv *p, Input *in, int64_t ts)
+{
+    int64_t start = in->fmt->start_time != AV_NOPTS_VALUE
+                    ? in->fmt->start_time : 0;
+    int64_t back = 0, step = AV_TIME_BASE, at = ts, key;
+    int ret;
+
+    for (;;) {
+        at = ts - back;
+        if (at <= start) {
+            /* From the very start: by bytes where the demuxer can, since
+             * a jump by time can land past the first keyframe too. */
+            if (!(in->fmt->iformat->flags & AVFMT_NO_BYTE_SEEK)
+                && avformat_seek_file(in->fmt, -1, 0, 0, 0,
+                                      AVSEEK_FLAG_BYTE) >= 0)
+                return 0;
+            return avformat_seek_file(in->fmt, -1, INT64_MIN, start, start,
+                                      0) < 0 ? -1 : 0;
+        }
+        ret = avformat_seek_file(in->fmt, -1, INT64_MIN, at, at, 0);
+        if (ret < 0)
+            return ret;
+        key = first_key_time(in->fmt, p->pkt);
+        if (key != AV_NOPTS_VALUE && key <= ts)
+            break;
+        FB_TRACE("render", "jump to %lld us gave a keyframe at %lld us; "
+                 "going back further", (long long)at, (long long)key);
+        back += step;
+        step *= 2;
+    }
+    /* Read from that keyframe again. */
+    return avformat_seek_file(in->fmt, -1, INT64_MIN, at, at, 0);
+}
+
 static int open_inputs(LocalPriv *p)
 {
     int i, ret;
@@ -445,7 +509,7 @@ static int open_inputs(LocalPriv *p)
 
             if (in->fmt->start_time != AV_NOPTS_VALUE)
                 ts += in->fmt->start_time;
-            ret = avformat_seek_file(in->fmt, -1, INT64_MIN, ts, ts, 0);
+            ret = seek_before(p, in, ts);
             if (ret < 0)
                 FB_Log(FB_LOG_WARNING, "render",
                        "Input %d: can't jump to %lld ms, reading from the "

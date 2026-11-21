@@ -919,10 +919,13 @@ int FB_TimelineWindow(FBTimeline *dst, const FBTimeline *src, fb_ms_t from,
             continue;               /* outside the window */
         if (a < from) {
             c.in += from - a;
+            c.cut_head += from - a;
             a = from;
         }
-        if (b > to)
+        if (b > to) {
+            c.cut_tail += b - to;
             b = to;
+        }
         c.out = c.in + (b - a);
         c.start = a - from;
         dst->clips[n++] = c;
