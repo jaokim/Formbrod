@@ -190,13 +190,13 @@ its icons), the program as `Formbrod/Formbrod` and the catalogs in
 an lha that can create archives (lha for Unix, or LhA on AmigaOS); lhasa
 only unpacks.
 
-To install from the archive, unpack it anywhere and run
-`Formbrod/Install` with Installer. It asks where to put Formbröd
-and copies the drawer there, everything except the installer included.
+To install from the archive, unpack it anywhere and run `Install`, next to
+the `Formbrod` drawer, with Installer. It asks where to put Formbröd and
+copies the drawer and its icon there.
 
-`release/Formbrod/Formbrod.guide` is the user manual (AmigaGuide) and
-`Formbrod.readme` the text for OS4Depot. Both, like the Installer
-script, are ISO-8859-1; keep them that way when editing.
+`release/Install` is the Installer script, `release/Formbrod/Formbrod.guide`
+the user manual (AmigaGuide) and `Formbrod.readme` the text for OS4Depot.
+All three are ISO-8859-1; keep them that way when editing.
 
 ## Translating
 
