@@ -3,5 +3,6 @@
 
 Set FormbrodPath `GetEnv AppDir/Formbrod`
 
-CopyStore Formbrod/#? "$FormbordPath"
+CopyStore Formbrod/Formbrod "$FormbrodPath"
+Copy Formbrod/#? "$FormbrodPath" ALL
 
