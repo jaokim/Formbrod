@@ -2,9 +2,9 @@
 ;
 ; Installer script for Formbrod. This file is ISO-8859-1, like Installer
 ; expects; keep it that way when editing.
-; Run it from the unpacked Formbrod drawer.
-; Copies everything in this drawer (except the installer itself) into a
-; Formbrod drawer wherever the user chooses.
+; It sits at the top of the unpacked archive, next to the Formbrod drawer,
+; and copies that drawer with everything in it, and its icon, to wherever
+; the user chooses.
 
 (set #name "Formbrod")
 
@@ -21,7 +21,7 @@
                  "för översättningarna.\n\nFinns lådan redan skrivs filerna i den "
                  "över, så du kan installera en ny version ovanpå en gammal."))
         (set #copying "Kopierar Formbröd...")
-        (set #same-dir "Du kan inte installera i samma låda som installationen körs från.")
+        (set #same-dir "Formbröd är redan uppackat där. Välj en annan låda.")
         (set #done "Formbröd är installerat i\n")
     )
     (
@@ -36,15 +36,16 @@
                  "its files are replaced, so you can install a new version over an "
                  "old one."))
         (set #copying "Copying Formbrod...")
-        (set #same-dir "You can't install into the drawer the installation runs from.")
+        (set #same-dir "Formbrod is already unpacked there. Choose another drawer.")
         (set #done "Formbrod is installed in\n")
     )
 )
 
 ; ---- Where we are -------------------------------------------------------
-; The drawer this script is in, and that drawer's own icon next to it.
-(set #srcdir  (expandpath (pathonly @icon)))
-(set #srcicon (tackon (pathonly #srcdir) (cat (fileonly #srcdir) ".info")))
+; The Formbrod drawer and its icon, next to this script.
+(set #here    (expandpath (pathonly @icon)))
+(set #srcdir  (tackon #here #name))
+(set #srcicon (tackon #here (cat #name ".info")))
 
 (message #welcome)
 
@@ -82,14 +83,13 @@
     )
 )
 
-; Everything in the drawer except this script and its icon, subdrawers
-; (such as Catalogs) included.
+; Everything in the drawer, subdrawers (such as Catalogs) included.
 (copyfiles
     (prompt #copying)
     (help @copyfiles-help)
     (source #srcdir)
     (dest #dest)
-    (pattern "~(Install|Install.info)")
+    (all)
 )
 
 (complete 100)

@@ -148,10 +148,11 @@ compare-catalogs: $(CATALOGS)
 # icons, plus anything added there later), the program and the catalogs
 # into $(RELEASE_LHA):
 #   Formbrod.info
+#   Install
+#   Install.info
 #   Formbrod/Formbrod
 #   Formbrod/Formbrod.info
 #   Formbrod/Formbrod.guide
-#   Formbrod/Install
 #   Formbrod/Catalogs/<language>/formbrod.catalog
 # Needs an lha that can create archives (lha for Unix, or LhA on AmigaOS;
 # lhasa only unpacks). LHA_ADD is the command that adds files recursively.

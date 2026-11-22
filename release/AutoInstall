@@ -1,0 +1,8 @@
+; AutoInstall for Formbrod
+; $VER: Formbrod AutoInstall 1.1 (22.11.2026)
+
+Set FormbrodPath `GetEnv AppDir/Formbrod`
+
+CopyStore Formbrod/Formbrod "$FormbrodPath"
+Copy Formbrod/#? "$FormbrodPath" ALL QUIET
+
